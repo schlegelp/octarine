@@ -1,0 +1,6 @@
+pygfx
+numpy
+pandas
+pypng
+six
+cmap
