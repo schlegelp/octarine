@@ -10,13 +10,14 @@ except ImportError:
 # - show type of object in legend
 # - add dropdown to manipulate all selected objects
 # - add filter to legend (use item.setHidden(True/False) to show/hide items)
+# - highlight object in legend when hovered over in scene
 
 class Controls(QtWidgets.QWidget):
-    def __init__(self, viewer):
+    def __init__(self, viewer, width=200, height=400):
         super().__init__()
         self.viewer = viewer
         self.setWindowTitle("Legend")
-        self.resize(200, 400)
+        self.resize(width, height)
 
         self.btn_layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.btn_layout)
@@ -33,16 +34,6 @@ class Controls(QtWidgets.QWidget):
         self.mesh_flat_checkbox = self.create_checkbox(
             "Flat Shading", gfx.Mesh, "material.flat_shading"
         )
-        # self.mesh_flat_checkbox = QtWidgets.QCheckBox("Flat Shading")
-        # self.mesh_flat_checkbox.setChecked(False)
-
-        # def set_shading(*args):
-        #     for vis in self.viewer.scene.children:
-        #         if isinstance(vis, gfx.Mesh):
-        #             vis.material.flat_shading = self.mesh_flat_checkbox.isChecked()
-
-        # self.mesh_flat_checkbox.toggled.connect(set_shading)
-        # self.btn_layout.addWidget(self.mesh_flat_checkbox)
 
         # Second: add button to toggle wireframe
         self.mesh_wireframe_checkbox = QtWidgets.QCheckBox("Wireframe")
@@ -76,11 +67,9 @@ class Controls(QtWidgets.QWidget):
 
         self.add_split()
 
-
         self.btn_layout.addStretch(1)
 
         return
-
 
     def add_split(self):
         # self.btn_layout.addSpacing(5)
