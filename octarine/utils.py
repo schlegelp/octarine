@@ -1,4 +1,4 @@
-import six 
+import six
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,7 @@ from . import config
 logger = config.get_logger(__name__)
 
 
-def parse_objects(x):
+def parse_objects(x, include_geometries=True):
     """Categorize objects e.g. for plotting.
 
     Returns
@@ -38,20 +38,23 @@ def parse_objects(x):
     # Collect visuals
     visuals = [ob for ob in x if 'pygfx.objects' in str(type(ob))]
 
-    # Collect scatter points 
+    if include_geometries:
+        visuals += [ob for ob in x if 'pygfx.geometries' in str(type(ob))]
+
+    # Collect scatter points
     scatter = [ob for ob in x if isinstance(ob, np.ndarray) and (ob.ndim == 2) and (ob.shape[1] == 3)]
 
     # Collect dataframes with X/Y/Z coordinates
     dataframes = [ob for ob in x if isinstance(ob, pd.DataFrame)]
     if [d for d in dataframes if False in np.isin(['x', 'y', 'z'], d.columns)]:
-        logger.warning('DataFrames must have x, y and z columns.')    
+        logger.warning('DataFrames must have x, y and z columns.')
     dataframes = [d for d in dataframes if all(np.isin(['x', 'y', 'z'], d.columns))]
-    scatter += [d[['x', 'y', 'z']].values for d in dataframes]    
+    scatter += [d[['x', 'y', 'z']].values for d in dataframes]
 
-    # Collect volumes 
+    # Collect volumes
     volumes = [ob for ob in x if isinstance(ob, np.ndarray) and (ob.ndim == 3)]
 
-    # Collect meshes 
+    # Collect meshes
     meshes = [ob for ob in x if is_mesh_like(ob)]
 
     # Collect dataframes with X/Y/Z coordinates
@@ -80,7 +83,7 @@ def is_mesh_like(x):
     if hasattr(x, 'vertices') and hasattr(x, 'faces'):
         return True
 
-    return False    
+    return False
 
 
 def make_iterable(x, force_type = None):
@@ -125,4 +128,4 @@ def is_iterable(x) -> bool:
     if isinstance(x, Iterable) and not isinstance(x, (six.string_types, pd.DataFrame)):
         return True
     else:
-        return False    
+        return False
