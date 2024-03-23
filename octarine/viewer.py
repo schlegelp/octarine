@@ -168,13 +168,29 @@ class Viewer:
 
         return self.__cached_colors[len(self.objects) % len(self.__cached_colors)]
 
+    def _next_label(self, prefix='Object'):
+        """Return next label."""
+        existing = [o for o in self.objects if o.startswith(prefix)]
+        if len(existing) == 0:
+            return prefix
+        return f'{prefix}.{len(existing) + 1:03}'
+
     def __getitem__(self, key):
         """Get item."""
         return self.objects[key]
 
+    def __contains__(self, key):
+        """Check if object is on canvas."""
+        return key in self.objects
+
     def __len__(self):
         """Return number of objects on canvas."""
         return len(self._object_ids)
+
+    @property
+    def controls(self):
+        """Return the controls widget."""
+        return getattr(self, '_controls', None)
 
     @property
     def visible(self):
@@ -379,6 +395,11 @@ class Viewer:
             if getattr(v, '_object_type', '') == 'boundingbox':
                 self.remove(v)
 
+    def resize(self, size):
+        """Resize canvas."""
+        assert len(size) == 2
+        self.canvas.set_logical_size(*size)
+
     def update_bounds(self, color='w', width=1):
         """Update bounding box visual."""
         # Remove any existing visual
@@ -403,7 +424,8 @@ class Viewer:
 
     def center_camera(self):
         """Center camera on visuals."""
-        self.camera.show_object(self.scene, scale=1.1, view_dir=(0., 0., 1.), up=(0., -1., 0.))
+        if len(self):
+            self.camera.show_object(self.scene, scale=1.1, view_dir=(0., 0., 1.), up=(0., -1., 0.))
 
     @update_legend
     def add(self, x, center=True, clear=False, **kwargs):
@@ -449,9 +471,16 @@ class Viewer:
         for p in points:
             self.add_scatter(p, **kwargs)
         for v in visuals:
+            # Check if the visual is actually just the geometry
+            if isinstance(v, gfx.Geometry):
+                v = gfx.Mesh(
+                    v,
+                    gfx.MeshPhongMaterial()
+                )
+
             # Give visuals an _object_id if they don't already have one
             if not hasattr(v, '_object_id'):
-                v._object_id = uuid.uuid4()
+                v._object_id = self._next_label('Mesh')
             self.scene.add(v)
 
         if center:
@@ -476,6 +505,8 @@ class Viewer:
             raise TypeError(f'Expected mesh-like object, got {type(mesh)}')
         if color is None:
             color = self._next_color()
+        if name is None:
+            name = self._next_label('Mesh')
 
         visual = mesh2gfx(mesh, color=color)
         visual._object_id = name if name else uuid.uuid4()
@@ -504,6 +535,8 @@ class Viewer:
             raise ValueError(f'Expected (N, 3) array, got {points.shape}')
         if color is None:
             color = self._next_color()
+        if name is None:
+            name = self._next_label('Scatter')
 
         visual = points2gfx(points, color=color, size=size)
         visual._object_id = name if name else uuid.uuid4()
@@ -540,6 +573,8 @@ class Viewer:
 
         if color is None:
             color = self._next_color()
+        if name is None:
+            name = self._next_label('Lines')
 
         visual = lines2gfx(lines, linewidth=linewidth, color=color)
         visual._object_id = name if name else uuid.uuid4()
@@ -570,6 +605,8 @@ class Viewer:
             raise ValueError(f'Expected 3D array, got {volume.ndim}')
         if color is None:
             color = self._next_color()
+        if name is None:
+            name = self._next_label('Volume')
 
         visual = volume2gfx(volume, dims=dims, offset=offset, color=color)
         visual._object_id = name if name else uuid.uuid4()
