@@ -106,3 +106,23 @@ def make_iterable(x, force_type = None):
         x = list(x)
 
     return np.asarray(x, dtype=force_type)
+
+
+def is_iterable(x) -> bool:
+    """Test if input is iterable (but not str).
+
+    Examples
+    --------
+    >>> import octarine as oc
+    >>> oc.utils.is_iterable(['a'])
+    True
+    >>> oc.utils.is_iterable('a')
+    False
+    >>> oc.utils.is_iterable({'a': 1})
+    True
+
+    """
+    if isinstance(x, Iterable) and not isinstance(x, (six.string_types, pd.DataFrame)):
+        return True
+    else:
+        return False    

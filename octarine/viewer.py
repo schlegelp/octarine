@@ -10,7 +10,7 @@ from collections import OrderedDict
 from wgpu.gui.auto import WgpuCanvas
 from wgpu.gui.offscreen import WgpuCanvas as WgpuCanvasOffscreen
 
-from .visuals import mesh2gfx, volume2gfx, points2gfx
+from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx
 from . import utils, config
 
 
@@ -21,10 +21,10 @@ logger = config.get_logger(__name__)
 
 # TODO
 # - add styles for viewer (lights, background, etc.) - e.g. .set_style(dark)
-#   - e.g. material.metalness = 2 looks good for background meshes 
+#   - e.g. material.metalness = 2 looks good for background meshes
 #   - metalness = 1 with roughness = 0 makes for funky looking neurons
-#   - m.material.side = "FRONT" makes volumes look better   
-# - make Viewer reactive (see reactive_rendering.py) to save 
+#   - m.material.side = "FRONT" makes volumes look better
+# - make Viewer reactive (see reactive_rendering.py) to save
 #   resources when not actively using the viewer - might help in Jupyter?
 # - add specialised methods for adding neurons, volumes, etc. to the viewer
 
@@ -37,11 +37,11 @@ class Viewer:
     reactive :  bool, optional
                 If True, will only render when changes are made to the scene.
     offscreen : bool, optional
-                If True, will use an offscreen Canvas. Useful if you only 
-                want a screenshot. 
+                If True, will use an offscreen Canvas. Useful if you only
+                want a screenshot.
     title :     str, optional
                 Title of the viewer window.
-    max_fps :   int, optional   
+    max_fps :   int, optional
                 Maximum frames per second to render.
     size :      tuple, optional
                 Size of the viewer window.
@@ -49,21 +49,24 @@ class Viewer:
                 Keyword arguments passed to ``WgpuCanvas``.
 
     """
+    palette='seaborn:tab10'
+
     def __init__(self,
                 reactive=False,
                 offscreen=False,
                 title='Octarine Viewer',
                 max_fps=30,
                 size=None,
+                show_controls=True,
                 **kwargs):
         # Check if we're running in an IPython environment
         try:
-            ip = get_ipython()   
+            ip = get_ipython()
             if not ip.active_eventloop:
                 # ip.enable_gui('qt6')
-                raise ValueError('IPython event loop not running. Please use e.g. "%gui qt" to hook into the event loop.')         
+                raise ValueError('IPython event loop not running. Please use e.g. "%gui qt" to hook into the event loop.')
         except NameError:
-            ip = None 
+            ip = None
 
         # Update some defaults as necessary
         defaults = {'title': title, 'max_fps': max_fps, 'size': size}
@@ -74,7 +77,7 @@ class Viewer:
         # out to be very annoying to correctly setup on Github Actions.
         if getattr(config, 'HEADLESS', False):
             return
-        
+
         if not offscreen:
             self._offscreen = False
             self.canvas = WgpuCanvas(**defaults)
@@ -95,7 +98,7 @@ class Viewer:
 
         # Set up a default background
         self._background = gfx.BackgroundMaterial((0, 0, 0))
-        self.scene.add(gfx.Background(None, self._background))  
+        self.scene.add(gfx.Background(None, self._background))
 
         # Add camera
         self.camera = gfx.OrthographicCamera()
@@ -104,7 +107,7 @@ class Viewer:
         # Add controller
         self.controller = gfx.TrackballController(self.camera, register_events=self.renderer)
 
-        # Stats 
+        # Stats
         self.stats = gfx.Stats(self.renderer)
         self._show_fps = False
 
@@ -114,34 +117,53 @@ class Viewer:
         self._key_events['2'] = lambda : self.set_view('XZ')
         self._key_events['3'] = lambda : self.set_view('YZ')
         self._key_events['f'] = lambda : self._toggle_fps()
-        
+        self._key_events['c'] = lambda : self._toggle_controls()
+
         def _keydown(event):
             """Handle key presses."""
             if event.key in self._key_events:
                 self._key_events[event.key]()
 
-        # Register events 
+        # Register events
         self.renderer.add_event_handler(_keydown, "key_down")
-        
+
         # Finally, setting some variables
         self._show_bounds = False
 
         # This starts the animation loop
         self.show()
 
+        # Add controls
+        if show_controls:
+            self.show_controls()
+
     def _animate(self):
         """Animate the scene."""
         if self._show_fps:
-            with self.stats:        
-                self.renderer.render(self.scene, self.camera, flush=False)            
+            with self.stats:
+                self.renderer.render(self.scene, self.camera, flush=False)
             self.stats.render()
         else:
             self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw()
 
+    def _next_color(self):
+        """Return next color in the colormap."""
+        # Cache the full palette. N.B. that ordering of colors in cmap depends on
+        # the number of colors requested - i.e. we can't just grab the last color.
+        if not hasattr(self, '__cached_palette') or self.palette != self.__cached_palette:
+            self.__cached_colors = list(cmap.Colormap(self.palette).iter_colors())
+            self.__cached_palette = self.palette
+
+        return self.__cached_colors[len(self.objects) % len(self.__cached_colors)]
+
     def __getitem__(self, key):
         """Get item."""
-        return self.objects[key]       
+        return self.objects[key]
+
+    def __len__(self):
+        """Return number of objects on canvas."""
+        return len(self._object_ids)
 
     @property
     def visible(self):
@@ -208,7 +230,7 @@ class Viewer:
     @property
     def visuals(self):
         """List of all visuals on this canvas."""
-        return [c for c in self.scene.children if hasattr(c, '_object_type')]
+        return [c for c in self.scene.children if hasattr(c, '_object_id')]
 
     @property
     def bounds(self):
@@ -216,7 +238,7 @@ class Viewer:
         bounds = []
         for vis in self.visuals:
             # Skip the bounding box itself
-            if getattr(vis, '_object_type', '') == 'boundingbox':
+            if getattr(vis, '_object_id', '') == 'boundingbox':
                 continue
 
             try:
@@ -240,7 +262,7 @@ class Viewer:
         obj_ids = []
         for v in self.visuals:
             if hasattr(v, '_object_id'):
-                obj_ids.append(v._object_id)                
+                obj_ids.append(v._object_id)
         return sorted(set(obj_ids), key=lambda x: obj_ids.index(x))
 
     @property
@@ -258,9 +280,31 @@ class Viewer:
         if getattr(config, 'HEADLESS', False):
             logger.info("Viewer widget not shown - running in headless mode.")
             return
-    
-        self.canvas.show()                
-        self.canvas.request_draw(self._animate)          
+
+        self.canvas.show()
+        self.canvas.request_draw(self._animate)
+
+    def show_controls(self):
+        """Show controls."""
+        if not hasattr(self, '_controls'):
+            from .controls import Controls
+            self._controls = Controls(self)
+        self._controls.show()
+
+    def hide_controls(self):
+        """Hide controls."""
+        if not hasattr(self, '_controls'):
+            return
+        self._controls.hide()
+
+    def _toggle_controls(self):
+        """Switch controls on and off."""
+        if not hasattr(self, '_controls'):
+            self.show_controls()
+        elif self._controls.isVisible():
+            self.hide_controls()
+        else:
+            self.show_controls()
 
     def clear(self):
         """Clear canvas of objects (expects lights and background)."""
@@ -268,7 +312,7 @@ class Viewer:
         if getattr(config, 'HEADLESS', False):
             return
 
-        # Remove everything but the lights and backgrounds 
+        # Remove everything but the lights and backgrounds
         self.scene.remove(*self.visuals)
 
     def remove(self, to_remove):
@@ -333,7 +377,7 @@ class Viewer:
         if isinstance(bounds, type(None)):
             return
 
-        # Create box visual        
+        # Create box visual
         box = gfx.BoxHelper()
         box.set_transform_by_aabb(bounds)
 
@@ -378,21 +422,21 @@ class Viewer:
         # simply not add the objects. Not ideal but it turns out to be very
         # annoying to correctly setup on Github Actions.
         if getattr(config, 'HEADLESS', False):
-            return            
+            return
 
         if clear:
-            self.clear()            
+            self.clear()
 
         for m in meshes:
             self.add_mesh(m, **kwargs)
         for v in volumes:
             self.add_volume(v, **kwargs)
         for p in points:
-            self.add_points(p, **kwargs)
+            self.add_scatter(p, **kwargs)
         for v in visuals:
             # Give visuals an _object_id if they don't already have one
-            if not hasattr(v, '_object_id'):                
-                v._object_id = uuid.uuid4()                
+            if not hasattr(v, '_object_id'):
+                v._object_id = uuid.uuid4()
             self.scene.add(v)
 
         if center:
@@ -408,12 +452,15 @@ class Viewer:
         name :          str, optional
                         Name for the visual.
         color :         str | tuple, optional
-                        Color to use for plotting. Can be the name of 
+                        Color to use for plotting. Can be the name of
                         a colormap or a single color.
 
-        """ 
+        """
         if not utils.is_mesh_like(mesh):
             raise TypeError(f'Expected mesh-like object, got {type(mesh)}')
+        if color is None:
+            color = self._next_color()
+
         visual = mesh2gfx(mesh, color=color)
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
@@ -428,30 +475,57 @@ class Viewer:
         name :          str, optional
                         Name for the visual.
         color :         str | tuple, optional
-                        Color to use for plotting. Can be the name of 
+                        Color to use for plotting. Can be the name of
                         a colormap or a single color.
         size :          int | float
                         Marker size.
-                        
-        """         
+
+        """
         if not isinstance(points, np.ndarray):
             raise TypeError(f'Expected numpy array, got {type(points)}')
         if points.ndim != 2 or points.shape[1] != 3:
             raise ValueError(f'Expected (N, 3) array, got {points.shape}')
+        if color is None:
+            color = self._next_color()
 
-        visual = points2gfx(points, color=color, size=2)
+        visual = points2gfx(points, color=color, size=size)
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
 
-    def add_lines(self, lines, name=None, color=None):
+    def add_lines(self, lines, name=None, color=None, linewidth=1):
         """Add lines to canvas.
 
-        Parameters 
+        Parameters
         ----------
-        lines :         list of (N, 3) arrays | (N, 2) array
-                        Lines to plot.
-        """ 
-        pass     
+        lines :     list of (N, 3) arrays | (N, 3) array
+                    Lines to plot. If a list of arrays, each array
+                    represents a separate line. If a single array,
+                    each row represents a point in the line. You can
+                    introduce breaks in the line by inserting NaNs.
+        name :      str, optional
+                    Name for the visual.
+        color :     str | tuple, optional
+                    Color to use for plotting. Can be a single color
+                    or one for every point in the line(s).
+        linewidth : float, optional
+                    Line width.
+
+        """
+        if isinstance(lines, np.ndarray):
+            if lines.ndim != 2 or lines.shape[1] != 3:
+                raise ValueError(f'Expected (N, 3) array, got {lines.shape}')
+        elif isinstance(lines, list):
+            if not all([l.ndim == 2 and l.shape[1] == 3 for l in lines]):
+                raise ValueError('Expected list of (N, 3) arrays.')
+        else:
+            raise TypeError(f'Expected numpy array or list, got {type(lines)}')
+
+        if color is None:
+            color = self._next_color()
+
+        visual = lines2gfx(lines, linewidth=linewidth, color=color)
+        visual._object_id = name if name else uuid.uuid4()
+        self.scene.add(visual)
 
     def add_volume(self, volume, dims, name=None, color=None, offset=(0, 0, 0)):
         """Add image volume to canvas.
@@ -460,13 +534,13 @@ class Viewer:
         ----------
         volume :        (N, M, K) array
                         Volume to plot.
-        dims :          tuple 
+        dims :          tuple
                         Scale factors for the volume.
         name :          str, optional
                         Name for the visual.
         color :         tuple, optional
-                        Color to use for plotting. Can be the name of 
-                        a colormap or a single color. 
+                        Color to use for plotting. Can be the name of
+                        a colormap or a single color.
         offset :        tuple, optional
                         Offset for the volume.
 
@@ -475,6 +549,8 @@ class Viewer:
             raise TypeError(f'Expected numpy array, got {type(volume)}')
         if volume.ndim != 3:
             raise ValueError(f'Expected 3D array, got {volume.ndim}')
+        if color is None:
+            color = self._next_color()
 
         visual = volume2gfx(volume, dims=dims, offset=offset, color=color)
         visual._object_id = name if name else uuid.uuid4()
@@ -495,11 +571,14 @@ class Viewer:
 
         # Close if not already closed
         if not self.canvas.is_closed():
-            self.canvas.close() 
+            self.canvas.close()
+
+        if hasattr(self, '_controls'):
+            self._controls.close()
 
     def hide_object(self, obj):
         """Hide given object(s).
-        
+
         Parameters
         ----------
         obj :   str | list
@@ -683,7 +762,7 @@ class Viewer:
                         continue
                     if v._neuron_part == 'connectors' and not include_connectors:
                         continue
-                    
+
                     this_c = np.asarray(v.material.color.rgba)
 
                     # For arrays of colors
@@ -713,11 +792,11 @@ class Viewer:
 
     def colorize(self, palette='seaborn:tab10', objects=None):
         """Colorize objects using a color palette.
-        
-        Parameters 
+
+        Parameters
         ----------
         palette :   str | cmap Colormap
-                    Name of the `cmap` palette to use. See 
+                    Name of the `cmap` palette to use. See
                     https://cmap-docs.readthedocs.io/en/latest/catalog/#colormaps-by-category
                     for available options.
 
@@ -726,7 +805,7 @@ class Viewer:
             objects = self.objects  # grab once to speed things up
 
         if not isinstance(palette, cmap._colormap.Colormap):
-            palette = cmap.Colormap(palette)            
+            palette = cmap.Colormap(palette)
 
         colors = list(palette.iter_colors(len(objects)))
         colormap = {s: colors[i] for i, s in enumerate(objects)}
@@ -760,7 +839,7 @@ class Viewer:
                         Factor by which to scale canvas. Determines image
                         dimensions.
         size :          tuple, optional
-                        Size of the screenshot. If provided, will temporarily 
+                        Size of the screenshot. If provided, will temporarily
                         change the canvas size.
         alpha :         bool, optional
                         If True, will export transparent background.
@@ -768,7 +847,7 @@ class Viewer:
         """
         im = self._screenshot(alpha=alpha, size=size)
         if filename:
-            if not filename.endswith('.png'):                
+            if not filename.endswith('.png'):
                 filename += '.png'
             png.from_array(im.reshape(im.shape[0], im.shape[1] * im.shape[2]), mode='RGBA').save(filename)
         else:
@@ -777,7 +856,7 @@ class Viewer:
     def _screenshot(self, alpha=True, size=None):
         """Return image array for screenshot."""
         if alpha:
-            op = self._background.opacity 
+            op = self._background.opacity
             self._background.opacity = 0
         if size:
             os = (self.canvas.width(), self.canvas.height())
@@ -787,11 +866,11 @@ class Viewer:
             im = self.renderer.snapshot()
         except BaseException:
             raise
-        finally: 
+        finally:
             if alpha:
-                self._background.opacity = op     
+                self._background.opacity = op
             if size:
-                self.canvas.set_logical_size(*os)      
+                self.canvas.set_logical_size(*os)
 
         return im
 
