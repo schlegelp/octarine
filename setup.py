@@ -25,7 +25,7 @@ setup(
     long_description_content_type='text/markdown',
     url='https://github.com/schlegelp/octarine',
     project_urls={
-     "Documentation": "https://octarine.readthedocs.io",
+     #"Documentation": "https://octarine.readthedocs.io",
      "Source": "https://github.com/schlegelp/octarine",
      "Changelog": "https://github.com/schlegelp/octarine/releases",
     },
