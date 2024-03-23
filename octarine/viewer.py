@@ -52,6 +52,11 @@ class Viewer:
                 Maximum frames per second to render.
     size :      tuple, optional
                 Size of the viewer window.
+    show_controls : bool, optional
+                If True, will show the controls widget.
+                You can always show/hide the controls with
+                ``viewer.show_controls()`` and ``viewer.hide_controls()``.
+
     **kwargs
                 Keyword arguments passed to ``WgpuCanvas``.
 
@@ -59,12 +64,11 @@ class Viewer:
     palette='seaborn:tab10'
 
     def __init__(self,
-                reactive=False,
                 offscreen=False,
                 title='Octarine Viewer',
                 max_fps=30,
                 size=None,
-                show_controls=True,
+                show_controls=False,
                 **kwargs):
         # Check if we're running in an IPython environment
         try:
