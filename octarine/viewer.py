@@ -1,6 +1,7 @@
 import png
 import cmap
 import uuid
+import random
 
 import numpy as np
 import pygfx as gfx
@@ -757,6 +758,7 @@ class Viewer:
                         new_c = gfx.Color(cmap[n]).rgba
                     v.material.color = gfx.Color(new_c)
 
+    def colorize(self, palette='seaborn:tab10', objects=None, randomize=True):
         """Colorize objects using a color palette.
 
         Parameters
@@ -765,6 +767,10 @@ class Viewer:
                     Name of the `cmap` palette to use. See
                     https://cmap-docs.readthedocs.io/en/latest/catalog/#colormaps-by-category
                     for available options.
+        objects :   list, optional
+                    Objects to colorize. If None, will colorize all objects.
+        randomize : bool
+                    If True (default), will randomly shuffle the colors.
 
         """
         if objects is None:
@@ -773,8 +779,13 @@ class Viewer:
         if not isinstance(palette, cmap._colormap.Colormap):
             palette = cmap.Colormap(palette)
 
-        colors = list(palette.iter_colors(len(objects)))
-        colormap = {s: colors[i] for i, s in enumerate(objects)}
+        if randomize:
+            # Note: can't use numpy here because it claims array is not 1d
+            colors = random.choices(list(palette.iter_colors()), k=len(objects))
+        else:
+            colors = list(palette.iter_colors(len(objects)))
+
+        colormap = {s: tuple(colors[i].rgba) for i, s in enumerate(objects)}
 
         self.set_colors(colormap)
 
