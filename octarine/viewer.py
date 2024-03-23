@@ -720,42 +720,6 @@ class Viewer:
                 v._pinned = False
                 v.freeze()
 
-    def toggle_neurons(self, n):
-        """Toggle neuron(s) visibility."""
-        n = utils.make_iterable(n)
-
-        if False not in [isinstance(u, uuid.UUID) for u in n]:
-            obj = self._neuron_obj
-        else:
-            n = utils.eval_id(n)
-            obj = self.neurons
-
-        for s in n:
-            for v in obj[s]:
-                v.visible = v.visible is False
-
-        self.update_legend()
-
-    def toggle_select(self, n):
-        """Toggle selected of given neuron."""
-        skids = utils.eval_id(n)
-
-        neurons = self.neurons  # grab once to speed things up
-
-        for s in skids:
-            if self.selected != s:
-                self.selected = s
-                for v in neurons[s]:
-                    self._selected_color = v.color
-                    v.set_data(color=self.highlight_color)
-            else:
-                self.selected = None
-                for v in neurons[s]:
-                    v.set_data(color=self._selected_color)
-
-        self.update_legend()
-
-    def set_colors(self, c, include_connectors=False):
     @update_legend
     def set_colors(self, c):
         """Set object color.
@@ -793,62 +757,6 @@ class Viewer:
                         new_c = gfx.Color(cmap[n]).rgba
                     v.material.color = gfx.Color(new_c)
 
-
-    def set_alpha(self, a, include_connectors=True):
-        """Set neuron color alphas.
-
-        Parameters
-        ----------
-        a :      tuple | dict
-                 Alpha value(s) to apply. Values must be 0-1. Accepted:
-                   1. Tuple of single alpha. Applied to all visible neurons.
-                   2. Dictionary mapping skeleton IDs to alpha.
-
-        """
-        neurons = self.neurons  # grab once to speed things up
-        if isinstance(a, (tuple, list, np.ndarray, str)):
-            amap = {s: a for s in neurons}
-        elif isinstance(a, dict):
-            amap = a
-        else:
-            raise TypeError(f'Unable to use colors of type "{type(a)}"')
-
-        for n in neurons:
-            if n in amap:
-                for v in neurons[n]:
-                    if getattr(v, '_pinned', False):
-                        continue
-                    if v._neuron_part == 'connectors' and not include_connectors:
-                        continue
-
-                    this_c = np.asarray(v.material.color.rgba)
-
-                    # For arrays of colors
-                    if this_c.ndim == 2:
-                        # If no alpha channel yet, add one
-                        if this_c.shape[1] == 3:
-                            this_c = np.insert(this_c,
-                                               3,
-                                               np.ones(this_c.shape[0]),
-                                               axis=1)
-
-                        # If already the correct alpha value
-                        if np.all(this_c[:, 3] == amap[n]):
-                            continue
-                        else:
-                            this_c[:, 3] = amap[n]
-                    else:
-                        if len(this_c) == 4 and this_c[3] == amap[n]:
-                            continue
-                        else:
-                            this_c = tuple([this_c[0], this_c[1], this_c[2], amap[n]])
-
-                    if isinstance(v, gfx.Mesh):
-                        v.color = this_c
-                    else:
-                        v.set_data(color=this_c)
-
-    def colorize(self, palette='seaborn:tab10', objects=None):
         """Colorize objects using a color palette.
 
         Parameters
