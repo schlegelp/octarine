@@ -32,7 +32,7 @@ This is still a prototype but basic stuff already works (mostly because `pygfx` 
 ## Installation :rocket:
 
 ```bash
-pip install octarine
+pip install octarine3d
 ```
 
 In addition you will need to install at least one window manager supported by [wgpu-py](https://github.com/pygfx/wgpu-py):

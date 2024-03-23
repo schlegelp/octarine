@@ -16,7 +16,7 @@ with open('requirements.txt') as f:
     requirements = [l for l in requirements if not l.startswith('#')]
 
 setup(
-    name='octarine',
+    name='octarine3d',
     version=verstr,
     packages=find_packages(),
     license='BSD-2-Clause',
