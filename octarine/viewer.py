@@ -26,7 +26,16 @@ logger = config.get_logger(__name__)
 #   - m.material.side = "FRONT" makes volumes look better
 # - make Viewer reactive (see reactive_rendering.py) to save
 #   resources when not actively using the viewer - might help in Jupyter?
-# - add specialised methods for adding neurons, volumes, etc. to the viewer
+# [/] add specialised methods for adding neurons, volumes, etc. to the viewer
+
+
+def update_legend(func):
+    """Decorator to update legend after function call."""
+    def wrapper(*args, **kwargs):
+        func(*args, **kwargs)
+        if args[0].controls:
+            args[0].controls.update_legend()
+    return wrapper
 
 
 class Viewer:
@@ -34,8 +43,6 @@ class Viewer:
 
     Parameters
     ----------
-    reactive :  bool, optional
-                If True, will only render when changes are made to the scene.
     offscreen : bool, optional
                 If True, will use an offscreen Canvas. Useful if you only
                 want a screenshot.
@@ -306,6 +313,7 @@ class Viewer:
         else:
             self.show_controls()
 
+    @update_legend
     def clear(self):
         """Clear canvas of objects (expects lights and background)."""
         # Skip if running in headless mode
@@ -315,11 +323,12 @@ class Viewer:
         # Remove everything but the lights and backgrounds
         self.scene.remove(*self.visuals)
 
+    @update_legend
     def remove(self, to_remove):
         """Remove given neurons/visuals from canvas."""
         to_remove = utils.make_iterable(to_remove)
 
-        neurons = self.neurons  # grab this only once to speed things up
+        neurons = self.objects  # grab this only once to speed things up
         for vis in to_remove:
             if vis in self.scene.children:
                 self.scene.children.remove(vis)
@@ -332,6 +341,7 @@ class Viewer:
         if self.show_bounds:
             self.update_bounds()
 
+    @update_legend
     def pop(self, N=1):
         """Remove the most recently added N visuals."""
         for vis in list(self.objects.values())[-N:]:
@@ -391,6 +401,7 @@ class Viewer:
         """Center camera on visuals."""
         self.camera.show_object(self.scene, scale=1.1, view_dir=(0., 0., 1.), up=(0., -1., 0.))
 
+    @update_legend
     def add(self, x, center=True, clear=False, **kwargs):
         """Add objects to canvas.
 
@@ -442,6 +453,7 @@ class Viewer:
         if center:
             self.center_camera()
 
+    @update_legend
     def add_mesh(self, mesh, name=None, color=None):
         """Add mesh to canvas.
 
@@ -465,6 +477,7 @@ class Viewer:
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
 
+    @update_legend
     def add_scatter(self, points, name=None, color=None, size=2):
         """Add scatter plot to canvas.
 
@@ -492,6 +505,7 @@ class Viewer:
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
 
+    @update_legend
     def add_lines(self, lines, name=None, color=None, linewidth=1):
         """Add lines to canvas.
 
@@ -527,6 +541,7 @@ class Viewer:
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
 
+    @update_legend
     def add_volume(self, volume, dims, name=None, color=None, offset=(0, 0, 0)):
         """Add image volume to canvas.
 
@@ -700,6 +715,8 @@ class Viewer:
         self.update_legend()
 
     def set_colors(self, c, include_connectors=False):
+    @update_legend
+    def set_colors(self, c):
         """Set object color.
 
         Parameters
