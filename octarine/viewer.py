@@ -124,17 +124,17 @@ class Viewer:
         self._show_fps = False
 
         # Setup key events
-        self._key_events = {}
-        self._key_events['1'] = lambda : self.set_view('XY')
-        self._key_events['2'] = lambda : self.set_view('XZ')
-        self._key_events['3'] = lambda : self.set_view('YZ')
-        self._key_events['f'] = lambda : self._toggle_fps()
-        self._key_events['c'] = lambda : self._toggle_controls()
+        self.key_events = {}
+        self.key_events['1'] = lambda : self.set_view('XY')
+        self.key_events['2'] = lambda : self.set_view('XZ')
+        self.key_events['3'] = lambda : self.set_view('YZ')
+        self.key_events['f'] = lambda : self._toggle_fps()
+        self.key_events['c'] = lambda : self._toggle_controls()
 
         def _keydown(event):
             """Handle key presses."""
-            if event.key in self._key_events:
-                self._key_events[event.key]()
+            if event.key in self.key_events:
+                self.key_events[event.key]()
 
         # Register events
         self.renderer.add_event_handler(_keydown, "key_down")
@@ -729,24 +729,22 @@ class Viewer:
         ----------
         c :      tuple | dict
                  RGB color(s) to apply. Values must be 0-1. Accepted:
-                   1. Tuple of single color. Applied to all visible neurons.
-                   2. Dictionary mapping skeleton IDs to colors.
+                   1. Tuple of single color. Applied to all visible objects.
+                   2. Dictionary names/IDs to colors.
 
         """
-        neurons = self.neurons  # grab once to speed things up
+        objects = self.objects  # grab once to speed things up
         if isinstance(c, (tuple, list, np.ndarray, str)):
-            cmap = {s: c for s in neurons}
+            cmap = {s: c for s in objects}
         elif isinstance(c, dict):
             cmap = c
         else:
             raise TypeError(f'Unable to use colors of type "{type(c)}"')
 
-        for n in neurons:
+        for n in objects:
             if n in cmap:
-                for v in neurons[n]:
+                for v in objects[n]:
                     if getattr(v, '_pinned', False):
-                        continue
-                    if v._neuron_part == 'connectors' and not include_connectors:
                         continue
                     if not hasattr(v, 'material'):
                         continue
@@ -755,7 +753,7 @@ class Viewer:
                     if len(v.material.color) == 4:
                         new_c = gfx.Color(cmap[n]).rgba
                     else:
-                        new_c = gfx.Color(cmap[n]).rgba
+                        new_c = gfx.Color(cmap[n]).rgb
                     v.material.color = gfx.Color(new_c)
 
     def colorize(self, palette='seaborn:tab10', objects=None, randomize=True):
@@ -868,5 +866,3 @@ class Viewer:
             self.camera.show_object(self.scene, scale=1, view_dir=(-1., 0., 0.), up=(0., -1., 0.))
         else:
             raise TypeError(f'Unable to set view from {type(view)}')
-
-
