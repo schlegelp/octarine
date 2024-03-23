@@ -154,16 +154,27 @@ class Controls(QtWidgets.QWidget):
         N_items = self.legend.count()
         present = []
         for i in list(range(N_items))[::-1]:
+            # Get this item
             item = self.legend.item(i)
+
             # Clear item if not present anymore
             if item._id not in objects:
                 self.legend.takeItem(i)
+                continue
             else:
                 present.append(item._id)
+
             # Update color
-            # try:
-            #     color = objects[item._id][0].material.color
-            #     item_widget = self.legend.itemWidget(item)
+            try:
+                color = objects[item._id][0].material.color
+            except BaseException:
+                color = gfx.Color('k')
+            # Find the button in this widget
+            item_widget = self.legend.itemWidget(item)
+            line_push_button = item_widget.findChild(QtWidgets.QPushButton, item._id)
+            # Update color
+            if line_push_button:
+                line_push_button.setStyleSheet(f"background-color: {color.css}")
 
         # Add new items
         for obj in objects:
@@ -181,7 +192,7 @@ class Controls(QtWidgets.QWidget):
     def _clicked(self):
         sender = self.sender()
         push_button = self.findChild(QtWidgets.QPushButton, sender.objectName())
-        print(f'click: {push_button.objectName()}')
+        # print(f'click: {push_button.objectName()}')
 
     def create_color_btn(self, name, target, property, callback=None):
         layout = QtWidgets.QHBoxLayout()
