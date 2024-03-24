@@ -1,7 +1,8 @@
+import numpy as np
 import pygfx as gfx
 
 try:
-    from PySide6 import QtWidgets, QtGui, QtCore
+    from PySide6 import QtWidgets, QtCore
 except ImportError:
     raise ImportError("Showing controls requires PySide6. Please install it via:\n `pip install PySide6`.")
 
@@ -22,12 +23,22 @@ class Controls(QtWidgets.QWidget):
         self.btn_layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.btn_layout)
 
+        # Build legend
         self.build_gui()
+
+        # Populate legend
+        self.update_legend()
+
+        # This determines the target for color changes
+        self.active_objects = None
+
+        self.color_picker = QtWidgets.QColorDialog(parent=self)
+        self.color_picker.currentColorChanged.connect(self.set_color)
+        self.color_picker.colorSelected.connect(self.reset_active_objects)
 
     def build_gui(self):
         """Build the GUI."""
-
-        # Add legend
+        # Add legend (i.e. a list widget)
         self.legend = self.create_legend()
 
         # First: add button to toggle flat shading
@@ -47,6 +58,7 @@ class Controls(QtWidgets.QWidget):
         self.mesh_wireframe_checkbox.toggled.connect(set_wireframe)
         self.btn_layout.addWidget(self.mesh_wireframe_checkbox)
 
+        # Add horizontal divider
         self.add_split()
 
         # Third: add controls to adjust ambient light
@@ -65,6 +77,7 @@ class Controls(QtWidgets.QWidget):
                     "Intensity", 0, 10, gfx.AmbientLight, "intensity", step=0.01
                 )
 
+        # Add horizontal divider
         self.add_split()
 
         self.btn_layout.addStretch(1)
@@ -72,6 +85,7 @@ class Controls(QtWidgets.QWidget):
         return
 
     def add_split(self):
+        """Add horizontal divider."""
         # self.btn_layout.addSpacing(5)
         self.btn_layout.addWidget(QHLine())
         # self.btn_layout.addSpacing(5)
@@ -85,11 +99,11 @@ class Controls(QtWidgets.QWidget):
         layout.addWidget(list_widget)
         list_widget.setSpacing(spacing)
 
-        # Add some example items
-        for i, c in enumerate(["red", "green", "blue"]):
-            item, item_widget = self.make_legend_entry(f"Item {i}", color=c)
-            list_widget.addItem(item)
-            list_widget.setItemWidget(item, item_widget)
+        # Add some example items (for debugging only)
+        # for i, c in enumerate(["red", "green", "blue"]):
+        #     item, item_widget = self.make_legend_entry(f"Item {i}", color=c)
+        #     list_widget.addItem(item)
+        #     list_widget.setItemWidget(item, item_widget)
 
         if index is not None:
             self.btn_layout.insertWidget(index, list_widget)
@@ -114,9 +128,11 @@ class Controls(QtWidgets.QWidget):
                     List item.
         item_widget : QtWidgets.QWidget
                     List item widget.
+
         """
         # Initialize widget and item
         item_widget = QtWidgets.QWidget()
+        item_widget.setObjectName(name)
         item = QtWidgets.QListWidgetItem()
         item._id = name  # this helps to identify the item
 
@@ -127,6 +143,7 @@ class Controls(QtWidgets.QWidget):
         # Generate the checkbox
         line_checkbox = QtWidgets.QCheckBox()
         line_checkbox.setObjectName(name)  # this helps to identify the checkbox
+        line_checkbox.setMaximumWidth(40)
         line_checkbox.setToolTip("Toggle visibility")
         line_checkbox.setChecked(True)
 
@@ -138,16 +155,7 @@ class Controls(QtWidgets.QWidget):
         line_checkbox.toggled.connect(set_property)
 
         # Generate the button
-        line_push_button = QtWidgets.QPushButton()
-        line_push_button.setMaximumWidth(20)
-        line_push_button.setMaximumHeight(20)
-        line_push_button.setObjectName(name)  # this helps to identify the button
-        line_push_button.setToolTip("Click to change color")
-        line_push_button.clicked.connect(self._clicked)  # connect button to function
-
-        if color is not None:
-            color = gfx.Color(color).css
-            line_push_button.setStyleSheet(f"background-color: {color}")
+        line_push_button = self.create_color_btn(name, color=color, callback=None)
 
         # Generate item layout
         item_layout = QtWidgets.QHBoxLayout()
@@ -209,38 +217,60 @@ class Controls(QtWidgets.QWidget):
                 self.legend.addItem(item)
                 self.legend.setItemWidget(item, item_widget)
 
-    def _clicked(self):
+    def color_button_clicked(self):
+        """Set the active object to be the buttons target."""
         sender = self.sender()
         push_button = self.findChild(QtWidgets.QPushButton, sender.objectName())
         # print(f'click: {push_button.objectName()}')
+        self.active_objects = push_button.objectName()
+        self.color_picker.show()
 
-    def create_color_btn(self, name, target, property, callback=None):
-        layout = QtWidgets.QHBoxLayout()
+    def set_color(self, color):
+        """Color target object."""
+        if self.active_objects is None:
+            return
+        elif self.active_objects == "selected":
+            targets = []
+            for item in self.legend.selectedItems():
+                targets.append(item.listWidget().objectName())
+        elif not isinstance(self.active_objects, list):
+            targets = [self.active_objects]
 
-        layout.addWidget(QtWidgets.QLabel(name))
+        # Convert QColor to [0-1] RGB
+        color = np.array(color.toTuple()) / 255
 
+        self.viewer.set_colors({name: color for name in targets})
+
+    def reset_active_objects(self):
+        """Reset active objects."""
+        self.color_target = "selected"
+
+    def create_color_btn(self, name, color=None, callback=None):
+        """Generate a colorize button ."""
+        # Generate button
         color_btn = QtWidgets.QPushButton()
-        color_btn.setStyleSheet("background-color: %s" % getattr(target, property).hex)
 
-        def set_color():
-            color = QtWidgets.QColorDialog.getColor(
-                QtGui.QColor(getattr(target, property).hex)
-            )
-            if color.isValid():
-                color_btn.setStyleSheet("background-color: %s" % color.name())
-                setattr(target, property, color.name())
-                if callback:
-                    callback(color.name())
+        # Make sure it doesn't take up too much space
+        color_btn.setMaximumWidth(20)
+        color_btn.setMaximumHeight(20)
+        color_btn.setObjectName(name)
 
-        color_btn.clicked.connect(set_color)
+        # Set tooltip
+        color_btn.setToolTip("Click to change color")
 
-        layout.addWidget(color_btn)
-        self.btn_layout.addLayout(layout)
+        # Set color (will be updated subsequently via controls.update_legend())
+        if color is None:
+            color = 'w'
+        color = gfx.Color(color)
+        color_btn.setStyleSheet(f"background-color: {color.css}")
+
+        # Connect callback (this just sets the active object)
+        color_btn.clicked.connect(self.color_button_clicked)
+
         return color_btn
 
-    def create_checkbox(
-        self, name, targets=None, property=None, callback=None, toggle=[], index=None, default_value=False
-    ):
+    def create_checkbox(self, name, targets=None, property=None, callback=None, toggle=[], index=None, default_value=False):
+        """Create a checkbox to toggle a property."""
         checkbox = QtWidgets.QCheckBox(name)
 
         checkbox.setChecked(bool(default_value))
@@ -268,6 +298,7 @@ class Controls(QtWidgets.QWidget):
         return checkbox
 
     def create_slider(self, name, min, max, targets, property, step=1, callback=None):
+        """Generate a slider to adjust a property."""
         layout = QtWidgets.QHBoxLayout()
         layout.addWidget(QtWidgets.QLabel(name))
         slide = QtWidgets.QSlider(QtCore.Qt.Horizontal)
@@ -309,22 +340,11 @@ class Controls(QtWidgets.QWidget):
         self.btn_layout.addLayout(layout)
         return slide
 
-
-    #     self.hello = ["Hallo Welt", "Hei maailma", "Hola Mundo", "Привет мир"]
-
-    #     self.button = QtWidgets.QPushButton("Click me!")
-    #     self.text = QtWidgets.QLabel("Hello World",
-    #                                  alignment=QtCore.Qt.AlignCenter)
-
-    #     self.layout = QtWidgets.QVBoxLayout(self)
-    #     self.layout.addWidget(self.text)
-    #     self.layout.addWidget(self.button)
-
-    #     self.button.clicked.connect(self.magic)
-
-    # @QtCore.Slot()
-    # def magic(self):
-    #     self.text.setText(random.choice(self.hello))
+    def close(self):
+        """Close the controls."""
+        # This makes sure to also close the color picker, not just the controls window
+        self.color_picker.close()
+        super().close()
 
 
 class QHLine(QtWidgets.QFrame):
