@@ -345,19 +345,16 @@ class Viewer:
         self.scene.remove(*self.visuals)
 
     @update_legend
-    def remove(self, to_remove):
+    def remove_objects(self, to_remove):
         """Remove given neurons/visuals from canvas."""
         to_remove = utils.make_iterable(to_remove)
 
-        neurons = self.objects  # grab this only once to speed things up
-        for vis in to_remove:
-            if vis in self.scene.children:
+        for vis in self.scene.children:
+            if vis in to_remove:
                 self.scene.children.remove(vis)
-            else:
-                uuids = utils.eval_id(to_remove)
-                for u in uuids:
-                    for v in neurons.get(u, []):
-                        self.scene.children.remove(v)
+            elif hasattr(vis, '_object_id'):
+                if vis._object_id in to_remove:
+                    self.scene.children.remove(vis)
 
         if self.show_bounds:
             self.update_bounds()
@@ -366,7 +363,7 @@ class Viewer:
     def pop(self, N=1):
         """Remove the most recently added N visuals."""
         for vis in list(self.objects.values())[-N:]:
-            self.remove(vis)
+            self.remove_objects(vis)
 
     @property
     def show_bounds(self):
@@ -394,7 +391,7 @@ class Viewer:
         self._show_bounds = False
         for v in self.visuals:
             if getattr(v, '_object_type', '') == 'boundingbox':
-                self.remove(v)
+                self.remove_objects(v)
 
     def resize(self, size):
         """Resize canvas."""
@@ -633,7 +630,7 @@ class Viewer:
         if hasattr(self, '_controls'):
             self._controls.close()
 
-    def hide_object(self, obj):
+    def hide_objects(self, obj):
         """Hide given object(s).
 
         Parameters
@@ -645,7 +642,7 @@ class Viewer:
         objects = self.objects   # grab once to speed things up
         for ob in utils.make_iterable(obj):
             if ob not in objects:
-                logger.warning(f'Object {ob} not found on canvas.')
+                logger.warning(f'Object "{ob}" not found on canvas.')
                 continue
             for v in objects[ob]:
                 if getattr(v, '_pinned', False):
@@ -668,7 +665,7 @@ class Viewer:
         """
         objects = self.objects  # grab once to speed things up
         if obj is not None:
-            obj = utils.make_iterable(obj)
+            ids = utils.make_iterable(obj)
         else:
             ids = list(objects.keys())
 

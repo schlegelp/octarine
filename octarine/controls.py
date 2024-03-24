@@ -41,6 +41,23 @@ class Controls(QtWidgets.QWidget):
         # Add legend (i.e. a list widget)
         self.legend = self.create_legend()
 
+        # Add the dropdown to action all selected objects
+        self.sel_action = QtWidgets.QPushButton(text="Action")
+        self.sel_action_menu = QtWidgets.QMenu(self)
+        self.sel_action_menu.addAction("Hide")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.hide_selected)
+        self.sel_action_menu.addAction("Show")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.show_selected)
+        self.sel_action_menu.addAction("Delete")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.delete_selected)
+        self.sel_action_menu.addAction("Color")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.color_selected)
+        self.sel_action.setMenu(self.sel_action_menu)
+        self.btn_layout.addWidget(self.sel_action)
+
+        # Add horizontal divider
+        self.add_split()
+
         # First: add button to toggle flat shading
         self.mesh_flat_checkbox = self.create_checkbox(
             "Flat Shading", gfx.Mesh, "material.flat_shading"
@@ -80,7 +97,7 @@ class Controls(QtWidgets.QWidget):
         # Add horizontal divider
         self.add_split()
 
-        self.btn_layout.addStretch(1)
+        #self.btn_layout.addStretch(1)
 
         return
 
@@ -226,13 +243,11 @@ class Controls(QtWidgets.QWidget):
         self.color_picker.show()
 
     def set_color(self, color):
-        """Color target object."""
+        """Color current active object(s). This is the callback for the color picker."""
         if self.active_objects is None:
             return
         elif self.active_objects == "selected":
-            targets = []
-            for item in self.legend.selectedItems():
-                targets.append(item.listWidget().objectName())
+            targets = self.get_selected()
         elif not isinstance(self.active_objects, list):
             targets = [self.active_objects]
 
@@ -241,9 +256,39 @@ class Controls(QtWidgets.QWidget):
 
         self.viewer.set_colors({name: color for name in targets})
 
+    def get_selected(self):
+        """Get selected items."""
+        sel = []
+        for item in self.legend.selectedItems():
+            sel.append(item._id)
+        return sel
+
+    def color_selected(self):
+        """Set the active object to be the selected objects."""
+        self.active_objects = "selected"
+        self.color_picker.show()
+
+    def hide_selected(self):
+        """Hide selected objects."""
+        sel = self.get_selected()
+        if sel:
+            self.viewer.hide_objects(self.get_selected())
+
+    def show_selected(self):
+        """Show selected objects."""
+        sel = self.get_selected()
+        if sel:
+            self.viewer.unhide_objects(self.get_selected())
+
+    def delete_selected(self):
+        """Delete selected objects."""
+        sel = self.get_selected()
+        if sel:
+            self.viewer.remove_objects(self.get_selected())
+
     def reset_active_objects(self):
         """Reset active objects."""
-        self.color_target = "selected"
+        self.color_target = None
 
     def create_color_btn(self, name, color=None, callback=None):
         """Generate a colorize button ."""
