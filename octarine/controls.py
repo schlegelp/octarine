@@ -120,12 +120,29 @@ class Controls(QtWidgets.QWidget):
         item = QtWidgets.QListWidgetItem()
         item._id = name  # this helps to identify the item
 
-        # Generate a button
+        # Generate the label
         line_text = QtWidgets.QLabel(f"{name}")
+        line_text.setToolTip("Click to select")
+
+        # Generate the checkbox
+        line_checkbox = QtWidgets.QCheckBox()
+        line_checkbox.setObjectName(name)  # this helps to identify the checkbox
+        line_checkbox.setToolTip("Toggle visibility")
+        line_checkbox.setChecked(True)
+
+        def set_property(*args):
+            for vis in self.viewer.objects.get(name, []):
+                # Navigate to the correct property
+                vis.visible = line_checkbox.isChecked()
+
+        line_checkbox.toggled.connect(set_property)
+
+        # Generate the button
         line_push_button = QtWidgets.QPushButton()
         line_push_button.setMaximumWidth(20)
         line_push_button.setMaximumHeight(20)
         line_push_button.setObjectName(name)  # this helps to identify the button
+        line_push_button.setToolTip("Click to change color")
         line_push_button.clicked.connect(self._clicked)  # connect button to function
 
         if color is not None:
@@ -136,9 +153,12 @@ class Controls(QtWidgets.QWidget):
         item_layout = QtWidgets.QHBoxLayout()
         item_layout.setContentsMargins(0, 0, 0, 0)  # make layout tight
         item_layout.setSpacing(0)
+
         # Add text and button to layout
         item_layout.addWidget(line_text)
+        item_layout.addWidget(line_checkbox)
         item_layout.addWidget(line_push_button)
+
         # Set layout
         item_widget.setLayout(item_layout)
         item.setSizeHint(item_widget.sizeHint())
