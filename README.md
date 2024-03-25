@@ -35,7 +35,7 @@ This is still a prototype but basic stuff already works (mostly because `pygfx` 
 pip install octarine3d
 ```
 
-In addition you will need to install at least one window manager supported by [wgpu-py](https://github.com/pygfx/wgpu-py):
+In addition you will need to install at least one window manager supported by [`wgpu-py`](https://github.com/pygfx/wgpu-py):
 - qt: PySide6, PyQt6, PySide2, PyQt5 all work but I recommend PySide6 (see below)
 - glfw: a lightweight GUI for the desktop
 - jupyter_rfb: only needed if you plan on using `Octarine` in Jupyter
