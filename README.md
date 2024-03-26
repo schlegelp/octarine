@@ -12,12 +12,12 @@ abstracting away some of the boiler plate code for you.
 
 ## Rationale :thought_balloon:
 Why another 3d viewer? There are plenty options out there:
-[`vedo`](https://github.com/marcomusy/vedo), [`ipygany`](https://github.com/jupyter-widgets-contrib/ipygany), [`polyscope`](https://github.com/nmwsharp/polyscope), [`napari`](https://github.com/napari/napari), [`fury`](https://github.com/fury-gl/fury) or [`pyvista`](https://github.com/pyvista/pyvista) to name but a few. All of these are great in their own right but I wanted something (a) without heavy dependencies (i.e. no VTK), (b) that lets me interactively explore my data in both REPL and Jupyter and (c) is very performant. None of the above ticked all those boxes for me.
+[`vedo`](https://github.com/marcomusy/vedo), [`ipygany`](https://github.com/jupyter-widgets-contrib/ipygany), [`polyscope`](https://github.com/nmwsharp/polyscope), [`napari`](https://github.com/napari/napari), [`fury`](https://github.com/fury-gl/fury), [`plotly`](https://github.com/plotly/plotly.py) or [`pyvista`](https://github.com/pyvista/pyvista) to name but a few. All of these are great in their own right but I wanted something *(a)* without heavy dependencies (i.e. no VTK), *(b)* that lets me interactively explore my data in both REPL and Jupyter and *(c)* is very performant. None of the existing solutions ticked all those boxes for me.
 
 `Octarine` tries to fill that gap:
 1. _Lightweight_ with very few direct or indirect dependencies.
 2. Works in both _Jupyter_ and _REPL_.
-3. _High performance_: a mesh with 15M faces renders with 80 fps at 1080p (2023 MacBook Pro).
+3. _High performance_: a mesh with 15M faces renders with 80 fps at 1080p on a 2023 MacBook Pro.
 
 ## ToDo :ballot_box_with_check:
 This is still a prototype but basic stuff already works (mostly because `pygfx` makes it so ridiculously easy).
@@ -25,7 +25,9 @@ This is still a prototype but basic stuff already works (mostly because `pygfx` 
 - [x] basic datatypes: meshes, points, scatter, volumes
 - [x] custom keyboard shortcuts
 - [x] rudamentary controls + legend
+- [x] screenshots
 - [ ] user-defined animations
+- [ ] methods/controls to manipulate image volumes
 - [ ] proper docs
 - [ ] tests
 
@@ -68,6 +70,8 @@ v.add(m, color='b')
 v.close()
 ```
 
+![demo gif](https://private-user-images.githubusercontent.com/7161148/316890960-b913ecd3-4615-4591-a08f-fadb537201ce.gif?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MTE0NjE3ODgsIm5iZiI6MTcxMTQ2MTQ4OCwicGF0aCI6Ii83MTYxMTQ4LzMxNjg5MDk2MC1iOTEzZWNkMy00NjE1LTQ1OTEtYTA4Zi1mYWRiNTM3MjAxY2UuZ2lmP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI0MDMyNiUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNDAzMjZUMTM1ODA4WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9NDkzODg1NjU4MThjYzEzYzJmMTdlODgzYzhiNTcxNzI5ZjRjYmJlOTFkNGQ3ZTQ5MDM1MTRhNGE0MmQ5NmQyMCZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QmYWN0b3JfaWQ9MCZrZXlfaWQ9MCZyZXBvX2lkPTAifQ.WgohFpEs-112AKBKjHV-ilHL0xZUU1asLkk0OigVh9E)
+
 Other selected `Viewer` methods:
 - `add()`: generic method to add stuff to the viewer; will call respective specialised methods
 - `add_lines()`: add line plot
@@ -79,7 +83,7 @@ Other selected `Viewer` methods:
 - `close()`: close viewer
 - `colorize()`: cycle colors for all objects
 - `pop()`: remove last added object
-- `remove()`: remove a given object(s) from the scene
+- `remove_objects()`: remove a given object(s) from the scene
 - `screenshot()`: take (and save) a screenshot
 - `set_bgcolor()`: set background color
 - `set_colors()`: set object colors
@@ -90,7 +94,7 @@ The following keyboard shortcuts are hard-coded:
 - `2`: reset view to XZ (dorsal)
 - `3`: reset view to YZ (lateral)
 - `f`: show FPS
-- `c`: show control panel
+- `c`: show control panel (requires `PySide6`)
 
 You can also bind custom functions to keys:
 
@@ -98,3 +102,14 @@ You can also bind custom functions to keys:
 # Bind `x` key to the cycle-colors method
 v.key_events['x'] = lambda : v.colorize()
 ```
+
+## Want to contribute?
+We welcome all kinds of contributions. For example:
+
+- reports of bugs, broken examples, etc.
+- feature requests
+- pull requests with bug fixes or new features
+
+If you already know what needs doing, feel free to open a pull request
+right away. When in doubt please open an [issue](https://github.com/schlegelp/octarine/issues)
+so we can discuss the best way to address the issue.
