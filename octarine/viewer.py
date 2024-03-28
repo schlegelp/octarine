@@ -596,10 +596,16 @@ class Viewer:
         name :          str, optional
                         Name for the visual.
         color :         tuple, optional
-                        Color to use for plotting. Can be the name of
-                        a colormap or a single color.
-        offset :        tuple, optional
-                        Offset for the volume.
+                    Color to use for plotting. Can be the name of
+                    a colormap or a single color.
+        offset :    tuple, optional
+                    Offset for the volume.
+        cmin/cmax : float | "auto", optional
+                    Min/max values for the colormap. If "auto", will
+                    use the min/max of the volume. If `None` will determine
+                    the min/max based on the data type of `volume`.
+        center :    bool, optional
+                    If True, re-center camera to all objects on canvas.
 
         """
         if not isinstance(volume, np.ndarray):

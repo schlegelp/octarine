@@ -74,7 +74,7 @@ def color_to_texture(color, N=256, gamma=1.0, fade=True):
     return gfx.Texture(colormap_data, dim=1)
 
 
-def volume2gfx(vol, dims, color, offset=(0, 0, 0), **kwargs):
+def volume2gfx(vol, dims, color, offset=(0, 0, 0), cmin=None, cmax=None, **kwargs):
     """Convert volume (i.e. 3d arrays) to pygfx visual.
 
     Parameters
@@ -105,8 +105,16 @@ def volume2gfx(vol, dims, color, offset=(0, 0, 0), **kwargs):
     if grid.dtype == bool:
         grid = grid.astype(int)
 
-    # Find the potential max value of the volume
-    cmax = np.iinfo(grid.dtype).max
+    # Find the potential min/max value of the volume
+    if cmax is None:
+        cmax = np.iinfo(grid.dtype).max
+    elif cmax == "auto":
+        cmax = grid.max()
+
+    if cmin is None:
+        cmin = 0
+    elif cmin == "auto":
+        cmin = grid.min()
 
     # Initialize texture
     tex = gfx.Texture(grid, dim=3)
