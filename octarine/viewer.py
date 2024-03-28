@@ -2,6 +2,7 @@ import png
 import cmap
 import uuid
 import random
+import inspect
 
 import numpy as np
 import pygfx as gfx
@@ -12,6 +13,7 @@ from wgpu.gui.auto import WgpuCanvas
 from wgpu.gui.offscreen import WgpuCanvas as WgpuCanvasOffscreen
 
 from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx
+from .conversion import get_converter
 from . import utils, config
 
 
@@ -427,21 +429,25 @@ class Viewer:
 
     @update_legend
     def add(self, x, center=True, clear=False, **kwargs):
-        """Add objects to canvas.
+        """Add object to canvas.
 
-        This is just a shorthand for the respective methods (e.g. `Viewer.add_mesh`).
+        This function is a general entry point for adding objects to the canvas.
+        It will look at the type of the input and try to find an appropriate
+        function to convert the input to visuals.
+
+        Use `octarine.register_converter` to add custom converters.
 
         Parameters
         ----------
-        x :         Mesh-like | Volume | Points | gfx Visuals
-                    Object(s) to add to the canvas.
+        x
+                    Object to add to the canvas.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
         clear :     bool, optional
                     If True, clear canvas before adding new objects.
         **kwargs
-                    Keyword arguments passed when generating visuals. See
-                    the respective methods (e.g. `Viewer.add_mesh`) for details.
+                    Keyword arguments passed to the conversion functions when
+                    generating visuals.
 
         Returns
         -------
@@ -462,23 +468,22 @@ class Viewer:
         if clear:
             self.clear()
 
-        for m in meshes:
-            self.add_mesh(m, **kwargs)
-        for v in volumes:
-            self.add_volume(v, **kwargs)
-        for p in points:
-            self.add_scatter(p, **kwargs)
-        for v in visuals:
-            # Check if the visual is actually just the geometry
-            if isinstance(v, gfx.Geometry):
-                v = gfx.Mesh(
-                    v,
-                    gfx.MeshPhongMaterial()
-                )
+        converter = get_converter(x, raise_missing=False)
+        if converter is None:
+            raise NotImplementedError(f'No converter found for {x} ({type(x)})')
 
+        # Check if we have to provide a color
+        if 'color' not in kwargs and 'color' in inspect.signature(converter).parameters:
+            kwargs['color'] = self._next_color()
+
+        visuals = utils.make_iterable(converter(x, **kwargs))
+        for v in visuals:
             # Give visuals an _object_id if they don't already have one
             if not hasattr(v, '_object_id'):
-                v._object_id = self._next_label('Mesh')
+                new_id = self._next_label('Object')
+                for v2 in visuals:
+                    v._object_id = new_id
+
             self.scene.add(v)
 
         if center:

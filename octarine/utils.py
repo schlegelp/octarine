@@ -1,5 +1,6 @@
 import six
 
+import pygfx as gfx
 import numpy as np
 import pandas as pd
 
@@ -78,14 +79,6 @@ def parse_objects(x, include_geometries=True):
     return meshes, volumes, points, visuals
 
 
-def is_mesh_like(x):
-    """Check if object is mesh (i.e. contains vertices and faces)."""
-    if hasattr(x, 'vertices') and hasattr(x, 'faces'):
-        return True
-
-    return False
-
-
 def make_iterable(x, force_type = None):
     """Force input into a numpy array.
 
@@ -129,3 +122,59 @@ def is_iterable(x) -> bool:
         return True
     else:
         return False
+
+
+def is_hashable(x) -> bool:
+    """Check if object is hashable."""
+    try:
+        hash(x)
+        return True
+    except TypeError:
+        return False
+
+
+def is_mesh_like(x):
+    """Check if object is mesh (i.e. contains vertices and faces)."""
+    if hasattr(x, 'vertices') and hasattr(x, 'faces'):
+        return True
+
+    return False
+
+
+def is_points(x):
+    """Check if object could be points (i.e. contains 3D coordinates)."""
+    if isinstance(x, np.ndarray) and x.ndim == 2 and x.shape[1] == 3:
+        return True
+
+    return False
+
+
+def is_lines(x):
+    """Check if object could be lines (i.e. contains 3D coordinates)."""
+    if isinstance(x, np.ndarray) and x.ndim == 2 and x.shape[1] == 3:
+        return True
+
+    return False
+
+
+def is_volume(x):
+    """Check if object could be a volume (i.e. 3D array)."""
+    if isinstance(x, np.ndarray) and x.ndim == 3:
+        return True
+
+    return False
+
+
+def is_pygfx_visual(x):
+    """Check if object is a pygfx visual."""
+    if isinstance(x, gfx.WorldObject):
+        return True
+    return False
+
+
+def is_pygfx_geometry(x):
+    """Check if object is a pygfx geometry."""
+    if isinstance(x, gfx.Geometry):
+        return True
+    return False
+
