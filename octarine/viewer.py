@@ -503,18 +503,20 @@ class Viewer:
             self.center_camera()
 
     @update_legend
-    def add_mesh(self, mesh, name=None, color=None):
+    def add_mesh(self, mesh, name=None, color=None, center=True):
         """Add mesh to canvas.
 
         Parameters
         ----------
-        mesh :          Mesh-like
-                        Mesh to plot.
-        name :          str, optional
-                        Name for the visual.
-        color :         str | tuple, optional
-                        Color to use for plotting. Can be the name of
-                        a colormap or a single color.
+        mesh :      Mesh-like
+                    Mesh to plot.
+        name :      str, optional
+                    Name for the visual.
+        color :     str | tuple, optional
+                    Color to use for plotting. Can be the name of
+                    a colormap or a single color.
+        center :    bool, optional
+                    If True, re-center camera to all objects on canvas.
 
         """
         if not utils.is_mesh_like(mesh):
@@ -530,21 +532,26 @@ class Viewer:
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
 
+        if center:
+            self.center_camera()
+
     @update_legend
-    def add_scatter(self, points, name=None, color=None, size=2):
+    def add_scatter(self, points, name=None, color=None, size=2, center=True):
         """Add scatter plot to canvas.
 
         Parameters
         ----------
-        points :        (N, 3) array
-                        Points to plot.
-        name :          str, optional
-                        Name for the visual.
-        color :         str | tuple, optional
-                        Color to use for plotting. Can be the name of
-                        a colormap or a single color.
-        size :          int | float
-                        Marker size.
+        points :    (N, 3) array
+                    Points to plot.
+        name :      str, optional
+                    Name for the visual.
+        color :     str | tuple, optional
+                    Color to use for plotting. Can be the name of
+                    a colormap or a single color.
+        size :      int | float
+                    Marker size.
+        center :    bool, optional
+                    If True, re-center camera to all objects on canvas.
 
         """
         if not isinstance(points, np.ndarray):
@@ -562,8 +569,11 @@ class Viewer:
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
 
+        if center:
+            self.center_camera()
+
     @update_legend
-    def add_lines(self, lines, name=None, color=None, linewidth=1):
+    def add_lines(self, lines, name=None, color=None, linewidth=1, center=True):
         """Add lines to canvas.
 
         Parameters
@@ -580,6 +590,8 @@ class Viewer:
                     or one for every point in the line(s).
         linewidth : float, optional
                     Line width.
+        center :    bool, optional
+                    If True, re-center camera to all objects on canvas.
 
         """
         if isinstance(lines, np.ndarray):
@@ -602,19 +614,22 @@ class Viewer:
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
 
+        if center:
+            self.center_camera()
+
     @update_legend
-    def add_volume(self, volume, dims, name=None, color=None, offset=(0, 0, 0)):
+    def add_volume(self, volume, dims, name=None, color=None, offset=(0, 0, 0), cmin=None, cmax='auto', center=True):
         """Add image volume to canvas.
 
         Parameters
         ----------
-        volume :        (N, M, K) array
-                        Volume to plot.
-        dims :          tuple
-                        Scale factors for the volume.
-        name :          str, optional
-                        Name for the visual.
-        color :         tuple, optional
+        volume :    (N, M, K) array
+                    Volume to plot.
+        dims :      tuple
+                    Scale factors for the volume.
+        name :      str, optional
+                    Name for the visual.
+        color :     tuple, optional
                     Color to use for plotting. Can be the name of
                     a colormap or a single color.
         offset :    tuple, optional
@@ -638,9 +653,12 @@ class Viewer:
         elif not isinstance(name, str):
             name = str(name)
 
-        visual = volume2gfx(volume, dims=dims, offset=offset, color=color)
+        visual = volume2gfx(volume, dims=dims, offset=offset, color=color, cmin=cmin, cmax=cmax)
         visual._object_id = name if name else uuid.uuid4()
         self.scene.add(visual)
+
+        if center:
+            self.center_camera()
 
     def close(self):
         """Close the viewer."""
