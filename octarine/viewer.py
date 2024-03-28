@@ -409,7 +409,13 @@ class Viewer:
                 self.remove_objects(v)
 
     def resize(self, size):
-        """Resize canvas."""
+        """Resize canvas.
+
+        Parameters
+        ----------
+        size :  (width, height) tuple
+                New size of the canvas.
+        """
         assert len(size) == 2
         self.canvas.set_logical_size(*size)
 
@@ -438,7 +444,12 @@ class Viewer:
     def center_camera(self):
         """Center camera on visuals."""
         if len(self):
-            self.camera.show_object(self.scene, scale=1.1, view_dir=(0., 0., 1.), up=(0., -1., 0.))
+            self.camera.show_object(
+                self.scene,
+                scale=1,
+                view_dir=(0., 0., 1.),
+                up=(0., -1., 0.)
+                )
 
     @update_legend
     def add(self, x, center=True, clear=False, **kwargs):
@@ -467,11 +478,6 @@ class Viewer:
         None
 
         """
-        (meshes, volumes, points, visuals) = utils.parse_objects(x)
-
-        if len(set(kwargs) & set(['c', 'color', 'colors'])) > 1:
-            raise ValueError('Must not provide colors via multiple arguments')
-
         # If we're runningg in headless mode (primarily for tests on CI) we will
         # simply not add the objects. Not ideal but it turns out to be very
         # annoying to correctly setup on Github Actions.

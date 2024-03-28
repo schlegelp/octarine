@@ -12,6 +12,7 @@ except ImportError:
 # - add dropdown to manipulate all selected objects
 # - add filter to legend (use item.setHidden(True/False) to show/hide items)
 # - highlight object in legend when hovered over in scene
+# - make legend tabbed (QTabWidget)
 
 class Controls(QtWidgets.QWidget):
     def __init__(self, viewer, width=200, height=400):
@@ -95,9 +96,11 @@ class Controls(QtWidgets.QWidget):
                 )
 
         # Add horizontal divider
-        self.add_split()
+        # self.add_split()
 
-        #self.btn_layout.addStretch(1)
+        # This would make it so the legend does not stretch when
+        # we resize the window vertically
+        # self.btn_layout.addStretch(1)
 
         return
 
