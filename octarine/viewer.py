@@ -510,6 +510,8 @@ class Viewer:
             color = self._next_color()
         if name is None:
             name = self._next_label('Mesh')
+        elif not isinstance(name, str):
+            name = str(name)
 
         visual = mesh2gfx(mesh, color=color)
         visual._object_id = name if name else uuid.uuid4()
@@ -540,6 +542,8 @@ class Viewer:
             color = self._next_color()
         if name is None:
             name = self._next_label('Scatter')
+        elif not isinstance(name, str):
+            name = str(name)
 
         visual = points2gfx(points, color=color, size=size)
         visual._object_id = name if name else uuid.uuid4()
@@ -578,6 +582,8 @@ class Viewer:
             color = self._next_color()
         if name is None:
             name = self._next_label('Lines')
+        elif not isinstance(name, str):
+            name = str(name)
 
         visual = lines2gfx(lines, linewidth=linewidth, color=color)
         visual._object_id = name if name else uuid.uuid4()
@@ -616,6 +622,8 @@ class Viewer:
             color = self._next_color()
         if name is None:
             name = self._next_label('Volume')
+        elif not isinstance(name, str):
+            name = str(name)
 
         visual = volume2gfx(volume, dims=dims, offset=offset, color=color)
         visual._object_id = name if name else uuid.uuid4()
