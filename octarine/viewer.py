@@ -7,6 +7,7 @@ import inspect
 import numpy as np
 import pygfx as gfx
 
+from functools import wraps
 from collections import OrderedDict
 
 from wgpu.gui.auto import WgpuCanvas
@@ -34,6 +35,7 @@ logger = config.get_logger(__name__)
 
 def update_legend(func):
     """Decorator to update legend after function call."""
+    @wraps(func)
     def wrapper(*args, **kwargs):
         func(*args, **kwargs)
         if args[0].controls:
