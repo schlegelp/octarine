@@ -258,6 +258,17 @@ class Viewer:
         self._data_text.text = t
 
     @property
+    def size(self):
+        """Return size of the canvas."""
+        return self.canvas.get_logical_size()
+
+    @size.setter
+    def size(self, size):
+        """Set size of the canvas."""
+        assert len(size) == 2
+        self.canvas.set_logical_size(*size)
+
+    @property
     def visuals(self):
         """List of all visuals on this canvas."""
         return [c for c in self.scene.children if hasattr(c, '_object_id')]
