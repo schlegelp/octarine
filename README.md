@@ -43,7 +43,7 @@ In addition you will need to install at least one window manager supported by [`
 - jupyter_rfb: only needed if you plan on using `Octarine` in Jupyter
 - wx
 
-Please note that at this point, `Octarine`'s controls panel requires `PySide6`. So if you need GUI controls you have to use `PySide6`.
+Please note that at this point, `Octarine`'s controls panel requires `PySide6`. So if you want GUI controls you have to use `PySide6`.
 
 ## Quickstart :fire:
 

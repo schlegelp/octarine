@@ -1,6 +1,7 @@
 import png
 import cmap
 import uuid
+import wgpu
 import random
 import inspect
 
@@ -16,7 +17,6 @@ from wgpu.gui.offscreen import WgpuCanvas as WgpuCanvasOffscreen
 from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx
 from .conversion import get_converter
 from . import utils, config
-
 
 
 __all__ = ['Viewer']
@@ -57,32 +57,34 @@ class Viewer:
                 Maximum frames per second to render.
     size :      tuple, optional
                 Size of the viewer window.
+    show :      bool, optional
+                Whether to immediately show the viewer.
     show_controls : bool, optional
                 If True, will show the controls widget.
                 You can always show/hide the controls with
                 ``viewer.show_controls()`` and ``viewer.hide_controls()``.
-
     **kwargs
-                Keyword arguments passed to ``WgpuCanvas``.
+                Keyword arguments are passed through to ``WgpuCanvas``.
 
     """
     palette='seaborn:tab10'
 
     def __init__(self,
-                offscreen=False,
-                title='Octarine Viewer',
-                max_fps=30,
-                size=None,
-                show_controls=False,
-                **kwargs):
+                 offscreen=False,
+                 title='Octarine Viewer',
+                 max_fps=30,
+                 size=None,
+                 show=True,
+                 show_controls=False,
+                 **kwargs):
         # Check if we're running in an IPython environment
-        try:
-            ip = get_ipython()
+        if utils._type_of_script() == 'ipython':
+            ip = get_ipython()  # noqa: F821
             if not ip.active_eventloop:
                 # ip.enable_gui('qt6')
                 raise ValueError('IPython event loop not running. Please use e.g. "%gui qt" to hook into the event loop.')
-        except NameError:
-            ip = None
+
+        self._title = title
 
         # Update some defaults as necessary
         defaults = {'title': title, 'max_fps': max_fps, 'size': size}
@@ -100,7 +102,20 @@ class Viewer:
         else:
             self._offscreen = True
             self.canvas = WgpuCanvasOffscreen(**defaults)
-        self.renderer = gfx.renderers.WgpuRenderer(self.canvas, show_fps=False)
+
+        # Depending on the context we need to do thing slightly differently
+        if WgpuCanvas is wgpu.gui.jupyter.JupyterWgpuCanvas:
+            self._is_jupyter = True
+        else:
+            self._is_jupyter = False
+
+        # There is a bug in pygfx 0.1.18 that causes the renderer to crash
+        # when using a Jupyter canvas without explicitly setting the pixel_ratio.
+        # This is already fixed in main but for now:
+        if self._is_jupyter:
+            self.renderer = gfx.renderers.WgpuRenderer(self.canvas, show_fps=False, pixel_ratio=2)
+        else:
+            self.renderer = gfx.renderers.WgpuRenderer(self.canvas, show_fps=False)
 
         # Set up a default scene
         self.scene = gfx.Scene()
@@ -147,11 +162,12 @@ class Viewer:
         self._show_bounds = False
 
         # This starts the animation loop
-        self.show()
+        if show:
+            self.show()
 
-        # Add controls
-        if show_controls:
-            self.show_controls()
+            # Add controls
+            if show_controls:
+                self.show_controls()
 
     def _animate(self):
         """Animate the scene."""
@@ -317,18 +333,41 @@ class Viewer:
 
         return objects
 
-    def show(self):
-        """Show viewer."""
+    def show(self, use_sidecar=False):
+        """Show viewer.
+
+        Parameters
+        ----------
+        use_sidecar : bool
+                      For Jupyter lab only: if True, will use the Sidecar
+                      extension to display the viewer outside the notebooks.
+                      Will throw an error if Sidecar is not installed.
+
+        """
         # This is for e.g. headless testing
         if getattr(config, 'HEADLESS', False):
             logger.info("Viewer widget not shown - running in headless mode.")
             return
 
-        self.canvas.show()
+        # Start the animation loop
         self.canvas.request_draw(self._animate)
+
+        # In terminal we can just show the window
+        if not self._is_jupyter:
+            self.canvas.show()
+        else:
+            if not hasattr(self, 'widget'):
+                from .jupyter import JupyterOutput
+                # Construct the widget
+                self.widget = JupyterOutput(self, use_sidecar=use_sidecar, sidecar_kwargs={'title': self._title})
+            return self.widget
 
     def show_controls(self):
         """Show controls."""
+        if self._is_jupyter:
+            logger.warning('Controls are not (yet) supported in Jupyter.')
+            return
+
         if not hasattr(self, '_controls'):
             from .controls import Controls
             self._controls = Controls(self)
@@ -502,6 +541,8 @@ class Viewer:
                 new_id = self._next_label('Object')
                 for v2 in visuals:
                     v._object_id = new_id
+            elif not isinstance(v._object_id, str):
+                v._object_id = str(v._object_id)
 
             self.scene.add(v)
 
@@ -685,6 +726,10 @@ class Viewer:
 
         if hasattr(self, '_controls'):
             self._controls.close()
+
+        # Close the Jupyter widget
+        if hasattr(self, 'widget') and not getattr(self.widget, '_is_closed', False):
+            self.widget.close(close_viewer=False)
 
     def hide_objects(self, obj):
         """Hide given object(s).
