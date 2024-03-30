@@ -24,8 +24,12 @@ def get_converter(t, raise_missing=True):
     if type(t) in CONVERTERS:
         return CONVERTERS[type(t)]
 
-    # If that also failed, see if we any of the converters keys are functions
+    # If that also failed, see if we have a converter for a parent class
+    # # or if any of the converters keys are functions
     for k, v in CONVERTERS.items():
+        if isinstance(k, type) and isinstance(t, k):
+            return v
+
         if callable(k):
             try:
                 if k(t):
