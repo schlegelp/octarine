@@ -97,17 +97,9 @@ class Viewer:
             return
 
         if not offscreen:
-            self._offscreen = False
             self.canvas = WgpuCanvas(**defaults)
         else:
-            self._offscreen = True
             self.canvas = WgpuCanvasOffscreen(**defaults)
-
-        # Depending on the context we need to do thing slightly differently
-        if WgpuCanvas is wgpu.gui.jupyter.JupyterWgpuCanvas:
-            self._is_jupyter = True
-        else:
-            self._is_jupyter = False
 
         # There is a bug in pygfx 0.1.18 that causes the renderer to crash
         # when using a Jupyter canvas without explicitly setting the pixel_ratio.
@@ -316,6 +308,16 @@ class Viewer:
         return np.vstack((mn, mx)).T
 
     @property
+    def _is_jupyter(self):
+        """Check if Viewer is using Jupyter canvas."""
+        return "JupyterWgpuCanvas" in str(type(self.canvas))
+
+    @property
+    def _is_offscreen(self):
+        """Check if Viewer is using offscreen canvas."""
+        return isinstance(self.canvas, WgpuCanvasOffscreen)
+
+    @property
     def _object_ids(self):
         """All object IDs on this canvas in order of addition."""
         obj_ids = []
@@ -352,9 +354,13 @@ class Viewer:
         # Start the animation loop
         self.canvas.request_draw(self._animate)
 
+        # If this is an offscreen canvas, we don't need to show anything
+        if isinstance(self.canvas, WgpuCanvasOffscreen):
+            return
         # In terminal we can just show the window
-        if not self._is_jupyter:
+        elif not self._is_jupyter:
             self.canvas.show()
+        # For Jupyter we need to wrap the canvas in a widget
         else:
             if not hasattr(self, 'widget'):
                 from .jupyter import JupyterOutput
@@ -897,8 +903,8 @@ class Viewer:
 
     def screenshot(self,
                    filename='screenshot.png',
-                   pixel_scale=2,
                    size=None,
+                   pixel_ratio=None,
                    alpha=True):
         """Save a screenshot of the canvas.
 
@@ -908,17 +914,18 @@ class Viewer:
                         Filename to save to. If ``None``, will return image array.
                         Note that this will always save a PNG file, no matter
                         the extension.
-        pixel_scale :   int, optional
-                        Factor by which to scale canvas. Determines image
-                        dimensions.
         size :          tuple, optional
                         Size of the screenshot. If provided, will temporarily
                         change the canvas size.
+        pixel_ratio :   int, optional
+                        Factor by which to scale canvas. Determines image
+                        dimensions. Note that this seems to have no effect
+                        on offscreen canvases.
         alpha :         bool, optional
                         If True, will export transparent background.
 
         """
-        im = self._screenshot(alpha=alpha, size=size)
+        im = self._screenshot(alpha=alpha, size=size, pixel_ratio=pixel_ratio)
         if filename:
             if not filename.endswith('.png'):
                 filename += '.png'
@@ -926,14 +933,22 @@ class Viewer:
         else:
             return im
 
-    def _screenshot(self, alpha=True, size=None):
+    def _screenshot(self, alpha=True, size=None, pixel_ratio=None):
         """Return image array for screenshot."""
         if alpha:
             op = self._background.opacity
             self._background.opacity = 0
         if size:
-            os = (self.canvas.width(), self.canvas.height())
-            self.canvas.set_logical_size(*size)
+            os = self.size
+            self.size = size
+        if pixel_ratio:
+            opr = self.renderer.pixel_ratio
+            self.renderer.pixel_ratio = pixel_ratio
+
+        # If this is an offscreen canvas, we need to manually trigger a draw first
+        # Note: this has to happen _after_ adjust parameters!
+        if isinstance(self.canvas, WgpuCanvasOffscreen):
+            self.canvas.draw()
 
         try:
             im = self.renderer.snapshot()
@@ -943,7 +958,9 @@ class Viewer:
             if alpha:
                 self._background.opacity = op
             if size:
-                self.canvas.set_logical_size(*os)
+                self.size = os
+            if pixel_ratio:
+                self.renderer.pixel_ratio = opr
 
         return im
 
