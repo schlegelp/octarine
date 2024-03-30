@@ -178,3 +178,32 @@ def is_pygfx_geometry(x):
         return True
     return False
 
+
+def _type_of_script() -> str:
+    """Return context (terminal, jupyter, colab, iPython) in which navis is run."""
+    try:
+        ipy_str = str(type(get_ipython()))  # noqa: F821
+        if 'zmqshell' in ipy_str:
+            return 'jupyter'
+        elif 'colab' in ipy_str:
+            return 'colab'
+        else:  # if 'terminal' in ipy_str:
+            return 'ipython'
+    except BaseException:
+        return 'terminal'
+
+
+def is_jupyter() -> bool:
+    """Test if navis is run in a Jupyter notebook.
+
+    Also returns True if inside Google colaboratory!
+
+    Examples
+    --------
+    >>> from navis.utils import is_jupyter
+    >>> # If run outside a Jupyter environment
+    >>> is_jupyter()
+    False
+
+    """
+    return _type_of_script() in ('jupyter', 'colab')
