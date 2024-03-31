@@ -8,7 +8,7 @@ from . import config, utils
 logger = config.get_logger(__name__)
 
 
-def mesh2gfx(mesh, color):
+def mesh2gfx(mesh, color, alpha=None):
     """Convert mesh to pygfx visuals.
 
     Parameters
@@ -19,6 +19,10 @@ def mesh2gfx(mesh, color):
                     Color to use for plotting. If multiple colors,
                     must be a list of colors with the same length as
                     the number of faces or vertices.
+    alpha :         float, optional
+                    Opacity value [0-1]. If provided, will override
+                    the alpha channel of the color.
+
     """
     # Skip empty meshes
     if not len(mesh.faces):
@@ -27,6 +31,9 @@ def mesh2gfx(mesh, color):
     mat_color_kwargs = dict()
     obj_color_kwargs = dict()
     if isinstance(color, np.ndarray) and color.ndim == 2:
+        if alpha is not None:
+            color[:, -1] = alpha
+
         if len(color) == len(mesh.vertices):
             obj_color_kwargs = dict(colors=color)
             mat_color_kwargs = dict(color_mode="vertex")
@@ -36,6 +43,10 @@ def mesh2gfx(mesh, color):
         else:
             mat_color_kwargs["color"] = color
     else:
+        if alpha is not None:
+            color = gfx.Color(color).rgba
+            color = (color[0], color[1], color[2], alpha)
+
         mat_color_kwargs["color"] = color
 
     vis = gfx.Mesh(
