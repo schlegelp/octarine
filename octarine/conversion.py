@@ -43,7 +43,7 @@ def get_converter(t, raise_missing=True):
     raise NotImplementedError(f"No converter found for {t} ({type(t)}).")
 
 
-def register_converter(t, converter):
+def register_converter(t, converter, insert='first'):
     """Register a converter for a given data type.
 
     Parameters
@@ -56,12 +56,26 @@ def register_converter(t, converter):
                 Function that converts `x` to pygfx visuals. Must accept
                 at least a single argument and return either a single
                 visual or a list thereof.
+    insert :    "first" | "last"
+                Whether to insert the converter at the beginning or end
+                of the list of converters. This is important because when
+                looking for a converter for a given type we will use the
+                first one that matches.
 
     """
+    global CONVERTERS
+    assert insert in ('first', 'last')
+
     if not callable(converter):
         raise ValueError("Converter must be callable.")
 
     if not callable(t) and not is_hashable(t):
         raise ValueError("Type must be hashable or callable.")
 
-    CONVERTERS[t] = converter
+
+    if insert == 'first':
+        items = list(CONVERTERS.items())
+        items.insert(0, (t, converter))
+        CONVERTERS = dict(items)
+    else:
+        CONVERTERS[t] = converter
