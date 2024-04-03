@@ -152,6 +152,7 @@ class Viewer:
 
         # Finally, setting some variables
         self._show_bounds = False
+        self._animations = []
 
         # This starts the animation loop
         if show:
@@ -163,6 +164,16 @@ class Viewer:
 
     def _animate(self):
         """Animate the scene."""
+        to_remove = []
+        for i, func in enumerate(self._animations):
+            try:
+                func()
+            except BaseException as e:
+                logger.error(f'Removing animtation function {func} because of error: {e}')
+                to_remove.append(i)
+        for i in to_remove[::-1]:
+            self.remove_animtation(i)
+
         if self._show_fps:
             with self.stats:
                 self.renderer.render(self.scene, self.camera, flush=False)
@@ -344,6 +355,37 @@ class Viewer:
             objects[ob] = [v for v in self.visuals if getattr(v, '_object_id', None) == ob]
 
         return objects
+
+    def add_animation(self, x):
+        """Add animation function to the Viewer.
+
+        Parameters
+        ----------
+        x :     callable
+                Function to add to the animation loop.
+
+        """
+        if not callable(x):
+            raise TypeError(f'Expected callable, got {type(x)}')
+
+        self._animations.append(x)
+
+    def remove_animtation(self, x):
+        """Remove animation function from the Viewer.
+
+        Parameters
+        ----------
+        x :     callable | int
+                Either the function itself or its index
+                in the list of animations.
+
+        """
+        if callable(x):
+            self._animations.remove(x)
+        elif isinstance(x, int):
+            self._animations.pop(x)
+        else:
+            raise TypeError(f'Expected callable or index (int), got {type(x)}')
 
     def show(self, use_sidecar=False):
         """Show viewer.
