@@ -308,6 +308,16 @@ class Viewer:
         return np.vstack((mn, mx)).T
 
     @property
+    def max_fps(self):
+        """Maximum frames per second to render."""
+        return self.canvas._subwidget._max_fps
+
+    @max_fps.setter
+    def max_fps(self, v):
+        assert isinstance(v, int)
+        self.canvas._subwidget._max_fps = v
+
+    @property
     def _is_jupyter(self):
         """Check if Viewer is using Jupyter canvas."""
         return "JupyterWgpuCanvas" in str(type(self.canvas))
