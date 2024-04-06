@@ -5,6 +5,8 @@ Octarine is the eighth color of the Discworld's spectrum, which is described as 
 </i>
 </p>
 
+[![docs](https://github.com/schlegelp/octarine/actions/workflows/docs.yml/badge.svg)](https://schlegelp.github.io/octarine/)
+
 # Octarine
 A minimalist, easy-to-use, high-performance 3D viewer. `Octarine` is build on top of the excellent
 [`pygfx`](https://github.com/pygfx/pygfx) WGPU rendering engine which does most of the heavy lifting - we're simply

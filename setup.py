@@ -29,7 +29,7 @@ setup(
     long_description_content_type='text/markdown',
     url='https://github.com/schlegelp/octarine',
     project_urls={
-     #"Documentation": "https://octarine.readthedocs.io",
+     "Documentation": "https://schlegelp.github.io/octarine/",
      "Source": "https://github.com/schlegelp/octarine",
      "Changelog": "https://github.com/schlegelp/octarine/releases",
     },
@@ -46,6 +46,7 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
     ],
     install_requires=install_requires,
     extras_require=dict(extras_require),
