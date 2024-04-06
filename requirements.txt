@@ -4,3 +4,21 @@ pandas
 pypng
 six
 cmap
+
+#extra: all
+
+jupyter_rfb
+PySide6
+ipywidgets  # ipywidget is installed with jupyter_rfb
+sidecar
+
+#extra: docs
+
+mkdocs
+mkdocs-material
+mkdocstrings-python
+mkdocs-minify-plugin
+mkdocs-literate-nav
+mkdocs-gen-files
+
+

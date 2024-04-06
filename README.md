@@ -114,3 +114,17 @@ We welcome all kinds of contributions. For example:
 If you already know what needs doing, feel free to open a pull request
 right away. When in doubt please open an [issue](https://github.com/schlegelp/octarine/issues)
 so we can discuss the best way to address the issue.
+
+## Development :dash:
+
+### Tests
+TODO
+
+### Docs
+
+To generate the documentation:
+
+```bash
+pip install -e .[docs]
+mkdocs build
+```

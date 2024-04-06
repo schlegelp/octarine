@@ -1,6 +1,8 @@
-from setuptools import setup, find_packages
 import re
 
+from setuptools import setup, find_packages
+from extreqs import parse_requirement_files
+from pathlib import Path
 
 VERSIONFILE = "octarine/__version__.py"
 verstrline = open(VERSIONFILE, "rt").read()
@@ -11,9 +13,11 @@ if mo:
 else:
     raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
 
-with open('requirements.txt') as f:
-    requirements = f.read().splitlines()
-    requirements = [l for l in requirements if not l.startswith('#')]
+HERE = Path(__file__).resolve().parent
+install_requires, extras_require = parse_requirement_files(
+    HERE / "requirements.txt",
+)
+
 
 setup(
     name='octarine3d',
@@ -43,8 +47,8 @@ setup(
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
     ],
-    install_requires=requirements,
-    extras_require={},
+    install_requires=install_requires,
+    extras_require=dict(extras_require),
     python_requires='>=3.8',
     zip_safe=False,
     include_package_data=True

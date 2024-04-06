@@ -1,0 +1,99 @@
+site_name: octarine
+site_description: Fast and easy-to-use 3d Viewer for Python
+# strict: true
+
+repo_name: schlegelp/octarine
+repo_url: https://github.com/schlegelp/octarine
+edit_uri: edit/main/docs/
+
+# watch:
+#   - src
+
+nav:
+  - Overview: index.md
+  - "The Basics": intro.md
+  - "Adding Objects": objects.md
+  - "Viewer Controls": controls.md
+  - "Animations": animations.md
+  - API:
+    - Viewer: api/viewer.md
+  - FAQ: faq.md
+
+theme:
+  name: "material"
+  features:
+    - content.tabs.link
+    - content.code.annotate
+    - navigation.indexes
+    - navigation.instant
+    - content.code.copy
+  icon:
+    logo: fontawesome/solid/eye
+    repo: fontawesome/brands/github
+  favicon: images/favicon.ico
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: fontawesome/regular/lightbulb
+        name: "Switch to dark mode"
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: pink
+      accent: pink
+      toggle:
+        icon: fontawesome/solid/lightbulb
+        name: "Switch to light mode"
+
+markdown_extensions:
+  - admonition
+  - abbr
+  - attr_list
+  - md_in_html
+  - pymdownx.snippets
+  - pymdownx.tasklist
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+  - pymdownx.extra
+  - pymdownx.highlight
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: "#"
+
+plugins:
+  - search:
+      separator: '[\s\-\_,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - autorefs
+  #- literate-nav
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+      htmlmin_opts:
+        remove_comments: true
+      # css_files:
+      #   - stylesheets/extra.css
+  - mkdocstrings:
+      handlers:
+        python:
+          import:
+            - https://docs.python.org/3/objects.inv
+            - https://numpy.org/doc/stable/objects.inv
+          options:
+            show_root_heading: true # default is false
+            docstring_style: "numpy"
+            line_length: 50 # default is 60
+            # show_if_no_docstring: true # default is false
+            # show_signature: false  # default is true
+            show_signature_annotations: true # default is false
+            annotations_path: "source" # default is 'brief'
+            show_bases: false # default is true
+            show_source: false # default is true
+
+extra_css:
+ - stylesheets/extra.css
