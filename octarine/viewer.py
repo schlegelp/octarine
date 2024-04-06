@@ -154,6 +154,7 @@ class Viewer:
 
         # Finally, setting some variables
         self._show_bounds = False
+        self._shadows = False
         self._animations = []
 
         # This starts the animation loop
@@ -290,6 +291,34 @@ class Viewer:
         """Set size of the canvas."""
         assert len(size) == 2
         self.canvas.set_logical_size(*size)
+
+    @property
+    def shadows(self):
+        """Return shadow state."""
+        return self._shadows
+
+    @shadows.setter
+    def shadows(self, v):
+        """Set shadow state."""
+        if not isinstance(v, bool):
+            raise TypeError(f'Expected bool, got {type(v)}')
+
+        def set_shadow(obj, state):
+            if hasattr(obj, 'cast_shadow'):
+                obj.cast_shadow = state
+            if hasattr(obj, 'receive_shadow'):
+                obj.receive_shadow = state
+
+        if v != self._shadows:
+            self._shadows = v
+            for vis in self.visuals:
+                set_shadow(vis, v)
+
+            for ch in self.scene.children:
+                if isinstance(ch, gfx.PointLight):
+                    ch.cast_shadow = v
+
+            #self.scene.traverse(lambda x: set_shadow(x, v))
 
     @property
     def visuals(self):
