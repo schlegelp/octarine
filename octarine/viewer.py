@@ -172,10 +172,10 @@ class Viewer:
             try:
                 func()
             except BaseException as e:
-                logger.error(f'Removing animtation function {func} because of error: {e}')
+                logger.error(f'Removing animation function {func} because of error: {e}')
                 to_remove.append(i)
         for i in to_remove[::-1]:
-            self.remove_animtation(i)
+            self.remove_animation(i)
 
         if self._show_fps:
             with self.stats:
@@ -401,7 +401,7 @@ class Viewer:
 
         self._animations.append(x)
 
-    def remove_animtation(self, x):
+    def remove_animation(self, x):
         """Remove animation function from the Viewer.
 
         Parameters
