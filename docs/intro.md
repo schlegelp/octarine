@@ -24,7 +24,7 @@ v.add(cube)
 v.show()
 ```
 
-![cube example](../_static/cube_example_jupyter.png)
+![cube example](_static/cube_example_jupyter.png)
 
 !!! tip "Resizing the widget"
 
@@ -84,7 +84,7 @@ the Python shell:
 >>> v.add(cube)
 ```
 
-![cube example](../_static/cube_example.png)
+![cube example](_static/cube_example.png)
 
 !!! warning "The main event loop"
 
@@ -120,4 +120,4 @@ v.set_view('XY')
 v.screenshot('cube.png', alpha=True)
 ```
 
-![cube example](../_static/cube_screenshot.png)
+![cube example](_static/cube_screenshot.png)
