@@ -76,7 +76,7 @@ Other selected `Viewer` methods:
 - `add()`: generic method to add stuff to the viewer; will call respective specialised methods
 - `add_lines()`: add line plot
 - `add_mesh()`: add meshes (anything that has `.vertices` and `.faces` goes)
-- `add_scatter()`: add a scatter plot
+- `add_points()`: add a scatter plot
 - `add_volume()`: add an image volume
 - `center_camera()`: center camera on scene
 - `clear()`: clear scene

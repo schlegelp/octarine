@@ -641,8 +641,8 @@ class Viewer:
             self.center_camera()
 
     @update_legend
-    def add_scatter(self, points, name=None, color=None, size=2, center=True):
-        """Add scatter plot to canvas.
+    def add_points(self, points, name=None, color=None, size=2, center=True):
+        """Add points plot to canvas.
 
         Parameters
         ----------
