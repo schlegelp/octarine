@@ -56,7 +56,7 @@ v.add(cube)
 v.show(use_sidecar=True)
 ```
 
-![cube example](../_static/cube_example_sidecar.png)
+![cube example](_static/cube_example_sidecar.png)
 
 ## IPython
 

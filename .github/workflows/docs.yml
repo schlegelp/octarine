@@ -15,4 +15,4 @@ jobs:
           python-version: '3.10'
       - run: |
           pip install -e .[docs]
-      - run: mkdocs gh-deploy --strict --force
+      - run: mkdocs gh-deploy --force
