@@ -111,8 +111,10 @@ class Viewer:
 
         # Set up a default scene
         self.scene = gfx.Scene()
-        self.scene.add(gfx.AmbientLight())
-        self.scene.add(gfx.DirectionalLight())
+        self.scene.add(gfx.AmbientLight(intensity=0.5))
+        self.scene.add(gfx.PointLight(intensity=4))
+        # Adjust shadow bias (this helps with shadow acne)
+        self.scene.children[-1].shadow.bias = 0.0000005
 
         # Modify the light
         light = self.scene.children[-1]
