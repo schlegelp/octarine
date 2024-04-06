@@ -944,9 +944,14 @@ class Viewer:
         self.set_colors(colormap)
 
     def set_bgcolor(self, c):
-        """Set background color."""
-        if getattr(config, 'HEADLESS', False):
-            return
+        """Set background color.
+
+        Parameters
+        ----------
+        c :     tuple | str
+                RGB(A) color to use for the background.
+
+        """
         self._background.set_colors(gfx.Color(c).rgba)
 
     def _toggle_fps(self):
