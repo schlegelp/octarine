@@ -26,6 +26,7 @@ This is still a prototype but basic stuff already works (mostly because `pygfx` 
 - [x] custom keyboard shortcuts
 - [x] rudamentary controls + legend
 - [x] screenshots
+- [x] support for trimesh scenes
 - [ ] user-defined animations
 - [ ] methods/controls to manipulate image volumes
 - [ ] proper docs

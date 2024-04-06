@@ -2,6 +2,7 @@ import uuid
 
 import pygfx as gfx
 import numpy as np
+import trimesh as tm
 
 from . import config, utils
 
@@ -9,7 +10,7 @@ logger = config.get_logger(__name__)
 
 
 def mesh2gfx(mesh, color, alpha=None):
-    """Convert mesh to pygfx visuals.
+    """Convert generic mesh to pygfx visuals.
 
     Parameters
     ----------
@@ -28,6 +29,27 @@ def mesh2gfx(mesh, color, alpha=None):
     if not len(mesh.faces):
         return
 
+    # Parse color
+    mat_color_kwargs, obj_color_kwargs = parse_mesh_color(mesh, color, alpha)
+
+    vis = gfx.Mesh(
+        gfx.Geometry(
+            indices=mesh.faces.astype(np.int32, copy=False),
+            positions=mesh.vertices.astype(np.float32, copy=False),
+            **obj_color_kwargs,
+        ),
+        gfx.MeshPhongMaterial(**mat_color_kwargs),
+    )
+
+    # Add custom attributes
+    vis._object_type = "mesh"
+    vis._object_id = uuid.uuid4()
+
+    return vis
+
+
+def parse_mesh_color(mesh, color, alpha=None):
+    """Parse color for mesh plotting."""
     mat_color_kwargs = dict()
     obj_color_kwargs = dict()
     if isinstance(color, np.ndarray) and color.ndim == 2:
@@ -49,20 +71,7 @@ def mesh2gfx(mesh, color, alpha=None):
 
         mat_color_kwargs["color"] = color
 
-    vis = gfx.Mesh(
-        gfx.Geometry(
-            indices=mesh.faces.astype(np.int32, copy=False),
-            positions=mesh.vertices.astype(np.float32, copy=False),
-            **obj_color_kwargs,
-        ),
-        gfx.MeshPhongMaterial(**mat_color_kwargs),
-    )
-
-    # Add custom attributes
-    vis._object_type = "mesh"
-    vis._object_id = uuid.uuid4()
-
-    return vis
+    return mat_color_kwargs, obj_color_kwargs
 
 
 def color_to_texture(color, N=256, gamma=1.0, fade=True):
@@ -264,3 +273,136 @@ def lines2gfx(lines, color, linewidth=1):
     vis._object_id = uuid.uuid4()
 
     return vis
+
+
+def trimesh2gfx(mesh, color=None, alpha=None, use_material=True):
+    """Convert trimesh to pygfx visual.
+
+    Importantly, this function will also try to extract textures
+    if applicable.
+
+    """
+    assert isinstance(mesh, tm.Trimesh), f"Expected trimesh.Trimesh, got {type(mesh)}."
+
+    kwargs = dict(
+        positions=np.ascontiguousarray(mesh.vertices, dtype="f4"),
+        indices=np.ascontiguousarray(mesh.faces, dtype="i4"),
+        normals=np.ascontiguousarray(mesh.vertex_normals, dtype="f4"),
+    )
+    if mesh.visual.kind == "texture" and getattr(mesh.visual, "uv", None) is not None:
+        # convert the uv coordinates from opengl to wgpu conventions.
+        # wgpu uses the D3D and Metal coordinate systems.
+        # the coordinate origin is in the upper left corner, while the opengl coordinate
+        # origin is in the lower left corner.
+        # trimesh loads textures according to the opengl coordinate system.
+        wgpu_uv = mesh.visual.uv * np.array([1, -1]) + np.array(
+            [0, 1]
+        )  # uv.y = 1 - uv.y
+        kwargs["texcoords"] = np.ascontiguousarray(wgpu_uv, dtype="f4")
+    elif mesh.visual.kind == "vertex":
+        kwargs["colors"] = np.ascontiguousarray(mesh.visual.vertex_colors, dtype="f4")
+
+    # Generate the geometry
+    vis = gfx.Mesh(gfx.Geometry(**kwargs),
+                   gfx.MeshBasicMaterial())
+
+    # If we have a material (including a texture)
+    if hasattr(mesh.visual, 'material') and use_material:
+        material = mesh.visual.material
+        # The material can be a PBRMaterial or a SimpleMaterial
+        # pygfx' helper method only supports PBRMaterials
+        if isinstance(material, tm.visual.material.PBRMaterial):
+            vis.material = gfx.material_from_trimesh(material)
+        elif isinstance(material, tm.visual.material.SimpleMaterial):
+            vis.material = simple_material_from_trimesh(material)
+
+    return vis
+
+
+def simple_material_from_trimesh(material):
+    """Convert a Trimesh SimpleMaterial object into a pygfx material.
+
+    Parameters
+    ----------
+    material : trimesh.Material
+        The material to convert.
+
+    Returns
+    -------
+    converted : Material
+        The converted material.
+
+    """
+    if not isinstance(material, tm.visual.material.SimpleMaterial):
+         raise NotImplementedError()
+
+    gfx_material = gfx.MeshPhongMaterial(color=material.ambient / 255)
+
+    gfx_material.shininess = material.glossiness
+    gfx_material.specular = gfx.Color(*(material.specular / 255))
+
+    if hasattr(material, 'image'):
+        gfx_material.map = texture_from_pillow_image(material.image)
+
+    gfx_material.side = "FRONT"
+    return gfx_material
+
+
+def texture_from_pillow_image(image, dim=2, **kwargs):
+    """Pillow Image texture.
+
+    Create a Texture from a PIL.Image.
+
+    Parameters
+    ----------
+    image : Image
+        The `PIL.Image
+        <https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image>`_
+        to convert into a texture.
+    dim : int
+        The number of spatial dimensions of the image.
+    kwargs : Any
+        Additional kwargs are forwarded to :class:`pygfx.Texture`.
+
+    Returns
+    -------
+    image_texture : Texture
+        A texture object representing the given image.
+
+    """
+    # If this is a palette image, convert it to RGBA
+    if getattr(image, 'mode', None) == 'P':
+        image = image.convert('RGBA')
+
+    m = memoryview(image.tobytes())
+
+    im_channels = len(image.getbands())
+    buffer_shape = image.size + (im_channels,)
+
+    m = m.cast(m.format, shape=buffer_shape)
+    return gfx.Texture(m, dim=dim, **kwargs)
+
+# Monkey-patch the pygfx texture_from_pillow_image function
+gfx.materials._compat.texture_from_pillow_image = texture_from_pillow_image
+
+
+def scene2gfx(scene):
+    """Convert trimesh Scene to pygfx visuals."""
+    assert isinstance(scene, tm.scene.scene.Scene), f"Expected trimesh scene, got {type(scene)}."
+
+    # Get all the geometry names
+    gfx_geometries = {}
+    visuals = []
+    for node_name in scene.graph.nodes_geometry:
+        transform, geometry_name = scene.graph[node_name]
+
+        if geometry_name not in gfx_geometries:
+            gfx_geometries[geometry_name] = trimesh2gfx(scene.geometry[geometry_name])
+
+        vis = gfx.Mesh(gfx_geometries[geometry_name].geometry,
+                       gfx_geometries[geometry_name].material)
+        vis.local.matrix = transform
+
+        visuals.append(vis)
+
+    return visuals

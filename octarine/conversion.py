@@ -1,38 +1,41 @@
 import pygfx as gfx
+import trimesh as tm
 
 from .utils import is_hashable, is_points, is_lines, is_volume, is_mesh_like, is_pygfx_visual, is_pygfx_geometry
-from .visuals import points2gfx, lines2gfx, mesh2gfx, volume2gfx
-
+from .visuals import points2gfx, lines2gfx, mesh2gfx, trimesh2gfx, volume2gfx, scene2gfx
 
 CONVERTERS = {
-    is_mesh_like : mesh2gfx,
-    is_points: points2gfx,
-    is_lines: lines2gfx,
-    is_volume: volume2gfx,
     is_pygfx_visual: lambda x: x,  # pass-through
     is_pygfx_geometry: lambda x: gfx.Mesh(x, gfx.MeshPhongMaterial()),  # add default material and return
+    tm.Trimesh: trimesh2gfx,
+    tm.Scene: scene2gfx,
+    is_mesh_like: mesh2gfx,
+    is_points: points2gfx,
+    is_lines: lines2gfx,
+    is_volume: volume2gfx
 }
 
 
 def get_converter(t, raise_missing=True):
     """Get the converter for a given data type."""
-    # First check if we have a direct match
-    if is_hashable(t) and t in CONVERTERS:
-        return CONVERTERS[t]
-
-    # If not, check if we have a converter for the type of `t`
-    if type(t) in CONVERTERS:
-        return CONVERTERS[type(t)]
-
-    # If that also failed, see if we have a converter for a parent class
-    # # or if any of the converters keys are functions
+    # Go through converters in order
     for k, v in CONVERTERS.items():
+        # First check if we have a direct match
+        if is_hashable(t) and t == k:
+            return v
+
+        # If not, check if k is a type
+        if type(t) == k:
+            return v
+
+        # Check if t is a subclass of k
         if isinstance(k, type) and isinstance(t, k):
             return v
 
+        # Check if k is a callable
         if callable(k):
             try:
-                if k(t):
+                if k(t) is True:
                     return v
             except Exception:
                 pass
