@@ -580,7 +580,7 @@ class Viewer:
                 )
 
     @update_legend
-    def add(self, x, center=True, clear=False, **kwargs):
+    def add(self, x, name=None, center=True, clear=False, **kwargs):
         """Add object to canvas.
 
         This function is a general entry point for adding objects to the canvas.
@@ -592,7 +592,9 @@ class Viewer:
         Parameters
         ----------
         x
-                    Object to add to the canvas.
+                    Object(s) to add to the canvas.
+        name :      str, optional
+                    Name for the visual(s).
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
         clear :     bool, optional
@@ -606,14 +608,15 @@ class Viewer:
         None
 
         """
-        # If we're runningg in headless mode (primarily for tests on CI) we will
-        # simply not add the objects. Not ideal but it turns out to be very
-        # annoying to correctly setup on Github Actions.
-        if getattr(config, 'HEADLESS', False):
-            return
-
         if clear:
             self.clear()
+
+        if utils.is_iterable(x):
+            for xx in x:
+                self.add(xx, center=False, clear=False, name=name, **kwargs)
+            if center:
+                self.center_camera()
+            return
 
         converter = get_converter(x, raise_missing=False)
         if converter is None:
@@ -621,17 +624,23 @@ class Viewer:
 
         # Check if we have to provide a color
         if 'color' not in kwargs and 'color' in inspect.signature(converter).parameters:
-            kwargs['color'] = self._next_color()
+            kwargs['color'] = tuple(self._next_color().rgba)
 
         visuals = utils.make_iterable(converter(x, **kwargs))
+
         for v in visuals:
-            # Give visuals an _object_id if they don't already have one
-            if not hasattr(v, '_object_id'):
-                new_id = self._next_label('Object')
-                for v2 in visuals:
-                    v._object_id = new_id
-            elif not isinstance(v._object_id, str):
-                v._object_id = str(v._object_id)
+            # If we have a name, assign it to the visual
+            if name is not None:
+                v._object_id = name
+            # If not we either use existing ID or generate a new one
+            else:
+                # Give visuals an _object_id if they don't already have one
+                if not hasattr(v, '_object_id'):
+                    new_id = self._next_label('Object')
+                    for v2 in visuals:
+                        v._object_id = new_id
+                elif not isinstance(v._object_id, str):
+                    v._object_id = str(v._object_id)
 
             self.scene.add(v)
 
