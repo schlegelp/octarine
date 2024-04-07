@@ -21,7 +21,7 @@ At this point not much is happening:
 
 ![cube example](../_static/cube_example.png)
 
-Next, we will use [`octarine.Viewer.add_animation`][] to add a function
+Next, we will use [`octarine.Viewer.add_animation`][]`()` to add a function
 that will rotate the cube:
 
 ```python

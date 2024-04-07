@@ -6,7 +6,7 @@ In [The Basics](intro.md), you already learned how to open a new
 Here we will demonstrate various ways to programmatically control the viewer.
 
 ## Closing the viewer
-Use [`octarine.Viewer.close`][] to close the viewer:
+Use [`octarine.Viewer.close`][]`()` to close the viewer:
 
 ```python
 >>> import octarine as oc
@@ -15,7 +15,7 @@ Use [`octarine.Viewer.close`][] to close the viewer:
 ```
 
 ## Adjust size
-Use [`octarine.Viewer.resize`][] to adjust the size of the viewer:
+Use [`octarine.Viewer.resize`][]`()` to adjust the size of the viewer:
 
 ```python
 >>> v = oc.Viewer()
@@ -23,14 +23,14 @@ Use [`octarine.Viewer.resize`][] to adjust the size of the viewer:
 ```
 
 ## Camera
-Use [`octarine.Viewer.center_camera`][] to center the camera onto objects in the scene:
+Use [`octarine.Viewer.center_camera`][]`()` to center the camera onto objects in the scene:
 
 ```python
 >>> v = oc.Viewer()
 >>> v.center_camera()
 ```
 
-Use [`octarine.Viewer.set_view`][] to set the camera view:
+Use [`octarine.Viewer.set_view`][]`()` to set the camera view:
 
 ```python
 >>> v = oc.Viewer()
@@ -38,14 +38,14 @@ Use [`octarine.Viewer.set_view`][] to set the camera view:
 ```
 
 ## Colors
-Use [`octarine.Viewer.colorize`][] to randomize colors:
+Use [`octarine.Viewer.colorize`][]`()` to randomize colors:
 
 ```python
 >>> v = oc.Viewer()
 >>> v.colorize(palette='seaborn:tab10')
 ```
 
-Use [`octarine.Viewer.set_colors`][] to set colors for given objects:
+Use [`octarine.Viewer.set_colors`][]`()` to set colors for given objects:
 
 ```python
 >>> v = oc.Viewer()
@@ -54,7 +54,7 @@ Use [`octarine.Viewer.set_colors`][] to set colors for given objects:
 >>> v.set_colors({'cube': 'r'})  # set colors for individual objects
 ```
 
-Use [`octarine.Viewer.set_bgcolor`][] to change the background color:
+Use [`octarine.Viewer.set_bgcolor`][]`()` to change the background color:
 
 ```python
 >>> v = oc.Viewer()

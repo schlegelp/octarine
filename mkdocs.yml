@@ -13,11 +13,12 @@ nav:
   - Overview: index.md
   - "The Basics": intro.md
   - "Adding Objects": objects.md
+  - "Extending Octarine": extending.md
   - "Viewer Controls": controls.md
   - "Animations": animations.md
+  - FAQ: faq.md
   - API:
     - Viewer: api/viewer.md
-  - FAQ: faq.md
 
 theme:
   name: "material"
