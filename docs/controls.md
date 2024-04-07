@@ -85,4 +85,4 @@ Then you can either press the `c` hotkey or:
 >>> v.show_controls()
 ```
 
-<center><img src="/_static/controls_example.png" alt="controls" width="300"/></center>
+<center><img src="https://schlegelp.github.io/octarine/_static/controls_example.png" alt="controls" width="300"/></center>
