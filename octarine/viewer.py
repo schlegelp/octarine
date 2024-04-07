@@ -31,6 +31,8 @@ logger = config.get_logger(__name__)
 # - make Viewer reactive (see reactive_rendering.py) to save
 #   resources when not actively using the viewer - might help in Jupyter?
 # [/] add specialised methods for adding neurons, volumes, etc. to the viewer
+# - move lights to just outside the scene's bounding box (maybe use decorator?)
+#   whenever we add/remove objects
 
 
 def update_legend(func):
@@ -67,6 +69,7 @@ class Viewer:
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
     """
+    # Palette used for assigning colors to objects
     palette='seaborn:tab10'
 
     def __init__(self,
@@ -611,7 +614,7 @@ class Viewer:
         if clear:
             self.clear()
 
-        if utils.is_iterable(x):
+        if utils.is_iterable(x) and not isinstance(x, np.ndarray):
             for xx in x:
                 self.add(xx, center=False, clear=False, name=name, **kwargs)
             if center:
@@ -739,6 +742,9 @@ class Viewer:
                     If True, re-center camera to all objects on canvas.
 
         """
+        # TODO:
+        # - allow providing a tuple of (positions, edges) for lines
+
         if isinstance(lines, np.ndarray):
             if lines.ndim != 2 or lines.shape[1] != 3:
                 raise ValueError(f'Expected (N, 3) array, got {lines.shape}')
