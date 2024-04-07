@@ -11,9 +11,9 @@ Why another 3d viewer? There are plenty options out there:
 
 `Octarine` tries to fill that gap:
 
-1. _Lightweight_ with very few direct or indirect dependencies.
-2. Works in both _Jupyter_ and _REPL_.
-3. _High performance_: a mesh with 15M faces renders with 80 fps at 1080p on a 2023 MacBook Pro.
+1. _Lightweight_ with very few direct or indirect dependencies
+2. Works in both _Jupyter_ and Python shell (e.g. `IPython`)
+3. _High performance_: a mesh with 15M faces renders with 80 fps at 1080p on a 2023 MacBook Pro
 
 ## Example
 
@@ -35,36 +35,48 @@ v.add(meshes)
 
 ![example](_static/milktruck_example.png)
 
-## Installation
+## What next?
 
-`Octarine` is published as a [Python package] and can be installed with
-`pip`, ideally by using a [virtual environment]. Open up a terminal and install
-`Octarine` with:
+<div class="grid cards" markdown>
 
-=== "Latest"
+-   :material-progress-wrench:{ .lg .middle } __Install__
 
-    ``` sh
-    pip install octarine3d
-    ```
+    ---
 
-=== "dev"
+    Instructions on how to install `Octarine`.
 
-    ``` sh
-    pip install git+https://github.com/schlegelp/octarine.git
-    ```
+    [:octicons-arrow-right-24: Installation](install.md)
 
-!!! tip
+-   :material-eye-arrow-right:{ .lg .middle } __Viewer Basics__
 
-    If you don't have prior experience with Python, we recommend reading
-    [Using Python's pip to Manage Your Projects' Dependencies], which is a
-    really good introduction on the mechanics of Python package management and
-    helps you troubleshoot if you run into errors.
+    ---
 
-  [Python package]: https://pypi.org/project/octarine3d/
-  [virtual environment]: https://realpython.com/what-is-pip/#using-pip-in-a-python-virtual-environment
-  [semantic versioning]: https://semver.org/
-  [upgrade to the next major version]: upgrade.md
-  [Markdown]: https://python-markdown.github.io/
-  [Pygments]: https://pygments.org/
-  [Python Markdown Extensions]: https://facelessuser.github.io/pymdown-extensions/
-  [Using Python's pip to Manage Your Projects' Dependencies]: https://realpython.com/what-is-pip/
+    Learn about using `Octarine` in different environments.
+
+    [:octicons-arrow-right-24: The Basics](intro.md)
+
+-   :material-cube:{ .lg .middle } __Objects__
+
+    ---
+
+    Check out the guide on different object types.
+
+    [:octicons-arrow-right-24: Adding Objects](objects.md)
+
+-   :material-format-font:{ .lg .middle } __Animations__
+
+    ---
+
+    Add movement to the viewer.
+
+    [:octicons-arrow-right-24: Animations](animations.md)
+
+-   :material-camera-control:{ .lg .middle } __Control__
+
+    ---
+
+    Learn how to control the viewer, adjust colors, etc.
+
+    [:octicons-arrow-right-24: Controls](controls.md)
+
+</div>

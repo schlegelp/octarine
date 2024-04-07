@@ -10,7 +10,8 @@ edit_uri: edit/main/docs/
 #   - src
 
 nav:
-  - Overview: index.md
+  - Home: index.md
+  - "Installation": install.md
   - "The Basics": intro.md
   - "Adding Objects": objects.md
   - "Extending Octarine": extending.md
