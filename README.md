@@ -13,7 +13,7 @@ A minimalist, easy-to-use, high-performance 3D viewer. `Octarine` is build on to
 abstracting away some of the boiler plate code for you.
 
 ## Rationale :thought_balloon:
-Why another 3d viewer? There are plenty options out there:
+Why another 3D viewer? There are plenty options out there:
 [`vedo`](https://github.com/marcomusy/vedo), [`ipygany`](https://github.com/jupyter-widgets-contrib/ipygany), [`polyscope`](https://github.com/nmwsharp/polyscope), [`napari`](https://github.com/napari/napari), [`fury`](https://github.com/fury-gl/fury), [`plotly`](https://github.com/plotly/plotly.py) or [`pyvista`](https://github.com/pyvista/pyvista) to name but a few. All of these are great in their own right but I wanted something *(a)* without heavy dependencies (i.e. no VTK), *(b)* that lets me interactively explore my data in both REPL and Jupyter and *(c)* is very performant. None of the existing solutions ticked all those boxes for me.
 
 `Octarine` tries to fill that gap:

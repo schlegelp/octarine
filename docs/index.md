@@ -19,12 +19,11 @@ Why another 3d viewer? There are plenty options out there:
 
 ```python
 import octarine as oc
-import pygfx as gfx
+import trimesh as tm
 
 # Load an example from trimesh
-meshes = gfx.load_mesh(
-    'https://github.com/mikedh/trimesh/raw/main/models/CesiumMilkTruck.glb',
-    remote_ok=True
+meshes = tm.load_remote(
+    'https://github.com/mikedh/trimesh/raw/main/models/CesiumMilkTruck.glb'
     )
 
 # Open a fresh viewer
