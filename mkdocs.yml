@@ -95,6 +95,7 @@ plugins:
             annotations_path: "source" # default is 'brief'
             show_bases: false # default is true
             show_source: false # default is true
+  - glightbox
 
 extra_css:
  - stylesheets/extra.css

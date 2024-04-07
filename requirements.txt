@@ -20,5 +20,6 @@ mkdocstrings-python
 mkdocs-minify-plugin
 mkdocs-literate-nav
 mkdocs-gen-files
+mkdocs-glightbox
 
 
