@@ -1,4 +1,4 @@
-![cocoa](docs/_static/octarine_logo_banner.png)
+![cocoa](https://schlegelp.github.io/octarine/_static/octarine_logo_banner.png)
 <p align="center">
 <i>
 Octarine is the eighth color of the Discworld's spectrum, which is described as the color of magic itself. Only wizards and cats can see it.
@@ -29,9 +29,9 @@ This is still a prototype but basic stuff already works (mostly because `pygfx` 
 - [x] rudamentary controls + legend
 - [x] screenshots
 - [x] support for trimesh scenes
-- [ ] user-defined animations
+- [x] user-defined animations
+- [x] documentation
 - [ ] methods/controls to manipulate image volumes
-- [ ] proper docs
 - [ ] tests
 
 ## Installation :rocket:
@@ -73,7 +73,7 @@ v.add(m, color='b')
 v.close()
 ```
 
-![demo gif](https://private-user-images.githubusercontent.com/7161148/316890960-b913ecd3-4615-4591-a08f-fadb537201ce.gif?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MTE0NjE3ODgsIm5iZiI6MTcxMTQ2MTQ4OCwicGF0aCI6Ii83MTYxMTQ4LzMxNjg5MDk2MC1iOTEzZWNkMy00NjE1LTQ1OTEtYTA4Zi1mYWRiNTM3MjAxY2UuZ2lmP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI0MDMyNiUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNDAzMjZUMTM1ODA4WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9NDkzODg1NjU4MThjYzEzYzJmMTdlODgzYzhiNTcxNzI5ZjRjYmJlOTFkNGQ3ZTQ5MDM1MTRhNGE0MmQ5NmQyMCZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QmYWN0b3JfaWQ9MCZrZXlfaWQ9MCZyZXBvX2lkPTAifQ.WgohFpEs-112AKBKjHV-ilHL0xZUU1asLkk0OigVh9E)
+![demo gif](docs/_static/octarine_demo_720p.gif)
 
 Other selected `Viewer` methods:
 - `add()`: generic method to add stuff to the viewer; will call respective specialised methods
