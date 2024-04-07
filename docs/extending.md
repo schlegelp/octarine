@@ -1,7 +1,7 @@
 # Extending `Octarine`
 
 In [Adding Objects](objects.md) you learned how to use the built-in
-object types. But what if you have want to visualize something not currently supportedby `Octarine`?
+object types. But what if you have want to visualize something not currently supported by `Octarine`?
 
 Well, in the first instance you can just generate the
 `pygfx` visual (e.g. a `pygfx.Mesh` or a `pygfx.Line`) yourself and

@@ -120,4 +120,4 @@ v.set_view('XY')
 v.screenshot('cube.png', alpha=True)
 ```
 
-![cube example](_static/cube_screenshot.png)
+![cube screenshot](_static/cube_screenshot.png)
