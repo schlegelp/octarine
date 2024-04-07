@@ -124,6 +124,10 @@ def volume2gfx(vol, dims, color, offset=(0, 0, 0), cmin=None, cmax=None, **kwarg
     # Avoid boolean matrices here
     if grid.dtype == bool:
         grid = grid.astype(int)
+    elif grid.dtype.str.contains('>u') or grid.dtype.str.contains('<u'):
+        grid = grid.astype(np.uint32)
+    elif grid.dtype.str.contains('>f') or grid.dtype.str.contains('<f'):
+        grid = grid.astype(np.float32)
 
     # Find the potential min/max value of the volume
     if cmax is None:
