@@ -1,4 +1,4 @@
-![cocoa](https://schlegelp.github.io/octarine/_static/octarine_logo_banner.png)
+![octarine banner](https://schlegelp.github.io/octarine/_static/octarine_logo_banner.png)
 <p align="center">
 <i>
 Octarine is the eighth color of the Discworld's spectrum, which is described as the color of magic itself. Only wizards and cats can see it.
