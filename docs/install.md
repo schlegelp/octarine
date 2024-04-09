@@ -13,6 +13,8 @@
     pip install octarine3d[all]
     ```
 
+    It includes `PySide6`, `jupyter_rfb` and `sidecar` as additional dependencies.
+
 
 === "Minimal"
 
@@ -23,7 +25,9 @@
     pip install octarine3d
     ```
 
-=== "dev"
+=== "Dev"
+
+    To install the latest version from Github:
 
     ``` sh
     pip install git+https://github.com/schlegelp/octarine.git

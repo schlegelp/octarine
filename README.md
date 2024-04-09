@@ -37,16 +37,12 @@ This is still a prototype but basic stuff already works (mostly because `pygfx` 
 ## Installation :rocket:
 
 ```bash
-pip install octarine3d
+pip install octarine3d[all]
 ```
 
-In addition you will need to install at least one window manager supported by [`wgpu-py`](https://github.com/pygfx/wgpu-py):
-- qt: PySide6, PyQt6, PySide2, PyQt5 all work but I recommend PySide6 (see below)
-- glfw: a lightweight GUI for the desktop
-- jupyter_rfb: only needed if you plan on using `Octarine` in Jupyter
-- wx
-
-Please note that at this point, `Octarine`'s controls panel requires `PySide6`. So if you want GUI controls you have to use `PySide6`.
+This will install the minimal requirements plus `PySide6` and `jupyter_rfb` as window managers for IPython/shell
+and Jupyter, respectively. Check out the [**Install Instructions**](https://schlegelp.github.io/octarine/install/)
+for details.
 
 ## Quickstart :fire:
 
@@ -63,8 +59,7 @@ v.add(points)
 # Clear scene
 v.clear()
 
-# Add a mesh
-# See also `Viewer.add_mesh`
+# Add a mesh (see also `Viewer.add_mesh`)
 import pygfx as gfx
 m = gfx.geometries.mobius_strip_geometry()
 v.add(m, color='b')
@@ -75,36 +70,8 @@ v.close()
 
 ![demo gif](docs/_static/octarine_demo_720p.gif)
 
-Other selected `Viewer` methods:
-- `add()`: generic method to add stuff to the viewer; will call respective specialised methods
-- `add_lines()`: add line plot
-- `add_mesh()`: add meshes (anything that has `.vertices` and `.faces` goes)
-- `add_points()`: add a scatter plot
-- `add_volume()`: add an image volume
-- `center_camera()`: center camera on scene
-- `clear()`: clear scene
-- `close()`: close viewer
-- `colorize()`: cycle colors for all objects
-- `pop()`: remove last added object
-- `remove_objects()`: remove a given object(s) from the scene
-- `screenshot()`: take (and save) a screenshot
-- `set_bgcolor()`: set background color
-- `set_colors()`: set object colors
-
-### Hotkeys
-The following keyboard shortcuts are hard-coded:
-- `1`: reset view to XY (frontal)
-- `2`: reset view to XZ (dorsal)
-- `3`: reset view to YZ (lateral)
-- `f`: show FPS
-- `c`: show control panel (requires `PySide6`)
-
-You can also bind custom functions to keys:
-
-```python
-# Bind `x` key to the cycle-colors method
-v.key_events['x'] = lambda : v.colorize()
-```
+## Want to learn more?
+Head over to the [**Documentation**](https://schlegelp.github.io/octarine/)!
 
 ## Want to contribute?
 We welcome all kinds of contributions. For example:
