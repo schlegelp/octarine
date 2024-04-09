@@ -430,15 +430,20 @@ class Viewer:
         else:
             raise TypeError(f'Expected callable or index (int), got {type(x)}')
 
-    def show(self, use_sidecar=False):
+    def show(self, use_sidecar=False, toolbar=True):
         """Show viewer.
 
         Parameters
         ----------
+
+        For Jupyter lab only:
+
         use_sidecar : bool
-                      For Jupyter lab only: if True, will use the Sidecar
-                      extension to display the viewer outside the notebooks.
-                      Will throw an error if Sidecar is not installed.
+                      If True, will use the Sidecar extension to display the
+                      viewer outside the notebooks. Will throw an error if
+                      Sidecar is not installed.
+        toolbar :     bool
+                      If True, will show a toolbar.
 
         """
         # This is for e.g. headless testing
@@ -457,10 +462,15 @@ class Viewer:
             self.canvas.show()
         # For Jupyter we need to wrap the canvas in a widget
         else:
-            if not hasattr(self, 'widget'):
-                from .jupyter import JupyterOutput
-                # Construct the widget
-                self.widget = JupyterOutput(self, use_sidecar=use_sidecar, sidecar_kwargs={'title': self._title})
+            # if not hasattr(self, 'widget'):
+            from .jupyter import JupyterOutput
+            # Construct the widget
+            self.widget = JupyterOutput(
+                self,
+                use_sidecar=use_sidecar,
+                toolbar=toolbar,
+                sidecar_kwargs={'title': self._title}
+                )
             return self.widget
 
     def show_controls(self):
