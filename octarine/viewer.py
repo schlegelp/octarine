@@ -35,14 +35,23 @@ logger = config.get_logger(__name__)
 #   whenever we add/remove objects
 
 
-def update_legend(func):
-    """Decorator to update legend after function call."""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        func(*args, **kwargs)
-        if args[0].controls:
-            args[0].controls.update_legend()
-    return wrapper
+def update_viewer(legend=True, bounds=True):
+    def outer(func):
+        """Decorator to update legend."""
+        @wraps(func)
+        def inner(*args, **kwargs):
+            func(*args, **kwargs)
+            if legend:
+                if getattr(args[0], 'controls' , None):
+                    args[0].controls.update_legend()
+                if getattr(args[0], 'widget' , None):
+                    if args[0].widget.toolbar:
+                        args[0].widget.toolbar.update_legend()
+            if bounds:
+                if getattr(args[0], 'show_bounds', False):
+                    args[0].update_bounds()
+        return inner
+    return outer
 
 
 class Viewer:
@@ -480,7 +489,7 @@ class Viewer:
         else:
             self.show_controls()
 
-    @update_legend
+    @update_viewer(legend=True, bounds=True)
     def clear(self):
         """Clear canvas of objects (expects lights and background)."""
         # Skip if running in headless mode
@@ -490,7 +499,7 @@ class Viewer:
         # Remove everything but the lights and backgrounds
         self.scene.remove(*self.visuals)
 
-    @update_legend
+    @update_viewer(legend=True, bounds=True)
     def remove_objects(self, to_remove):
         """Remove given neurons/visuals from canvas."""
         to_remove = utils.make_iterable(to_remove)
@@ -502,10 +511,7 @@ class Viewer:
                 if vis._object_id in to_remove:
                     self.scene.children.remove(vis)
 
-        if self.show_bounds:
-            self.update_bounds()
-
-    @update_legend
+    @update_viewer(legend=True, bounds=True)
     def pop(self, N=1):
         """Remove the most recently added N visuals."""
         for vis in list(self.objects.values())[-N:]:
@@ -582,7 +588,7 @@ class Viewer:
                 up=(0., -1., 0.)
                 )
 
-    @update_legend
+    @update_viewer(legend=True, bounds=True)
     def add(self, x, name=None, center=True, clear=False, **kwargs):
         """Add object to canvas.
 
@@ -650,7 +656,17 @@ class Viewer:
         if center:
             self.center_camera()
 
-    @update_legend
+    @update_viewer(legend=True, bounds=True)
+    def _add_to_scene(self, visual, center=True):
+        """Add visual to scene.
+
+        This is just a convenient collection point for us to trigger a bunch of updates in one go,
+        """
+        self.scene.add(visual)
+
+        if center:
+            self.center_camera()
+
     def add_mesh(self, mesh, name=None, color=None, center=True):
         """Add mesh to canvas.
 
@@ -678,12 +694,9 @@ class Viewer:
 
         visual = mesh2gfx(mesh, color=color)
         visual._object_id = name if name else uuid.uuid4()
-        self.scene.add(visual)
 
-        if center:
-            self.center_camera()
+        self._add_to_scene(visual, center)
 
-    @update_legend
     def add_points(self, points, name=None, color=None, size=2, center=True):
         """Add points plot to canvas.
 
@@ -715,12 +728,9 @@ class Viewer:
 
         visual = points2gfx(points, color=color, size=size)
         visual._object_id = name if name else uuid.uuid4()
-        self.scene.add(visual)
 
-        if center:
-            self.center_camera()
+        self._add_to_scene(visual, center)
 
-    @update_legend
     def add_lines(self, lines, name=None, color=None, linewidth=1, center=True):
         """Add lines to canvas.
 
@@ -763,12 +773,8 @@ class Viewer:
 
         visual = lines2gfx(lines, linewidth=linewidth, color=color)
         visual._object_id = name if name else uuid.uuid4()
-        self.scene.add(visual)
+        self._add_to_scene(visual, center)
 
-        if center:
-            self.center_camera()
-
-    @update_legend
     def add_volume(self, volume, dims, name=None, color=None, offset=(0, 0, 0), cmin=None, cmax='auto', center=True):
         """Add image volume to canvas.
 
@@ -806,10 +812,7 @@ class Viewer:
 
         visual = volume2gfx(volume, dims=dims, offset=offset, color=color, cmin=cmin, cmax=cmax)
         visual._object_id = name if name else uuid.uuid4()
-        self.scene.add(visual)
-
-        if center:
-            self.center_camera()
+        self._add_to_scene(visual, center)
 
     def close(self):
         """Close the viewer."""
@@ -923,7 +926,7 @@ class Viewer:
                 v._pinned = False
                 v.freeze()
 
-    @update_legend
+    @update_viewer(legend=True, bounds=False)
     def set_colors(self, c):
         """Set object color.
 
