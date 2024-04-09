@@ -21,19 +21,6 @@ Why another 3D viewer? There are plenty options out there:
 2. Works in both _Jupyter_ and _REPL_.
 3. _High performance_: a mesh with 15M faces renders with 80 fps at 1080p on a 2023 MacBook Pro.
 
-## ToDo :ballot_box_with_check:
-This is still a prototype but basic stuff already works (mostly because `pygfx` makes it so ridiculously easy).
-
-- [x] basic datatypes: meshes, points, scatter, volumes
-- [x] custom keyboard shortcuts
-- [x] rudamentary controls + legend
-- [x] screenshots
-- [x] support for trimesh scenes
-- [x] user-defined animations
-- [x] documentation
-- [ ] methods/controls to manipulate image volumes
-- [ ] tests
-
 ## Installation :rocket:
 
 ```bash
@@ -43,6 +30,9 @@ pip install octarine3d[all]
 This will install the minimal requirements plus `PySide6` and `jupyter_rfb` as window managers for IPython/shell
 and Jupyter, respectively. Check out the [**Install Instructions**](https://schlegelp.github.io/octarine/install/)
 for details.
+
+## Status :ballot_box_with_check:
+All basic components have been implemented but this is a very young project, which means that the API can still change with each version. We'd love for you to take it for a spin and let us know what you think though!
 
 ## Quickstart :fire:
 
