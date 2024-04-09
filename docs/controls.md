@@ -1,7 +1,8 @@
 # Controlling the Viewer
 
 In [The Basics](intro.md), you already learned how to open a new
-[`octarine.Viewer`][] and add a simple mesh.
+[`octarine.Viewer`][] and add a simple mesh, and [Managing Objects](manage.md)
+showed you how to inspect and access objects on the viewer.
 
 Here we will demonstrate various ways to programmatically control the viewer.
 
@@ -100,7 +101,6 @@ To activate them you can either press the `c` hotkey or:
 
 >>> #... or do this afterwards
 >>> v.show_controls()
-
 ```
 
 <center><img src="https://schlegelp.github.io/octarine/_static/jupyter_toolbar.png" alt="jupyter toolbar" width="75%"/></center>

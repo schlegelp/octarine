@@ -16,6 +16,15 @@ code.highlight span.n:not(:first-child) {
   color: #666;
 }
 
+ /* Set True/False */
+.highlight span.kc {
+  color: #548fed;
+}
+/* Set parentheses color */
+.highlight span.p {
+  color: #dfd58b;
+}
+
 /* Indentation. */
 div.doc-contents:not(.first) {
   padding-left: 25px;

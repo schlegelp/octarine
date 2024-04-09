@@ -47,4 +47,4 @@ cube rotate faster:
 ```
 
 You could decouple the rotation from the frame rate by incrementing the rotation
-depending no how much time has passed since the last call.
+depending on how much time has passed since the last call.

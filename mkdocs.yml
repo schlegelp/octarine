@@ -14,6 +14,7 @@ nav:
   - "Installation": install.md
   - "The Basics": intro.md
   - "Adding Objects": objects.md
+  - "Managing Objects": manage.md
   - "Extending Octarine": extending.md
   - "Viewer Controls": controls.md
   - "Animations": animations.md

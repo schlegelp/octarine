@@ -1,14 +1,14 @@
 # Adding Objects to the Viewer
 
-Off the bat `Octarine` supports four types of objects all of
+Off the bat `Octarine` supports 4 types of objects, all of
 which have dedicated `Viewer` methods:
 
-|   | Type          | Viewer method                  |
-|---|---------------|--------------------------------|
-| 1.| Meshes        | [octarine.Viewer.add_mesh][]   |
-| 2.| Points        | [octarine.Viewer.add_points][] |
-| 3.| Lines         | [octarine.Viewer.add_lines][]  |
-| 4.| Image Volumes | [octarine.Viewer.add_volume][] |
+|   | Object Type                       | Viewer method                  |
+|---|-----------------------------------|--------------------------------|
+| 1.| [Meshes](#meshes)                 | [octarine.Viewer.add_mesh][]   |
+| 2.| [Points](#points)                 | [octarine.Viewer.add_points][] |
+| 3.| [Lines](#lines)                   | [octarine.Viewer.add_lines][]  |
+| 4.| [Image Volumes](#image-volumes)   | [octarine.Viewer.add_volume][] |
 
 As a general entry point you can use the [octarine.Viewer.add][]`()` method
 which will pass an object to the respective specialized function:
@@ -105,58 +105,6 @@ array([[0.38, 0.  , 0.  ],
 
 ![brain volume](_static/brain_volume_example.png)
 
-
-## Managing objects
-
-As you add objects to the [octarine.Viewer][], you might want to keep track of
-them so you can e.g. colorize or remove them.
-
-Unless specified, each object gets a generic identifier:
-
-```python
->>> duck = tm.load_remote(
-...         'https://github.com/mikedh/trimesh/raw/main/models/Duck.glb'
-...     )
-
->>> # Add the duck
->>> v.add_mesh(duck)
-```
-
-![bunny example](_static/duck_example.png)
-
-Let's check what objects are there:
-
-```python
->>> v.objects
-OrderedDict([('Object', [<pygfx.Mesh at 0x37f4f8b90>])])
-```
-
-The `.objects` property will return a dictionary mapping IDs to `pygfx` visuals.
-
-Alternatively, you can also do this:
-
-```python
->>> v['Object']
-[<pygfx.Mesh at 0x37f4f8b90>]
-```
-
-Instead of generic IDs, we can also explicitly set the ID:
-
-```python
->>> v.add_mesh(duck, name='Duck')
->>> v.objects
-OrderedDict([('Duck', [<pygfx.Mesh at 0x37f5f8a12>])])
-```
-
-This can also be used to combine multiple objects under the same ID.
-
-Why are these IDs relevant? Well, they help you manipulate objects after
-they've been added:
-
-```
->>> v.set_colors({'Duck': 'w'})
->>> v.hide_objects('Duck')
-```
 
 ## Custom Objects
 
