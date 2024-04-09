@@ -1,7 +1,6 @@
 import png
 import cmap
 import uuid
-import wgpu
 import random
 import inspect
 
@@ -443,7 +442,9 @@ class Viewer:
                       viewer outside the notebooks. Will throw an error if
                       Sidecar is not installed.
         toolbar :     bool
-                      If True, will show a toolbar.
+                      If True, will show a toolbar. You can always show/hide
+                      the toolbar with ``viewer.show_controls()`` and
+                      ``viewer.hide_controls()``, or the `c` hotkey.
 
         """
         # This is for e.g. headless testing
@@ -476,28 +477,35 @@ class Viewer:
     def show_controls(self):
         """Show controls."""
         if self._is_jupyter:
-            logger.warning('Controls are not (yet) supported in Jupyter.')
-            return
-
-        if not hasattr(self, '_controls'):
-            from .controls import Controls
-            self._controls = Controls(self)
-        self._controls.show()
+            if self.widget.toolbar:
+                self.widget.toolbar.show()
+        else:
+            if not hasattr(self, '_controls'):
+                from .controls import Controls
+                self._controls = Controls(self)
+            self._controls.show()
 
     def hide_controls(self):
         """Hide controls."""
-        if not hasattr(self, '_controls'):
-            return
-        self._controls.hide()
+        if self._is_jupyter:
+            if self.widget.toolbar:
+                self.widget.toolbar.hide()
+        else:
+            if hasattr(self, '_controls'):
+                self._controls.hide()
 
     def _toggle_controls(self):
         """Switch controls on and off."""
-        if not hasattr(self, '_controls'):
-            self.show_controls()
-        elif self._controls.isVisible():
-            self.hide_controls()
+        if self._is_jupyter:
+            if self.widget.toolbar:
+                self.widget.toolbar.toggle()
         else:
-            self.show_controls()
+            if not hasattr(self, '_controls'):
+                self.show_controls()
+            elif self._controls.isVisible():
+                self.hide_controls()
+            else:
+                self.show_controls()
 
     @update_viewer(legend=True, bounds=True)
     def clear(self):

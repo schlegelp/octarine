@@ -32,7 +32,8 @@ class JupyterOutput(HBox):
         viewer  :       Viewer
                         The Viewer instance to display.
         toolbar :       bool
-                        Whether to display a toolbar.
+                        Whether to display a toolbar. If False, the toolbar
+                        will still be created but will hidden.
         use_sidecar :   bool
                         Whether to use Sidecar for display. Will throw an
                         error if Sidecar is not installed.
@@ -52,15 +53,14 @@ class JupyterOutput(HBox):
                 "the page after installation."
             )
 
+        self.toolbar = JupyterToolbar(viewer)
+        self.output = (
+            viewer.canvas,
+            self.toolbar,
+        )
+
         if not toolbar:  # just stack canvas in VBox
-            self.output = (viewer.canvas,)
-            self.toolbar = None
-        else:
-            self.toolbar = JupyterToolbar(viewer)
-            self.output = (
-                viewer.canvas,
-                self.toolbar,
-            )
+            self.toolbar.hide()
 
         if use_sidecar:  # instantiate sidecar if requested
             self.sidecar = Sidecar(**sidecar_kwargs)
@@ -223,6 +223,21 @@ class JupyterToolbar(VBox):
         self.tabs.titles = ["Objects", "Scene"]
 
         super().__init__([self.tabs], layout=Layout(width=width))
+
+    def hide(self):
+        """Hide the toolbar."""
+        self.layout.display = "none"
+
+    def show(self):
+        """Show the toolbar."""
+        self.layout.display = "block"
+
+    def toggle(self):
+        """Toggle visibility of the toolbar."""
+        if self.layout.display == "none":
+            self.show()
+        else:
+            self.hide()
 
     def center_camera(self, obj):
         """Center camera on scene."""
