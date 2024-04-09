@@ -68,11 +68,9 @@ class Viewer:
     size :      tuple, optional
                 Size of the viewer window.
     show :      bool, optional
-                Whether to immediately show the viewer.
-    show_controls : bool, optional
-                If True, will show the controls widget.
-                You can always show/hide the controls with
-                ``viewer.show_controls()`` and ``viewer.hide_controls()``.
+                Whether to immediately show the viewer. Note that this has no
+                effect in Jupyter. There you will have to call ``.show()`` manually
+                on the last line of a cell for the viewer to appear.
     **kwargs
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
@@ -86,7 +84,6 @@ class Viewer:
                  max_fps=30,
                  size=None,
                  show=True,
-                 show_controls=False,
                  **kwargs):
         # Check if we're running in an IPython environment
         if utils._type_of_script() == 'ipython':
@@ -169,12 +166,8 @@ class Viewer:
         self._animations = []
 
         # This starts the animation loop
-        if show:
+        if show and self._is_jupyter:
             self.show()
-
-            # Add controls
-            if show_controls:
-                self.show_controls()
 
     def _animate(self):
         """Animate the scene."""
@@ -429,7 +422,7 @@ class Viewer:
         else:
             raise TypeError(f'Expected callable or index (int), got {type(x)}')
 
-    def show(self, use_sidecar=False, toolbar=True):
+    def show(self, use_sidecar=False, toolbar=False):
         """Show viewer.
 
         Parameters
