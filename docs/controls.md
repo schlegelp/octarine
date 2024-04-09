@@ -74,15 +74,33 @@ While the viewer or widget is active you can use a set of hotkeys to control the
 
 ## GUI Controls
 
-`Octarine` provides basic GUI controls when run from the shell. These currently
+### Shell/IPython
+`Octarine` GUI controls when run from the shell currently
 require [PySide6](https://pypi.org/project/PySide6/) to be installed and you
 may have to use `%gui qt6` when inside `IPython`.
 
-Then you can either press the `c` hotkey or:
+To activate them you can either press the `c` hotkey or:
 
-```
+```python
 >>> v = oc.Viewer()
 >>> v.show_controls()
 ```
 
-<center><img src="https://schlegelp.github.io/octarine/_static/controls_example.png" alt="controls" width="300"/></center>
+<center><img src="https://schlegelp.github.io/octarine/_static/controls_example.png" alt="shell controls" width="300"/></center>
+
+### Jupyter
+For GUI controls in Jupyter/lab you won't need any additional dependencies.
+
+To activate them you can either press the `c` hotkey or:
+
+```python
+>>> # Show viewer widget with `toolbar=True`
+>>> v = oc.Viewer()
+>>> v.show(toolbar=True)
+
+>>> #... or do this afterwards
+>>> v.show_controls()
+
+```
+
+<center><img src="https://schlegelp.github.io/octarine/_static/jupyter_toolbar.png" alt="jupyter toolbar" width="75%"/></center>

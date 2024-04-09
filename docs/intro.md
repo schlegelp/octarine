@@ -24,6 +24,18 @@ v.add(cube)
 v.show()
 ```
 
+!!! important
+
+    The `.show()` method generates and returns a widget wrapping the `Viewer`. In order for it to be displayed
+    this _has_ to be on the last line of the cell. The only other alternative is this:
+
+    ```python
+    from IPython.display import display
+    display(v.show())  # display the widget
+    ...
+    do other stuff
+    ```
+
 ![cube example](_static/cube_example_jupyter.png)
 
 !!! tip "Resizing the widget"
