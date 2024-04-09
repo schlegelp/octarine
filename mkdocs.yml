@@ -97,6 +97,7 @@ plugins:
             annotations_path: "source" # default is 'brief'
             show_bases: false # default is true
             show_source: false # default is true
+            docstring_section_style: "spacy" # default is "table" but the tables end up being too wide
   - glightbox
 
 extra_css:
