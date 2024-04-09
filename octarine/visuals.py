@@ -308,7 +308,7 @@ def trimesh2gfx(mesh, color=None, alpha=None, use_material=True):
 
     # Generate the geometry
     vis = gfx.Mesh(gfx.Geometry(**kwargs),
-                   gfx.MeshBasicMaterial())
+                   gfx.MeshPhongMaterial())
 
     # If we have a material (including a texture)
     if hasattr(mesh.visual, 'material') and use_material:
