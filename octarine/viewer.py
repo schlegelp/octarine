@@ -166,7 +166,7 @@ class Viewer:
         self._animations = []
 
         # This starts the animation loop
-        if show and self._is_jupyter:
+        if show and not self._is_jupyter:
             self.show()
 
     def _animate(self):
