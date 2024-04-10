@@ -813,6 +813,8 @@ class Viewer:
         offset=(0, 0, 0),
         cmin=None,
         cmax="auto",
+        interpolation="linear",
+        hide_zero=True,
         center=True,
     ):
         """Add image volume to canvas.
@@ -825,15 +827,25 @@ class Viewer:
                     Scale factors for the volume.
         name :      str, optional
                     Name for the visual.
-        color :     tuple, optional
-                    Color to use for plotting. Can be the name of
-                    a colormap or a single color.
+        color :     color | list of colors | pygfx.Texture, optional
+                    Colormap to render the volume. This can be:
+                      - name of a colormap (e.g. "viridis" or "magma")
+                      - a single color (name, hex, rgb, rgba)
+                      - a list of colors
+                      - a 1D pygfx.Texture
+                    Note that single colors typically don't look good and
+                    it's better to define at least two colors. For example,
+                    instead if "red" use ["red", "yellow"].
         offset :    tuple, optional
                     Offset for the volume.
         cmin/cmax : float | "auto", optional
                     Min/max values for the colormap. If "auto", will
                     use the min/max of the volume. If `None` will determine
                     the min/max based on the data type of `volume`.
+        interpolation : "linear" | "nearest"
+                    Interpolation to use when rendering the volume.
+        hide_zero : bool
+                    If True, will hide voxels with lowest value according to `cmin`.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -842,15 +854,20 @@ class Viewer:
             raise TypeError(f"Expected numpy array, got {type(volume)}")
         if volume.ndim != 3:
             raise ValueError(f"Expected 3D array, got {volume.ndim}")
-        if color is None:
-            color = self._next_color()
         if name is None:
             name = self._next_label("Volume")
         elif not isinstance(name, str):
             name = str(name)
 
         visual = volume2gfx(
-            volume, dims=dims, offset=offset, color=color, cmin=cmin, cmax=cmax
+            volume,
+            dims=dims,
+            offset=offset,
+            color=color,
+            cmin=cmin,
+            cmax=cmax,
+            interpolation=interpolation,
+            hide_zero=hide_zero,
         )
         visual._object_id = name if name else uuid.uuid4()
         self._add_to_scene(visual, center)

@@ -1,4 +1,5 @@
 import uuid
+import cmap
 
 import pygfx as gfx
 import numpy as np
@@ -94,7 +95,16 @@ def color_to_texture(color, N=256, gamma=1.0, fade=True):
     return gfx.Texture(colormap_data, dim=1)
 
 
-def volume2gfx(vol, dims, color, offset=(0, 0, 0), cmin=None, cmax=None, **kwargs):
+def volume2gfx(
+    vol,
+    dims,
+    color,
+    offset=(0, 0, 0),
+    cmin=None,
+    cmax=None,
+    interpolation="linear",
+    hide_zero=True,
+):
     """Convert volume (i.e. 3d arrays) to pygfx visual.
 
     Parameters
@@ -105,10 +115,27 @@ def volume2gfx(vol, dims, color, offset=(0, 0, 0), cmin=None, cmax=None, **kwarg
                     Dimensions of the volume along the (x, y, z) axes.
     color :         str | tuple
                     CURRENTLY NOT USED.
+    offset :        tuple, optional
+                    Offset to apply to the volume.
+    cmin :          float | str, optional
+                    Minimum value for the colormap. If 'auto', will use the
+                    minimum value of the volume. If `None` will use 0.
+    cmax :          float | str, optional
+                    Maximum value for the colormap. If 'auto', will use the
+                    maximum value of the volume. If `None` will use the maximum
+                    theoretical value of the data type (e.g. 256 for int8).
+    interpolation : str, optional
+                    Interpolation method to use. Either "linear" or "nearest".
+    hide_zero :     bool, optional
+                    If True, will set the alpha for the lowest value to 0.
+
+    Returns
+    -------
+    vis :           gfx.Volume
+                    Pygfx visual representing the volume.
 
     """
     # TODOs:
-    # - add support for custom color maps (see cmap's to_pygfx method)
     # - add support for other Volume materials (e.g. gfx.VolumeMipMaterial)
 
     assert isinstance(vol, np.ndarray), "Expected 3D numpy array."
@@ -121,13 +148,14 @@ def volume2gfx(vol, dims, color, offset=(0, 0, 0), cmin=None, cmax=None, **kwarg
     # Similar to vispy, pygfx seems to expect zyx coordinate space
     grid = vol.T
 
-    # Avoid boolean matrices here
-    if grid.dtype == bool:
-        grid = grid.astype(int)
-    elif grid.dtype.str.contains('>u') or grid.dtype.str.contains('<u'):
-        grid = grid.astype(np.uint32)
-    elif grid.dtype.str.contains('>f') or grid.dtype.str.contains('<f'):
-        grid = grid.astype(np.float32)
+    # Convert to data type that pygfx can handle:
+    # Convert non-native byte order to native; e.g. >u4 -> u4 = uint64
+    if grid.dtype.byteorder in (">", "<"):
+        grid = grid.astype(grid.dtype.str.replace(grid.dtype.byteorder, ""))
+    # Convert boolean matrices to uint16; I tried uint4 but that renders as
+    # uniform volume and uint8 looks fuzzy
+    elif grid.dtype == bool:
+        grid = grid.astype(np.uint16)
 
     # Find the potential min/max value of the volume
     if cmax is None:
@@ -143,11 +171,24 @@ def volume2gfx(vol, dims, color, offset=(0, 0, 0), cmin=None, cmax=None, **kwarg
     # Initialize texture
     tex = gfx.Texture(grid, dim=3)
 
+    # Initialize colormap (and make copy of the data to avoid issues
+    # with the original colormap data being modified)
+    cmap = to_colormap(color, hide_zero=hide_zero)
+
     # Initialize the volume
     vis = gfx.Volume(
         gfx.Geometry(grid=tex),
-        gfx.VolumeRayMaterial(clim=(0, cmax), map=gfx.cm.cividis),
+        gfx.VolumeMipMaterial(
+            clim=(0, cmax),
+            map=cmap,
+            interpolation=interpolation,
+            map_interpolation=interpolation,
+        ),
     )
+
+    # To trigger an update of the colormap data later:
+    # vis.material.data[:, 1] = 0
+    # vis.material.map.update_range((0, 0, 0), vis.material.map.size)
 
     # Set scales and offset
     (
@@ -162,6 +203,46 @@ def volume2gfx(vol, dims, color, offset=(0, 0, 0), cmin=None, cmax=None, **kwarg
     vis._object_id = uuid.uuid4()
 
     return vis
+
+
+def to_colormap(x, hide_zero):
+    """Convert `x` to a gfx.Texture that can be used for Volumes."""
+    # If this is a texture
+    if x is None:
+        tex = gfx.cm.cividis
+    elif isinstance(x, gfx.Texture):
+        if x.dim != 1:
+            raise ValueError("Expected 1D texture.")
+        tex = x
+    elif isinstance(x, str) and hasattr(gfx.cm, x):
+        tex = getattr(gfx.cm, x)
+    elif isinstance(x, gfx.Color):
+        # cmap needs a list of colors (even if len == 1)
+        tex = cmap.Colormap([x.rgba]).to_pygfx()
+    elif isinstance(x, cmap.Colormap):
+        tex = x.to_pygfx()
+    elif isinstance(x, (dict, list)):
+        # cmap can interpret dict and list of colors
+        tex = cmap.Colormap(x).to_pygfx()
+    else:
+        # Last ditch effort: see if cmap can handle it
+        tex = cmap.Colormap([x]).to_pygfx()
+
+    if hide_zero:
+        # Add an alpha column if needed
+        if tex.data.shape[1] == 3:
+            colors = np.hstack(
+                (tex.data, np.ones((tex.data.shape[0], 1))), dtype=tex.data.dtype
+            )
+            tex = gfx.Texture(colors, dim=1)
+        # Otherwise make a copy to avoid modifying the original data
+        else:
+            tex = gfx.Texture(tex.data.copy(), dim=1)
+
+        # Set alpha channel for first color to 0
+        tex.data[0, 3] = 0
+
+    return tex
 
 
 def points2gfx(points, color, size=2):
@@ -204,10 +285,10 @@ def points2gfx(points, color, size=2):
                 "Expected `size` to be a single value or "
                 "an array of the same length as `points`."
             )
-        geometry_kwargs['sizes'] = np.asarray(size).astype(np.float32, copy=False)
-        material_kwargs['vertex_sizes'] = True
+        geometry_kwargs["sizes"] = np.asarray(size).astype(np.float32, copy=False)
+        material_kwargs["vertex_sizes"] = True
     else:
-        material_kwargs['size'] = size
+        material_kwargs["size"] = size
 
     vis = gfx.Points(
         gfx.Geometry(positions=points, **geometry_kwargs),
@@ -237,7 +318,12 @@ def lines2gfx(lines, color, linewidth=1):
         if len(lines) == 1:
             lines = lines[0]
         else:
-            lines = np.insert(np.vstack(lines), np.cumsum([len(l) for l in lines[:-1]]), np.nan, axis=0)
+            lines = np.insert(
+                np.vstack(lines),
+                np.cumsum([len(l) for l in lines[:-1]]),
+                np.nan,
+                axis=0,
+            )
     else:
         raise TypeError("Expected numpy array or list of numpy arrays.")
 
@@ -258,18 +344,16 @@ def lines2gfx(lines, color, linewidth=1):
             else:
                 raise ValueError(f"Got {len(color)} colors for {n_points} points.")
         color = color.astype(np.float32, copy=False)
-        geometry_kwargs['colors'] = color
-        material_kwargs['color_mode'] = 'vertex'
+        geometry_kwargs["colors"] = color
+        material_kwargs["color_mode"] = "vertex"
     else:
         if isinstance(color, np.ndarray):
             color = color.astype(np.float32, copy=False)
-        material_kwargs['color'] = color
+        material_kwargs["color"] = color
 
     vis = gfx.Line(
-        gfx.Geometry(positions=lines.astype(np.float32, copy=False),
-                     **geometry_kwargs),
-        gfx.LineMaterial(thickness=linewidth,
-                         **material_kwargs),
+        gfx.Geometry(positions=lines.astype(np.float32, copy=False), **geometry_kwargs),
+        gfx.LineMaterial(thickness=linewidth, **material_kwargs),
     )
 
     # Add custom attributes
@@ -307,11 +391,10 @@ def trimesh2gfx(mesh, color=None, alpha=None, use_material=True):
         kwargs["colors"] = np.ascontiguousarray(mesh.visual.vertex_colors, dtype="f4")
 
     # Generate the geometry
-    vis = gfx.Mesh(gfx.Geometry(**kwargs),
-                   gfx.MeshPhongMaterial())
+    vis = gfx.Mesh(gfx.Geometry(**kwargs), gfx.MeshPhongMaterial())
 
     # If we have a material (including a texture)
-    if hasattr(mesh.visual, 'material') and use_material:
+    if hasattr(mesh.visual, "material") and use_material:
         material = mesh.visual.material
         # The material can be a PBRMaterial or a SimpleMaterial
         # pygfx' helper method only supports PBRMaterials
@@ -338,14 +421,14 @@ def simple_material_from_trimesh(material):
 
     """
     if not isinstance(material, tm.visual.material.SimpleMaterial):
-         raise NotImplementedError()
+        raise NotImplementedError()
 
     gfx_material = gfx.MeshPhongMaterial(color=material.ambient / 255)
 
     gfx_material.shininess = material.glossiness
     gfx_material.specular = gfx.Color(*(material.specular / 255))
 
-    if hasattr(material, 'image'):
+    if hasattr(material, "image"):
         gfx_material.map = texture_from_pillow_image(material.image)
 
     gfx_material.side = "FRONT"
@@ -375,8 +458,8 @@ def texture_from_pillow_image(image, dim=2, **kwargs):
 
     """
     # If this is a palette image, convert it to RGBA
-    if getattr(image, 'mode', None) == 'P':
-        image = image.convert('RGBA')
+    if getattr(image, "mode", None) == "P":
+        image = image.convert("RGBA")
 
     m = memoryview(image.tobytes())
 
@@ -386,13 +469,16 @@ def texture_from_pillow_image(image, dim=2, **kwargs):
     m = m.cast(m.format, shape=buffer_shape)
     return gfx.Texture(m, dim=dim, **kwargs)
 
+
 # Monkey-patch the pygfx texture_from_pillow_image function
 gfx.materials._compat.texture_from_pillow_image = texture_from_pillow_image
 
 
 def scene2gfx(scene):
     """Convert trimesh Scene to pygfx visuals."""
-    assert isinstance(scene, tm.scene.scene.Scene), f"Expected trimesh scene, got {type(scene)}."
+    assert isinstance(
+        scene, tm.scene.scene.Scene
+    ), f"Expected trimesh scene, got {type(scene)}."
 
     # Get all the geometry names
     gfx_geometries = {}
@@ -403,8 +489,10 @@ def scene2gfx(scene):
         if geometry_name not in gfx_geometries:
             gfx_geometries[geometry_name] = trimesh2gfx(scene.geometry[geometry_name])
 
-        vis = gfx.Mesh(gfx_geometries[geometry_name].geometry,
-                       gfx_geometries[geometry_name].material)
+        vis = gfx.Mesh(
+            gfx_geometries[geometry_name].geometry,
+            gfx_geometries[geometry_name].material,
+        )
         vis.local.matrix = transform
 
         visuals.append(vis)
