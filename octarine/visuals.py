@@ -100,8 +100,7 @@ def volume2gfx(
     dims,
     color,
     offset=(0, 0, 0),
-    cmin=None,
-    cmax=None,
+    clim="auto",
     interpolation="linear",
     hide_zero=True,
 ):
@@ -113,17 +112,29 @@ def volume2gfx(
                     3D array representing the volume.
     dims :          tuple
                     Dimensions of the volume along the (x, y, z) axes.
-    color :         str | tuple
-                    CURRENTLY NOT USED.
+    color :         color | list of colors | pygfx.Texture, optional
+                    Colormap to render the volume. This can be:
+                      - name of a colormap (e.g. "viridis" or "magma")
+                      - a single color (name, hex, rgb, rgba)
+                      - a list of colors
+                      - a 1D pygfx.Texture
+                    Note that single colors typically don't look good and
+                    it's better to define at least two colors. For example,
+                    instead of "red" use ["red", "yellow"]. If `None` will
+                    use one of the built-in pygfx colormaps.
     offset :        tuple, optional
                     Offset to apply to the volume.
-    cmin :          float | str, optional
+    clim :          float | str, optional
                     Minimum value for the colormap. If 'auto', will use the
                     minimum value of the volume. If `None` will use 0.
-    cmax :          float | str, optional
-                    Maximum value for the colormap. If 'auto', will use the
-                    maximum value of the volume. If `None` will use the maximum
-                    theoretical value of the data type (e.g. 256 for int8).
+    clim :          "data" | "datatype" | tuple, optional
+                    The contrast limits to scale the data values with.
+                      - "data" (default) will use the min/max of the data
+                      - "datatype" will use (0, theoretical max of data type)
+                        for integer data, e.g. (0, 255) for int8 and uint8,
+                        and (0, 1) for float data assuming the data has been
+                        normalized.
+                      - tuple of min/max values, (0, 1)
     interpolation : str, optional
                     Interpolation method to use. Either "linear" or "nearest".
     hide_zero :     bool, optional
@@ -158,15 +169,18 @@ def volume2gfx(
         grid = grid.astype(np.uint16)
 
     # Find the potential min/max value of the volume
-    if cmax is None:
-        cmax = np.iinfo(grid.dtype).max
-    elif cmax == "auto":
-        cmax = grid.max()
-
-    if cmin is None:
+    if isinstance(clim, str) and clim == "datatype":
         cmin = 0
-    elif cmin == "auto":
-        cmin = grid.min()
+        # If float, assume that the data is normalized
+        if grid.dtype.kind == "f":
+            cmax = 1
+        # Otherwise, use the maximum value of the data type
+        else:
+            cmax = np.iinfo(grid.dtype).max
+    elif isinstance(clim, str) and clim == "data":
+        cmin, cmax = grid.min(), grid.max()
+    else:
+        cmin, cmax = clim
 
     # Initialize texture
     tex = gfx.Texture(grid, dim=3)
@@ -179,7 +193,7 @@ def volume2gfx(
     vis = gfx.Volume(
         gfx.Geometry(grid=tex),
         gfx.VolumeMipMaterial(
-            clim=(0, cmax),
+            clim=(cmin, cmax),
             map=cmap,
             interpolation=interpolation,
             map_interpolation=interpolation,

@@ -811,8 +811,7 @@ class Viewer:
         name=None,
         color=None,
         offset=(0, 0, 0),
-        cmin=None,
-        cmax="auto",
+        clim="data",
         interpolation="linear",
         hide_zero=True,
         center=True,
@@ -835,13 +834,18 @@ class Viewer:
                       - a 1D pygfx.Texture
                     Note that single colors typically don't look good and
                     it's better to define at least two colors. For example,
-                    instead if "red" use ["red", "yellow"].
+                    instead of "red" use ["red", "yellow"]. If `None` will
+                    use one of the built-in pygfx colormaps.
         offset :    tuple, optional
-                    Offset for the volume.
-        cmin/cmax : float | "auto", optional
-                    Min/max values for the colormap. If "auto", will
-                    use the min/max of the volume. If `None` will determine
-                    the min/max based on the data type of `volume`.
+                    (x, y, z) offset for the volume. If None, will use (0, 0, 0).
+        clim :      "data" | "datatype" | tuple, optional
+                    The contrast limits to scale the data values with.
+                      - "data" (default) will use the min/max of the data
+                      - "datatype" will use (0, theoretical max of data type)
+                        for integer data, e.g. (0, 255) for int8 and uint8,
+                        and (0, 1) for float data assuming the data has been
+                        normalized.
+                      - tuple of min/max values
         interpolation : "linear" | "nearest"
                     Interpolation to use when rendering the volume.
         hide_zero : bool
@@ -864,8 +868,7 @@ class Viewer:
             dims=dims,
             offset=offset,
             color=color,
-            cmin=cmin,
-            cmax=cmax,
+            clim=clim,
             interpolation=interpolation,
             hide_zero=hide_zero,
         )
