@@ -15,7 +15,7 @@ sidecar
 #extra: docs
 
 mkdocs
-mkdocs-material
+mkdocs-material[imaging]
 mkdocstrings-python
 mkdocs-minify-plugin
 mkdocs-literate-nav
