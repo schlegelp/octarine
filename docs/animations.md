@@ -19,7 +19,7 @@
 
 At this point not much is happening:
 
-![cube example](../_static/cube_example.png)
+![cube example](_static/cube_example.png)
 
 Next, we will use [`octarine.Viewer.add_animation`][]`()` to add a function
 that will rotate the cube:
@@ -32,7 +32,7 @@ that will rotate the cube:
 
 >>> v.add_animation(rotate_cube)
 ```
-![cube gif](../_static/cube_animation.gif)
+![cube gif](_static/cube_animation.gif)
 
 So what's happening here? The `rotate_cube()` function is now being called _before_
 each frame is rendered.

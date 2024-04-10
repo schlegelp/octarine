@@ -30,8 +30,12 @@ theme:
     - navigation.indexes
     - navigation.instant
     - content.code.copy
+  logo: images/icon.png
+  # below option would prevents loading typefaces from Google Fonts
+  # but see also the privacy plugin below
+  #font: false
   icon:
-    logo: fontawesome/solid/eye
+    #logo: fontawesome/solid/eye
     repo: fontawesome/brands/github
   favicon: images/favicon.ico
   palette:
@@ -69,6 +73,12 @@ markdown_extensions:
       permalink: "#"
 
 plugins:
+  # the privacy plugin will bundle external assets (like Google Fonts)
+  # this should make the website GDPR compliant
+  - privacy
+  # the social plugin generates social cards for each page of the project
+  # which are used as previews when sharing links to the documentation
+  - social
   - search:
       separator: '[\s\-\_,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
   - autorefs
