@@ -21,6 +21,7 @@ nav:
   - FAQ: faq.md
   - API:
     - Viewer: api/viewer.md
+    - Utility: api/utils.md
 
 theme:
   name: "material"

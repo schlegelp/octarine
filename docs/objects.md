@@ -46,6 +46,8 @@ has `.vertices` and `.faces`. In practice, I'd recommend you use
 
 ![bunny example](_static/bunny_example.png)
 
+See [octarine.Viewer.add_mesh][]`()` for details!
+
 ## Points
 
 Points are expected to be 2d `(N, 3)` numpy arrays:
@@ -61,6 +63,8 @@ Points are expected to be 2d `(N, 3)` numpy arrays:
 ```
 
 ![points example](_static/points_example.png)
+
+See [octarine.Viewer.add_points][]`()` for details!
 
 ## Lines
 
@@ -79,6 +83,8 @@ representing a single contiguous line or a list thereof:
 ```
 
 ![lines example](_static/lines_example.png)
+
+See [octarine.Viewer.add_lines][]`()` for details!
 
 ## Image Volumes
 
@@ -105,6 +111,7 @@ array([[0.38, 0.  , 0.  ],
 
 ![brain volume](_static/brain_volume_example.png)
 
+See [octarine.Viewer.add_volume][]`()` for details!
 
 ## Custom Objects
 
