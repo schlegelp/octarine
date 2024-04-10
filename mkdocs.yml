@@ -38,7 +38,7 @@ theme:
   icon:
     #logo: fontawesome/solid/eye
     repo: fontawesome/brands/github
-  favicon: images/favicon.ico
+  favicon: images/icon.png
   palette:
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
