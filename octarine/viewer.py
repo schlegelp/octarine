@@ -18,7 +18,7 @@ from .conversion import get_converter
 from . import utils, config
 
 
-__all__ = ['Viewer']
+__all__ = ["Viewer"]
 
 logger = config.get_logger(__name__)
 
@@ -37,19 +37,22 @@ logger = config.get_logger(__name__)
 def update_viewer(legend=True, bounds=True):
     def outer(func):
         """Decorator to update legend."""
+
         @wraps(func)
         def inner(*args, **kwargs):
             func(*args, **kwargs)
             if legend:
-                if getattr(args[0], 'controls' , None):
+                if getattr(args[0], "controls", None):
                     args[0].controls.update_legend()
-                if getattr(args[0], 'widget' , None):
+                if getattr(args[0], "widget", None):
                     if args[0].widget.toolbar:
                         args[0].widget.toolbar.update_legend()
             if bounds:
-                if getattr(args[0], 'show_bounds', False):
+                if getattr(args[0], "show_bounds", False):
                     args[0].update_bounds()
+
         return inner
+
     return outer
 
 
@@ -75,33 +78,38 @@ class Viewer:
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
     """
-    # Palette used for assigning colors to objects
-    palette='seaborn:tab10'
 
-    def __init__(self,
-                 offscreen=False,
-                 title='Octarine Viewer',
-                 max_fps=30,
-                 size=None,
-                 show=True,
-                 **kwargs):
+    # Palette used for assigning colors to objects
+    palette = "seaborn:tab10"
+
+    def __init__(
+        self,
+        offscreen=False,
+        title="Octarine Viewer",
+        max_fps=30,
+        size=None,
+        show=True,
+        **kwargs,
+    ):
         # Check if we're running in an IPython environment
-        if utils._type_of_script() == 'ipython':
+        if utils._type_of_script() == "ipython":
             ip = get_ipython()  # noqa: F821
             if not ip.active_eventloop:
                 # ip.enable_gui('qt6')
-                raise ValueError('IPython event loop not running. Please use e.g. "%gui qt" to hook into the event loop.')
+                raise ValueError(
+                    'IPython event loop not running. Please use e.g. "%gui qt" to hook into the event loop.'
+                )
 
         self._title = title
 
         # Update some defaults as necessary
-        defaults = {'title': title, 'max_fps': max_fps, 'size': size}
+        defaults = {"title": title, "max_fps": max_fps, "size": size}
         defaults.update(kwargs)
 
         # If we're running in headless mode (primarily for tests on CI) we will
         # simply not initialize the gfx objects. Not ideal but it turns
         # out to be very annoying to correctly setup on Github Actions.
-        if getattr(config, 'HEADLESS', False):
+        if getattr(config, "HEADLESS", False):
             return
 
         if not offscreen:
@@ -113,7 +121,9 @@ class Viewer:
         # when using a Jupyter canvas without explicitly setting the pixel_ratio.
         # This is already fixed in main but for now:
         if self._is_jupyter:
-            self.renderer = gfx.renderers.WgpuRenderer(self.canvas, show_fps=False, pixel_ratio=2)
+            self.renderer = gfx.renderers.WgpuRenderer(
+                self.canvas, show_fps=False, pixel_ratio=2
+            )
         else:
             self.renderer = gfx.renderers.WgpuRenderer(self.canvas, show_fps=False)
 
@@ -127,7 +137,7 @@ class Viewer:
         # Modify the light
         light = self.scene.children[-1]
         light.local.z = -10000  # move light forward
-        light.local.euler_x = 2.5 # rotate light
+        light.local.euler_x = 2.5  # rotate light
 
         # Set up a default background
         self._background = gfx.BackgroundMaterial((0, 0, 0))
@@ -135,10 +145,12 @@ class Viewer:
 
         # Add camera
         self.camera = gfx.OrthographicCamera()
-        #self.camera.show_object(scene, scale=1.4)
+        # self.camera.show_object(scene, scale=1.4)
 
         # Add controller
-        self.controller = gfx.TrackballController(self.camera, register_events=self.renderer)
+        self.controller = gfx.TrackballController(
+            self.camera, register_events=self.renderer
+        )
 
         # Stats
         self.stats = gfx.Stats(self.renderer)
@@ -146,11 +158,11 @@ class Viewer:
 
         # Setup key events
         self.key_events = {}
-        self.key_events['1'] = lambda : self.set_view('XY')
-        self.key_events['2'] = lambda : self.set_view('XZ')
-        self.key_events['3'] = lambda : self.set_view('YZ')
-        self.key_events['f'] = lambda : self._toggle_fps()
-        self.key_events['c'] = lambda : self._toggle_controls()
+        self.key_events["1"] = lambda: self.set_view("XY")
+        self.key_events["2"] = lambda: self.set_view("XZ")
+        self.key_events["3"] = lambda: self.set_view("YZ")
+        self.key_events["f"] = lambda: self._toggle_fps()
+        self.key_events["c"] = lambda: self._toggle_controls()
 
         def _keydown(event):
             """Handle key presses."""
@@ -176,7 +188,9 @@ class Viewer:
             try:
                 func()
             except BaseException as e:
-                logger.error(f'Removing animation function {func} because of error: {e}')
+                logger.error(
+                    f"Removing animation function {func} because of error: {e}"
+                )
                 to_remove.append(i)
         for i in to_remove[::-1]:
             self.remove_animation(i)
@@ -193,18 +207,21 @@ class Viewer:
         """Return next color in the colormap."""
         # Cache the full palette. N.B. that ordering of colors in cmap depends on
         # the number of colors requested - i.e. we can't just grab the last color.
-        if not hasattr(self, '__cached_palette') or self.palette != self.__cached_palette:
+        if (
+            not hasattr(self, "__cached_palette")
+            or self.palette != self.__cached_palette
+        ):
             self.__cached_colors = list(cmap.Colormap(self.palette).iter_colors())
             self.__cached_palette = self.palette
 
         return self.__cached_colors[len(self.objects) % len(self.__cached_colors)]
 
-    def _next_label(self, prefix='Object'):
+    def _next_label(self, prefix="Object"):
         """Return next label."""
         existing = [o for o in self.objects if o.startswith(prefix)]
         if len(existing) == 0:
             return prefix
-        return f'{prefix}.{len(existing) + 1:03}'
+        return f"{prefix}.{len(existing) + 1:03}"
 
     def __getitem__(self, key):
         """Get item."""
@@ -221,7 +238,7 @@ class Viewer:
     @property
     def controls(self):
         """Return the controls widget."""
-        return getattr(self, '_controls', None)
+        return getattr(self, "_controls", None)
 
     @property
     def visible(self):
@@ -239,7 +256,7 @@ class Viewer:
     def pinned(self):
         """List IDs of currently pinned objects."""
         objects = self.objects  # grab this only once to speed things up
-        return [s for s in objects if getattr(objects[s][0], '_pinned', False)]
+        return [s for s in objects if getattr(objects[s][0], "_pinned", False)]
 
     @property
     def selected(self):
@@ -251,7 +268,7 @@ class Viewer:
         val = utils.make_iterable(val)
 
         objects = self.objects  # grab once to speed things up
-        logger.debug(f'{len(val)} objects selected ({len(self.selected)} previously)')
+        logger.debug(f"{len(val)} objects selected ({len(self.selected)} previously)")
         # First un-highlight neurons no more selected
         for s in [s for s in self.__selected if s not in val]:
             for v in objects[s]:
@@ -282,7 +299,7 @@ class Viewer:
         # Update data text
         # Currently only the development version of vispy supports escape
         # character (e.g. \n)
-        t = '| '.join([f'{objects[s][0]._name} - #{s}' for s in self.__selected])
+        t = "| ".join([f"{objects[s][0]._name} - #{s}" for s in self.__selected])
         self._data_text.text = t
 
     @property
@@ -305,12 +322,12 @@ class Viewer:
     def shadows(self, v):
         """Set shadow state."""
         if not isinstance(v, bool):
-            raise TypeError(f'Expected bool, got {type(v)}')
+            raise TypeError(f"Expected bool, got {type(v)}")
 
         def set_shadow(obj, state):
-            if hasattr(obj, 'cast_shadow'):
+            if hasattr(obj, "cast_shadow"):
                 obj.cast_shadow = state
-            if hasattr(obj, 'receive_shadow'):
+            if hasattr(obj, "receive_shadow"):
                 obj.receive_shadow = state
 
         if v != self._shadows:
@@ -322,12 +339,12 @@ class Viewer:
                 if isinstance(ch, gfx.PointLight):
                     ch.cast_shadow = v
 
-            #self.scene.traverse(lambda x: set_shadow(x, v))
+            # self.scene.traverse(lambda x: set_shadow(x, v))
 
     @property
     def visuals(self):
         """List of all visuals on this canvas."""
-        return [c for c in self.scene.children if hasattr(c, '_object_id')]
+        return [c for c in self.scene.children if hasattr(c, "_object_id")]
 
     @property
     def bounds(self):
@@ -335,7 +352,7 @@ class Viewer:
         bounds = []
         for vis in self.visuals:
             # Skip the bounding box itself
-            if getattr(vis, '_object_id', '') == 'boundingbox':
+            if getattr(vis, "_object_id", "") == "boundingbox":
                 continue
 
             try:
@@ -378,7 +395,7 @@ class Viewer:
         """All object IDs on this canvas in order of addition."""
         obj_ids = []
         for v in self.visuals:
-            if hasattr(v, '_object_id'):
+            if hasattr(v, "_object_id"):
                 obj_ids.append(v._object_id)
         return sorted(set(obj_ids), key=lambda x: obj_ids.index(x))
 
@@ -387,7 +404,9 @@ class Viewer:
         """Ordered dictionary {name->[visuals]} of all objects in order of addition."""
         objects = OrderedDict()
         for ob in self._object_ids:
-            objects[ob] = [v for v in self.visuals if getattr(v, '_object_id', None) == ob]
+            objects[ob] = [
+                v for v in self.visuals if getattr(v, "_object_id", None) == ob
+            ]
 
         return objects
 
@@ -401,7 +420,7 @@ class Viewer:
 
         """
         if not callable(x):
-            raise TypeError(f'Expected callable, got {type(x)}')
+            raise TypeError(f"Expected callable, got {type(x)}")
 
         self._animations.append(x)
 
@@ -420,7 +439,7 @@ class Viewer:
         elif isinstance(x, int):
             self._animations.pop(x)
         else:
-            raise TypeError(f'Expected callable or index (int), got {type(x)}')
+            raise TypeError(f"Expected callable or index (int), got {type(x)}")
 
     def show(self, use_sidecar=False, toolbar=False):
         """Show viewer.
@@ -441,7 +460,7 @@ class Viewer:
 
         """
         # This is for e.g. headless testing
-        if getattr(config, 'HEADLESS', False):
+        if getattr(config, "HEADLESS", False):
             logger.info("Viewer widget not shown - running in headless mode.")
             return
 
@@ -458,13 +477,14 @@ class Viewer:
         else:
             # if not hasattr(self, 'widget'):
             from .jupyter import JupyterOutput
+
             # Construct the widget
             self.widget = JupyterOutput(
                 self,
                 use_sidecar=use_sidecar,
                 toolbar=toolbar,
-                sidecar_kwargs={'title': self._title}
-                )
+                sidecar_kwargs={"title": self._title},
+            )
             return self.widget
 
     def show_controls(self):
@@ -473,8 +493,9 @@ class Viewer:
             if self.widget.toolbar:
                 self.widget.toolbar.show()
         else:
-            if not hasattr(self, '_controls'):
+            if not hasattr(self, "_controls"):
                 from .controls import Controls
+
                 self._controls = Controls(self)
             self._controls.show()
 
@@ -484,7 +505,7 @@ class Viewer:
             if self.widget.toolbar:
                 self.widget.toolbar.hide()
         else:
-            if hasattr(self, '_controls'):
+            if hasattr(self, "_controls"):
                 self._controls.hide()
 
     def _toggle_controls(self):
@@ -493,7 +514,7 @@ class Viewer:
             if self.widget.toolbar:
                 self.widget.toolbar.toggle()
         else:
-            if not hasattr(self, '_controls'):
+            if not hasattr(self, "_controls"):
                 self.show_controls()
             elif self._controls.isVisible():
                 self.hide_controls()
@@ -504,7 +525,7 @@ class Viewer:
     def clear(self):
         """Clear canvas of objects (expects lights and background)."""
         # Skip if running in headless mode
-        if getattr(config, 'HEADLESS', False):
+        if getattr(config, "HEADLESS", False):
             return
 
         # Remove everything but the lights and backgrounds
@@ -518,7 +539,7 @@ class Viewer:
         for vis in self.scene.children:
             if vis in to_remove:
                 self.scene.children.remove(vis)
-            elif hasattr(vis, '_object_id'):
+            elif hasattr(vis, "_object_id"):
                 if vis._object_id in to_remove:
                     self.scene.children.remove(vis)
 
@@ -540,7 +561,7 @@ class Viewer:
     @show_bounds.setter
     def show_bounds(self, v):
         if not isinstance(v, bool):
-            raise TypeError(f'Need bool, got {type(v)}')
+            raise TypeError(f"Need bool, got {type(v)}")
 
         self._show_bounds = v
 
@@ -553,7 +574,7 @@ class Viewer:
         """Remove bounding box visual."""
         self._show_bounds = False
         for v in self.visuals:
-            if getattr(v, '_object_type', '') == 'boundingbox':
+            if getattr(v, "_object_type", "") == "boundingbox":
                 self.remove_objects(v)
 
     def resize(self, size):
@@ -567,7 +588,7 @@ class Viewer:
         assert len(size) == 2
         self.canvas.set_logical_size(*size)
 
-    def update_bounds(self, color='w', width=1):
+    def update_bounds(self, color="w", width=1):
         """Update bounding box visual."""
         # Remove any existing visual
         self.remove_bounds()
@@ -584,7 +605,7 @@ class Viewer:
         box.set_transform_by_aabb(bounds)
 
         # Add custom attributes
-        box._object_type = 'boundingbox'
+        box._object_type = "boundingbox"
         box._object_id = uuid.uuid4()
 
         self.scene.add(box)
@@ -593,11 +614,8 @@ class Viewer:
         """Center camera on visuals."""
         if len(self):
             self.camera.show_object(
-                self.scene,
-                scale=1,
-                view_dir=(0., 0., 1.),
-                up=(0., -1., 0.)
-                )
+                self.scene, scale=1, view_dir=(0.0, 0.0, 1.0), up=(0.0, -1.0, 0.0)
+            )
 
     @update_viewer(legend=True, bounds=True)
     def add(self, x, name=None, center=True, clear=False, **kwargs):
@@ -640,11 +658,11 @@ class Viewer:
 
         converter = get_converter(x, raise_missing=False)
         if converter is None:
-            raise NotImplementedError(f'No converter found for {x} ({type(x)})')
+            raise NotImplementedError(f"No converter found for {x} ({type(x)})")
 
         # Check if we have to provide a color
-        if 'color' not in kwargs and 'color' in inspect.signature(converter).parameters:
-            kwargs['color'] = tuple(self._next_color().rgba)
+        if "color" not in kwargs and "color" in inspect.signature(converter).parameters:
+            kwargs["color"] = tuple(self._next_color().rgba)
 
         visuals = utils.make_iterable(converter(x, **kwargs))
 
@@ -655,8 +673,8 @@ class Viewer:
             # If not we either use existing ID or generate a new one
             else:
                 # Give visuals an _object_id if they don't already have one
-                if not hasattr(v, '_object_id'):
-                    new_id = self._next_label('Object')
+                if not hasattr(v, "_object_id"):
+                    new_id = self._next_label("Object")
                     for v2 in visuals:
                         v._object_id = new_id
                 elif not isinstance(v._object_id, str):
@@ -695,11 +713,11 @@ class Viewer:
 
         """
         if not utils.is_mesh_like(mesh):
-            raise TypeError(f'Expected mesh-like object, got {type(mesh)}')
+            raise TypeError(f"Expected mesh-like object, got {type(mesh)}")
         if color is None:
             color = self._next_color()
         if name is None:
-            name = self._next_label('Mesh')
+            name = self._next_label("Mesh")
         elif not isinstance(name, str):
             name = str(name)
 
@@ -727,13 +745,13 @@ class Viewer:
 
         """
         if not isinstance(points, np.ndarray):
-            raise TypeError(f'Expected numpy array, got {type(points)}')
+            raise TypeError(f"Expected numpy array, got {type(points)}")
         if points.ndim != 2 or points.shape[1] != 3:
-            raise ValueError(f'Expected (N, 3) array, got {points.shape}')
+            raise ValueError(f"Expected (N, 3) array, got {points.shape}")
         if color is None:
             color = self._next_color()
         if name is None:
-            name = self._next_label('Scatter')
+            name = self._next_label("Scatter")
         elif not isinstance(name, str):
             name = str(name)
 
@@ -768,17 +786,17 @@ class Viewer:
 
         if isinstance(lines, np.ndarray):
             if lines.ndim != 2 or lines.shape[1] != 3:
-                raise ValueError(f'Expected (N, 3) array, got {lines.shape}')
+                raise ValueError(f"Expected (N, 3) array, got {lines.shape}")
         elif isinstance(lines, list):
             if not all([l.ndim == 2 and l.shape[1] == 3 for l in lines]):
-                raise ValueError('Expected list of (N, 3) arrays.')
+                raise ValueError("Expected list of (N, 3) arrays.")
         else:
-            raise TypeError(f'Expected numpy array or list, got {type(lines)}')
+            raise TypeError(f"Expected numpy array or list, got {type(lines)}")
 
         if color is None:
             color = self._next_color()
         if name is None:
-            name = self._next_label('Lines')
+            name = self._next_label("Lines")
         elif not isinstance(name, str):
             name = str(name)
 
@@ -786,7 +804,17 @@ class Viewer:
         visual._object_id = name if name else uuid.uuid4()
         self._add_to_scene(visual, center)
 
-    def add_volume(self, volume, dims, name=None, color=None, offset=(0, 0, 0), cmin=None, cmax='auto', center=True):
+    def add_volume(
+        self,
+        volume,
+        dims,
+        name=None,
+        color=None,
+        offset=(0, 0, 0),
+        cmin=None,
+        cmax="auto",
+        center=True,
+    ):
         """Add image volume to canvas.
 
         Parameters
@@ -811,42 +839,44 @@ class Viewer:
 
         """
         if not isinstance(volume, np.ndarray):
-            raise TypeError(f'Expected numpy array, got {type(volume)}')
+            raise TypeError(f"Expected numpy array, got {type(volume)}")
         if volume.ndim != 3:
-            raise ValueError(f'Expected 3D array, got {volume.ndim}')
+            raise ValueError(f"Expected 3D array, got {volume.ndim}")
         if color is None:
             color = self._next_color()
         if name is None:
-            name = self._next_label('Volume')
+            name = self._next_label("Volume")
         elif not isinstance(name, str):
             name = str(name)
 
-        visual = volume2gfx(volume, dims=dims, offset=offset, color=color, cmin=cmin, cmax=cmax)
+        visual = volume2gfx(
+            volume, dims=dims, offset=offset, color=color, cmin=cmin, cmax=cmax
+        )
         visual._object_id = name if name else uuid.uuid4()
         self._add_to_scene(visual, center)
 
     def close(self):
         """Close the viewer."""
         # Skip if this is headless mode
-        if getattr(config, 'HEADLESS', False):
+        if getattr(config, "HEADLESS", False):
             return
 
         # Clear first to free all visuals
         self.clear()
 
         # Remove from config if this is the primary viewer
-        if self == getattr(config, 'PRIMARY_VIEWER', None):
+        if self == getattr(config, "PRIMARY_VIEWER", None):
             del config.PRIMARY_VIEWER
 
         # Close if not already closed
         if not self.canvas.is_closed():
             self.canvas.close()
 
-        if hasattr(self, '_controls'):
+        if hasattr(self, "_controls"):
             self._controls.close()
 
         # Close the Jupyter widget
-        if hasattr(self, 'widget') and not getattr(self.widget, '_is_closed', False):
+        if hasattr(self, "widget") and not getattr(self.widget, "_is_closed", False):
             self.widget.close(close_viewer=False)
 
     def hide_objects(self, obj):
@@ -858,13 +888,13 @@ class Viewer:
                 Object(s) to hide.
 
         """
-        objects = self.objects   # grab once to speed things up
+        objects = self.objects  # grab once to speed things up
         for ob in utils.make_iterable(obj):
             if ob not in objects:
                 logger.warning(f'Object "{ob}" not found on canvas.')
                 continue
             for v in objects[ob]:
-                if getattr(v, '_pinned', False):
+                if getattr(v, "_pinned", False):
                     continue
                 if v.visible:
                     v.visible = False
@@ -890,10 +920,10 @@ class Viewer:
 
         for ob in ids:
             if ob not in objects:
-                logger.warning(f'Object {ob} not found on canvas.')
+                logger.warning(f"Object {ob} not found on canvas.")
                 continue
             for v in objects[ob]:
-                if getattr(v, '_pinned', False):
+                if getattr(v, "_pinned", False):
                     continue
                 if not v.visible:
                     v.visible = True
@@ -911,7 +941,7 @@ class Viewer:
 
         for ob in obj:
             if ob not in objects:
-                logger.warning(f'Object {ob} not found on canvas.')
+                logger.warning(f"Object {ob} not found on canvas.")
                 continue
             for v in objects[ob]:
                 v._pinned = True
@@ -930,7 +960,7 @@ class Viewer:
 
         for ob in obj:
             if ob not in objects:
-                logger.warning(f'Object {ob} not found on canvas.')
+                logger.warning(f"Object {ob} not found on canvas.")
                 continue
             for v in objects[ob]:
                 v.unfreeze()
@@ -960,9 +990,9 @@ class Viewer:
         for n in objects:
             if n in cmap:
                 for v in objects[n]:
-                    if getattr(v, '_pinned', False):
+                    if getattr(v, "_pinned", False):
                         continue
-                    if not hasattr(v, 'material'):
+                    if not hasattr(v, "material"):
                         continue
                     # Note: there is currently a bug where removing or adding an alpha
                     # channel from a color will break the rendering pipeline
@@ -972,7 +1002,7 @@ class Viewer:
                         new_c = gfx.Color(cmap[n]).rgb
                     v.material.color = gfx.Color(new_c)
 
-    def colorize(self, palette='seaborn:tab10', objects=None, randomize=True):
+    def colorize(self, palette="seaborn:tab10", objects=None, randomize=True):
         """Colorize objects using a color palette.
 
         Parameters
@@ -1018,11 +1048,9 @@ class Viewer:
         """Switch FPS measurement on and off."""
         self._show_fps = not self._show_fps
 
-    def screenshot(self,
-                   filename='screenshot.png',
-                   size=None,
-                   pixel_ratio=None,
-                   alpha=True):
+    def screenshot(
+        self, filename="screenshot.png", size=None, pixel_ratio=None, alpha=True
+    ):
         """Save a screenshot of the canvas.
 
         Parameters
@@ -1044,9 +1072,11 @@ class Viewer:
         """
         im = self._screenshot(alpha=alpha, size=size, pixel_ratio=pixel_ratio)
         if filename:
-            if not filename.endswith('.png'):
-                filename += '.png'
-            png.from_array(im.reshape(im.shape[0], im.shape[1] * im.shape[2]), mode='RGBA').save(filename)
+            if not filename.endswith(".png"):
+                filename += ".png"
+            png.from_array(
+                im.reshape(im.shape[0], im.shape[1] * im.shape[2]), mode="RGBA"
+            ).save(filename)
         else:
             return im
 
@@ -1090,11 +1120,17 @@ class Viewer:
                     View to set.
 
         """
-        if view == 'XY':
-            self.camera.show_object(self.scene, view_dir=(0., 0., 1.), up=(0., -1., 0.))
-        elif view == 'XZ':
-            self.camera.show_object(self.scene, scale=1, view_dir=(0., 1., 0.), up=(0., 0., 1.))
-        elif view == 'YZ':
-            self.camera.show_object(self.scene, scale=1, view_dir=(-1., 0., 0.), up=(0., -1., 0.))
+        if view == "XY":
+            self.camera.show_object(
+                self.scene, view_dir=(0.0, 0.0, 1.0), up=(0.0, -1.0, 0.0)
+            )
+        elif view == "XZ":
+            self.camera.show_object(
+                self.scene, scale=1, view_dir=(0.0, 1.0, 0.0), up=(0.0, 0.0, 1.0)
+            )
+        elif view == "YZ":
+            self.camera.show_object(
+                self.scene, scale=1, view_dir=(-1.0, 0.0, 0.0), up=(0.0, -1.0, 0.0)
+            )
         else:
-            raise TypeError(f'Unable to set view from {type(view)}')
+            raise TypeError(f"Unable to set view from {type(view)}")
