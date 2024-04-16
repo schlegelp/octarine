@@ -317,14 +317,20 @@ def points2gfx(points, color, size=2, marker=None, size_space="screen"):
                 "an array of the same length as `points`."
             )
         geometry_kwargs["sizes"] = np.asarray(size).astype(np.float32, copy=False)
-        material_kwargs["vertex_sizes"] = True
+        material_kwargs["size_mode"] = 'vertex'
     else:
         material_kwargs["size"] = size
 
-    vis = gfx.Points(
-        gfx.Geometry(positions=points, **geometry_kwargs),
-        gfx.PointsMaterial(color=color, **material_kwargs),
-    )
+    if marker is None:
+        material = gfx.PointsMaterial(
+            color=color, size_space=size_space, **material_kwargs
+        )
+    else:
+        material = gfx.PointsMarkerMaterial(
+            color=color, marker=marker, size_space=size_space, **material_kwargs
+        )
+
+    vis = gfx.Points(gfx.Geometry(positions=points, **geometry_kwargs), material)
 
     # Add custom attributes
     vis._object_type = "points"
