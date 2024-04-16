@@ -70,6 +70,7 @@ class Viewer:
                 Maximum frames per second to render.
     size :      tuple, optional
                 Size of the viewer window.
+    camera :    "ortho" | "perspective", optional
     show :      bool, optional
                 Whether to immediately show the viewer. Note that this has no
                 effect in Jupyter. There you will have to call ``.show()`` manually
@@ -87,6 +88,7 @@ class Viewer:
         offscreen=False,
         title="Octarine Viewer",
         max_fps=30,
+        camera="ortho",
         size=None,
         show=True,
         **kwargs,
@@ -144,8 +146,12 @@ class Viewer:
         self.scene.add(gfx.Background(None, self._background))
 
         # Add camera
-        self.camera = gfx.OrthographicCamera()
-        # self.camera.show_object(scene, scale=1.4)
+        if camera == "ortho":
+            self.camera = gfx.OrthographicCamera()
+        elif camera == "perspective":
+            self.camera = gfx.PerspectiveCamera()
+        else:
+            raise ValueError(f"Unknown camera type: {camera}")
 
         # Add controller
         self.controller = gfx.TrackballController(
