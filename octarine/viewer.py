@@ -702,7 +702,7 @@ class Viewer:
         if center:
             self.center_camera()
 
-    def add_mesh(self, mesh, name=None, color=None, center=True):
+    def add_mesh(self, mesh, name=None, color=None, alpha=None, center=True):
         """Add mesh to canvas.
 
         Parameters
@@ -712,8 +712,12 @@ class Viewer:
         name :      str, optional
                     Name for the visual.
         color :     str | tuple, optional
-                    Color to use for plotting. Can be the name of
-                    a colormap or a single color.
+                    Color to use for plotting. If multiple colors,
+                    must be a list of colors with the same length as
+                    the number of faces or vertices.
+        alpha :     float, optional
+                    Opacity value [0-1]. If provided, will override
+                    the alpha channel of the color.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -727,7 +731,7 @@ class Viewer:
         elif not isinstance(name, str):
             name = str(name)
 
-        visual = mesh2gfx(mesh, color=color)
+        visual = mesh2gfx(mesh, color=color, alpha=alpha)
         visual._object_id = name if name else uuid.uuid4()
 
         self._add_to_scene(visual, center)

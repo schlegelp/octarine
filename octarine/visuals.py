@@ -55,7 +55,15 @@ def parse_mesh_color(mesh, color, alpha=None):
     obj_color_kwargs = dict()
     if isinstance(color, np.ndarray) and color.ndim == 2:
         if alpha is not None:
+            if color.shape[1] == 3:
+                color = np.hstack((color, np.ones((color.shape[0], 1))))
+            elif color.shape[1] != 4:
+                raise ValueError("Expected colors to have 3 or 4 channels.")
             color[:, -1] = alpha
+
+        # Make sure the color is what pygfx expects
+        if color.dtype in (np.float64, ):
+            color = color.astype(np.float32, copy=False)
 
         if len(color) == len(mesh.vertices):
             obj_color_kwargs = dict(colors=color)
@@ -64,7 +72,9 @@ def parse_mesh_color(mesh, color, alpha=None):
             obj_color_kwargs = dict(colors=color)
             mat_color_kwargs = dict(color_mode="face")
         else:
-            mat_color_kwargs["color"] = color
+            raise ValueError(
+                "Expected colors to have the same length as the number of vertices or faces."
+            )
     else:
         if alpha is not None:
             color = gfx.Color(color).rgba
