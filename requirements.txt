@@ -21,5 +21,4 @@ mkdocs-minify-plugin
 mkdocs-literate-nav
 mkdocs-gen-files
 mkdocs-glightbox
-
-
+mkdocs-section-index

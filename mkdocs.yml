@@ -15,7 +15,10 @@ nav:
   - "The Basics": intro.md
   - "Adding Objects": objects.md
   - "Managing Objects": manage.md
-  - "Extending Octarine": extending.md
+  - "Extending Octarine":
+    - extending/index.md
+    - "Custom Converters": extending/converters.md
+    - Plugins: extending/plugins.md
   - "Viewer Controls": controls.md
   - "Animations": animations.md
   - FAQ: faq.md
@@ -80,6 +83,7 @@ plugins:
   # the social plugin generates social cards for each page of the project
   # which are used as previews when sharing links to the documentation
   - social
+  - section-index
   - search:
       separator: '[\s\-\_,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
   - autorefs

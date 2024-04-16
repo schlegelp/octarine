@@ -1,23 +1,19 @@
-# Extending `Octarine`
+# Custom Converters
 
-In [Adding Objects](objects.md) you learned how to use the built-in
-object types. But what if you have want to visualize something not currently supported by `Octarine`?
+`Octarine` knows off the bat how to convert various data types to `pygfx` visuals.
+When you throw data at e.g. `Viewer.add`, `Octarine` searches a set of known converter
+functions and tries to find one that fits the bill. If it can't find a matching
+converter it will complain.
 
-Well, in the first instance you can just generate the
-`pygfx` visual (e.g. a `pygfx.Mesh` or a `pygfx.Line`) yourself and
-use the [octarine.Viewer.add][]`()` method to add them to the scene.
+In this tutorial you will learn how to generate and register new converter functions.
+See the [Plugins](plugins.md) tutorial on how to package these into a separate
+package.
 
-That's probably good enough for the odd one-off but what if you want
-to use the `Octarine` viewer for your specialised data on a regular
-basis? Easy: you extend `Octarine`'s functionality to include your
-data!
-
-Probably easiest to illustrate using an example:
-
-First we will define a custom dummy class
+First we will define a dummy class for our "custom data":
 
 ```python
 class Point3d:
+    """Class representing a single 3d point."""
     def __init__(self, x, y, z):
         self.x = x
         self.y = y
@@ -73,7 +69,6 @@ v.add(p)
 
 If you like can even add a specialized `.add_...()` method:
 
-
 ```python
 @oc.viewer.update_legend
 def add_point3d(self, point, name=None, color=None, radius=1, center=True):
@@ -117,3 +112,10 @@ Now this should work:
 >>> v = oc.Viewer()
 >>> v.add_point3d(p)
 ```
+
+OK, now you know how to write a custom converter. You could run the
+above code every time you start a new Python session but that gets
+old pretty quickly.
+
+The more permanent solution is to write a [Plugin](plugins.md) that
+can be installed and is imported alongside `Octarine`.
