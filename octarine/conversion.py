@@ -52,9 +52,10 @@ def register_converter(t, converter, insert='first'):
     Parameters
     ----------
     t :         type | hashable | callable
-                Data type to register the converter for. If a function
+                Data type the converter is meant to convert. If a function
                 it is expected to take a single argument `x` and return
-                True if `x` can be converted using `converter`.
+                True if `x` can be converted using `converter` and False
+                if not.
     converter : callable
                 Function that converts `x` to pygfx visuals. Must accept
                 at least a single argument and return either a single
