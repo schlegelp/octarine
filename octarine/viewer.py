@@ -798,7 +798,9 @@ class Viewer:
         elif not isinstance(name, str):
             name = str(name)
 
-        visual = points2gfx(points, color=color, size=size, size_space=size_space, marker=marker)
+        visual = points2gfx(
+            points, color=color, size=size, size_space=size_space, marker=marker
+        )
         visual._object_id = name if name else uuid.uuid4()
 
         self._add_to_scene(visual, center)
@@ -873,7 +875,7 @@ class Viewer:
     def add_volume(
         self,
         volume,
-        dims,
+        spacing=(1, 1, 1),
         name=None,
         color=None,
         offset=(0, 0, 0),
@@ -888,8 +890,8 @@ class Viewer:
         ----------
         volume :    (N, M, K) array
                     Volume to plot.
-        dims :      tuple
-                    Scale factors for the volume.
+        spacing :   tuple
+                    Spacing between voxels.
         name :      str, optional
                     Name for the visual.
         color :     color | list of colors | pygfx.Texture, optional
@@ -933,7 +935,7 @@ class Viewer:
 
         visual = volume2gfx(
             volume,
-            dims=dims,
+            spacing=spacing,
             offset=offset,
             color=color,
             clim=clim,

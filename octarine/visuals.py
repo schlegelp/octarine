@@ -107,8 +107,8 @@ def color_to_texture(color, N=256, gamma=1.0, fade=True):
 
 def volume2gfx(
     vol,
-    dims,
     color,
+    spacing=(1, 1, 1),
     offset=(0, 0, 0),
     clim="auto",
     interpolation="linear",
@@ -120,8 +120,8 @@ def volume2gfx(
     ----------
     vol :           np.ndarray
                     3D array representing the volume.
-    dims :          tuple
-                    Dimensions of the volume along the (x, y, z) axes.
+    spacing :       tuple
+                    Spacing between voxels in the volume.
     color :         color | list of colors | pygfx.Texture, optional
                     Colormap to render the volume. This can be:
                       - name of a colormap (e.g. "viridis" or "magma")
@@ -159,10 +159,10 @@ def volume2gfx(
 
     assert isinstance(vol, np.ndarray), "Expected 3D numpy array."
     assert vol.ndim == 3, "Expected 3D numpy array."
-    assert isinstance(dims, (tuple, list, np.ndarray, int, float))
-    if isinstance(dims, (int, float)):
-        dims = [dims] * 3
-    assert len(dims) == 3, "Expected dimensions as tuple of length 3."
+    assert isinstance(spacing, (tuple, list, np.ndarray, int, float))
+    if isinstance(spacing, (int, float)):
+        spacing = [spacing] * 3
+    assert len(spacing) == 3, "Expected spacing as tuple of length 3."
 
     # Similar to vispy, pygfx seems to expect zyx coordinate space
     grid = vol.T
@@ -226,7 +226,7 @@ def volume2gfx(
         vis.local.scale_x,
         vis.local.scale_y,
         vis.local.scale_z,
-    ) = dims
+    ) = spacing
     (vis.local.x, vis.local.y, vis.local.z) = offset
 
     # Add custom attributes
