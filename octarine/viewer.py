@@ -224,7 +224,7 @@ class Viewer:
 
     def _next_label(self, prefix="Object"):
         """Return next label."""
-        existing = [o for o in self.objects if o.startswith(prefix)]
+        existing = [o for o in self.objects if str(o).startswith(prefix)]
         if len(existing) == 0:
             return prefix
         return f"{prefix}.{len(existing) + 1:03}"
