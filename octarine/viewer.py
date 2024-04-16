@@ -897,10 +897,12 @@ class Viewer:
                       - "datatype" will use (0, theoretical max of data type)
                         for integer data, e.g. (0, 255) for int8 and uint8,
                         and (0, 1) for float data assuming the data has been
-                        normalized.
-                      - tuple of min/max values
+                        normalized
+                      - tuple of min/max values or combination of "data" and
+                        "datatype" strings
         interpolation : "linear" | "nearest"
-                    Interpolation to use when rendering the volume.
+                    Interpolation to use when rendering the volume. "linear"
+                    (default) looks better but is slower.
         hide_zero : bool
                     If True, will hide voxels with lowest value according to `cmin`.
         center :    bool, optional

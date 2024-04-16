@@ -134,17 +134,15 @@ def volume2gfx(
                     use one of the built-in pygfx colormaps.
     offset :        tuple, optional
                     Offset to apply to the volume.
-    clim :          float | str, optional
-                    Minimum value for the colormap. If 'auto', will use the
-                    minimum value of the volume. If `None` will use 0.
     clim :          "data" | "datatype" | tuple, optional
                     The contrast limits to scale the data values with.
                       - "data" (default) will use the min/max of the data
                       - "datatype" will use (0, theoretical max of data type)
                         for integer data, e.g. (0, 255) for int8 and uint8,
                         and (0, 1) for float data assuming the data has been
-                        normalized.
-                      - tuple of min/max values, (0, 1)
+                        normalized
+                      - tuple of min/max values or combination of "data" and
+                        "datatype" strings
     interpolation : str, optional
                     Interpolation method to use. Either "linear" or "nearest".
     hide_zero :     bool, optional
@@ -180,17 +178,26 @@ def volume2gfx(
 
     # Find the potential min/max value of the volume
     if isinstance(clim, str) and clim == "datatype":
+        cmin = cmax = "datatype"
+    elif isinstance(clim, str) and clim == "data":
+        cmin = cmax = "data"
+    else:
+        cmin, cmax = clim
+
+    if cmin == "datatype":
         cmin = 0
+    elif cmin == "data":
+        cmin = grid.min()
+
+    if cmax == "datatype":
         # If float, assume that the data is normalized
         if grid.dtype.kind == "f":
             cmax = 1
         # Otherwise, use the maximum value of the data type
         else:
             cmax = np.iinfo(grid.dtype).max
-    elif isinstance(clim, str) and clim == "data":
-        cmin, cmax = grid.min(), grid.max()
-    else:
-        cmin, cmax = clim
+    elif cmax == "data":
+        cmax = grid.max()
 
     # Initialize texture
     tex = gfx.Texture(grid, dim=3)
