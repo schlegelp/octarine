@@ -71,6 +71,11 @@ class Viewer:
     size :      tuple, optional
                 Size of the viewer window.
     camera :    "ortho" | "perspective", optional
+                Type of camera to use. Defaults to "ortho". Note you can always
+                change the camera type by adjust the `Viewer.camera.fov` attribute
+                (0 = ortho, >0 = perspective).
+    control :   "trackball" | "panzoom" | "fly" | "orbit"
+                Controller type to use. Defaults to "trackball".
     show :      bool, optional
                 Whether to immediately show the viewer. Note that this has no
                 effect in Jupyter. There you will have to call ``.show()`` manually
@@ -89,6 +94,7 @@ class Viewer:
         title="Octarine Viewer",
         max_fps=30,
         camera="ortho",
+        control="trackball",
         size=None,
         show=True,
         **kwargs,
@@ -154,9 +160,16 @@ class Viewer:
             raise ValueError(f"Unknown camera type: {camera}")
 
         # Add controller
-        self.controller = gfx.TrackballController(
-            self.camera, register_events=self.renderer
-        )
+        controller = {
+            "trackball": gfx.TrackballController,
+            "panzoom": gfx.PanZoomController,
+            "fly": gfx.FlyController,
+            "orbit": gfx.OrbitController,
+        }.get(control, None)
+        if controller is None:
+            raise ValueError(f"Unknown controller type: {control}")
+
+        self.controller = controller(self.camera, register_events=self.renderer)
 
         # Stats
         self.stats = gfx.Stats(self.renderer)
