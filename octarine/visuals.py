@@ -333,8 +333,36 @@ def points2gfx(points, color, size=2, marker=None, size_space="screen"):
     return vis
 
 
-def lines2gfx(lines, color, linewidth=1):
-    """Convert lines into pygfx visuals."""
+def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=None):
+    """Convert lines into pygfx visuals.
+
+    Parameters
+    ----------
+    lines :     list of (N, 3) arrays | (N, 3) array
+                Lines to plot. If a list of arrays, each array
+                represents a separate line. If a single array,
+                each row represents a point in the line. You can
+                introduce breaks in the line by inserting NaNs.
+    color :     str | tuple, optional
+                Color to use for plotting. Can be a single color
+                or one for every point in the line(s).
+    linewidth : float, optional
+                Line width.
+    linewidth_space : "screen" | "world" | "model", optional
+                Units to use for the line width. "screen" (default)
+                will keep the line width constant on the screen, while
+                "world" and "model" will keep it constant in world and
+                model coordinates, respectively.
+    dash_pattern : "solid" | "dashed" | "dotted" | "dashdot" | tuple, optional
+                Line style to use. If a tuple, must define the on/off
+                sequence.
+
+    Returns
+    -------
+    vis :           gfx.Line
+                    Pygfx visuals for lines.
+
+    """
     if isinstance(lines, np.ndarray):
         assert lines.ndim == 2
         assert lines.shape[1] == 3
@@ -357,6 +385,20 @@ def lines2gfx(lines, color, linewidth=1):
             )
     else:
         raise TypeError("Expected numpy array or list of numpy arrays.")
+
+    if dash_pattern is None:
+        dash_pattern = ()  # pygfx expects an empty tuple for solid lines
+    elif isinstance(dash_pattern, str):
+        if dash_pattern == "solid":
+            dash_pattern = ()
+        elif dash_pattern == "dashed":
+            dash_pattern = (5, 2)
+        elif dash_pattern == "dotted":
+            dash_pattern = (1, 2)
+        elif dash_pattern == "dashdot":
+            dash_pattern = (5, 2, 1, 2)
+        else:
+            raise ValueError(f"Unknown dash pattern: {dash_pattern}")
 
     geometry_kwargs = {}
     material_kwargs = {}
@@ -384,7 +426,12 @@ def lines2gfx(lines, color, linewidth=1):
 
     vis = gfx.Line(
         gfx.Geometry(positions=lines.astype(np.float32, copy=False), **geometry_kwargs),
-        gfx.LineMaterial(thickness=linewidth, **material_kwargs),
+        gfx.LineMaterial(
+            thickness=linewidth,
+            thickness_space=linewidth_space,
+            dash_pattern=dash_pattern,
+            **material_kwargs,
+        ),
     )
 
     # Add custom attributes

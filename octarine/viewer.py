@@ -790,7 +790,16 @@ class Viewer:
 
         self._add_to_scene(visual, center)
 
-    def add_lines(self, lines, name=None, color=None, linewidth=1, center=True):
+    def add_lines(
+        self,
+        lines,
+        name=None,
+        color=None,
+        linewidth=1,
+        linewidth_space="screen",
+        linestyle="solid",
+        center=True,
+    ):
         """Add lines to canvas.
 
         Parameters
@@ -807,6 +816,14 @@ class Viewer:
                     or one for every point in the line(s).
         linewidth : float, optional
                     Line width.
+        linewidth_space : "screen" | "world" | "model", optional
+                    Units to use for the line width. "screen" (default)
+                    will keep the line width constant on the screen, while
+                    "world" and "model" will keep it constant in world and
+                    model coordinates, respectively.
+        linestyle : "solid" | "dashed" | "dotted" | "dashdot" | tuple, optional
+                    Line style to use. If a tuple, must define the on/off
+                    sequence.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -830,7 +847,13 @@ class Viewer:
         elif not isinstance(name, str):
             name = str(name)
 
-        visual = lines2gfx(lines, linewidth=linewidth, color=color)
+        visual = lines2gfx(
+            lines,
+            linewidth=linewidth,
+            linewidth_space=linewidth_space,
+            color=color,
+            dash_pattern=linestyle,
+        )
         visual._object_id = name if name else uuid.uuid4()
         self._add_to_scene(visual, center)
 
