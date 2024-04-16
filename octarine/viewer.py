@@ -736,7 +736,16 @@ class Viewer:
 
         self._add_to_scene(visual, center)
 
-    def add_points(self, points, name=None, color=None, size=2, center=True):
+    def add_points(
+        self,
+        points,
+        name=None,
+        color=None,
+        marker=None,
+        size=2,
+        size_space="screen",
+        center=True,
+    ):
         """Add points plot to canvas.
 
         Parameters
@@ -748,8 +757,19 @@ class Viewer:
         color :     str | tuple, optional
                     Color to use for plotting. Can be the name of
                     a colormap or a single color.
+        marker :    str, optional
+                    Marker to use for plotting. By default (None), will
+                    use a point. Other options include e.g. "circle", "ring"
+                    or "diamond". See `pygfx.MarkerShape` for the definitive
+                    list of options. Please note that you may have to
+                    increase the size of the marker to see some of the shapes.
         size :      int | float
-                    Marker size.
+                    Marker size. Can
+        size_space : "screen" | "world" | "model", optional
+                    Units to use for the marker size. "screen" (default)
+                    will keep the line width constant on the screen, while
+                    "world" and "model" will keep it constant in world and
+                    model coordinates, respectively.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -765,7 +785,7 @@ class Viewer:
         elif not isinstance(name, str):
             name = str(name)
 
-        visual = points2gfx(points, color=color, size=size)
+        visual = points2gfx(points, color=color, size=size, size_space=size_space, marker=marker)
         visual._object_id = name if name else uuid.uuid4()
 
         self._add_to_scene(visual, center)

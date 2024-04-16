@@ -269,7 +269,7 @@ def to_colormap(x, hide_zero):
     return tex
 
 
-def points2gfx(points, color, size=2):
+def points2gfx(points, color, size=2, marker=None, size_space="screen"):
     """Convert points to pygfx visuals.
 
     Parameters
@@ -282,11 +282,18 @@ def points2gfx(points, color, size=2):
                     the number of points.
     size :          int, optional
                     Marker size.
+    marker :        str, optional
+                    See gfx.MarkerShape for available markers.
+    size_space :    "screen" | "world" | "model", optional
+                    Units to use for the marker size. "screen" (default)
+                    will keep the line width constant on the screen, while
+                    "world" and "model" will keep it constant in world and
+                    model coordinates, respectively.
 
     Returns
     -------
-    list
-                    Contains pygfx visuals for points.
+    vis :           gfx.Points
+                    Pygfx visual for points.
 
     """
     # TODOs:
