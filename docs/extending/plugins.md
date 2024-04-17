@@ -21,10 +21,42 @@ Just to orient you, this is the structure of our example plugins - a bog-standar
 └── README.md
 ```
 
+### Adding functionality
+
+First we need to define a registration function to add new functionality to `Octarine`.
+Here, we will do so directly in the `__init__.py` but you can also define it elsewhere
+and import it at top-level of the namespace.
+
+```python
+# __init__.py
+
+import octarine as oc
+
+# Import converters (see the "Custom Converters" Tutorial for details)
+from .converters import convert_point3d, add_point3d
+
+
+def register_plugin():
+    """Register Point3d converter and method with Octarine."""
+    # Register the new converter
+    oc.register_converter(Point3d, convert_point3d)
+
+    # Monkey-patch the Viewer class
+    oc.Viewer.add_point3d = add_point3d
+
+```
+
+!!! note
+
+    Consider delaying imports for large (read: slow to import) libraries until
+    you actually need them. For example by putting the `import` statements inside
+    the converter functions. That way `Octarine` itself will not be bogged down by
+    the plugin and remain quick to import.
+
 ### Entry Point
 
-Each plugin must register as a Plugin via a setuptools entry_points. That's done in `setup.py`
-via the `entry_point` parameter.
+Next we need to make `Octarine` aware of the new plugin. For that we are using `setuptools`'
+entry points and is as simple as modifying the call to `setup()` in the `setup.py`:
 
 
 ```python
@@ -50,35 +82,14 @@ module to import (`octarine_point3d_plugin`) and which function (`octarine_point
 to run in order to teach `Octarine` how to deal with new data. It is not enforced but
 by convention that function should be called `register_plugin()`.
 
-### Registration
-
-Next, we need to define our registration function. We will do so directly in the `__init__.py`
-but you can also define it elsewhere and import it at top-level of the namespace.
-
-```python
-# __init__.py
-
-import octarine as oc
-
-# Import converters (see the Custom Converters Tutorial for details)
-from .converters import convert_point3d, add_point3d
-
-
-def register_plugin():
-    """Register Point3d converter and method with Octarine."""
-    oc.register_converter(Point3d, convert_point3d)
-    oc.Viewer.add_point3d = add_point3d
-
-```
-
 And that's it! Publish the plugin to PyPI and everyone who installs it will be able to
 use `Point3d` with `Octarine`.
 
 ### Concluding Remarks
 
-Consider delaying imports for large (read: slow to import) libraries until you actually need them by
-putting the `import` statements inside the converter functions. That way `Octarine` itself will remain
-quick to import.
+The plugin system is currently rather simple but you can still do a lot with it - in particular
+if you use [monkey patching](https://en.wikipedia.org/wiki/Monkey_patch) to modify the behavior
+of the `Viewer` class.
 
 See [`octarine-navis-plugin`](https://github.com/navis-org/octarine-navis-plugin) for an example of
 an `Octarine` plugin in the wild.

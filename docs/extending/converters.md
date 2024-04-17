@@ -64,7 +64,7 @@ v = oc.Viewer()
 v.add(p)
 ```
 
-![sphere example](_static/sphere_example.png)
+![sphere example](../_static/sphere_example.png)
 
 
 If you like can even add a specialized `.add_...()` method:
@@ -102,6 +102,7 @@ def add_point3d(self, point, name=None, color=None, radius=1, center=True):
     if center:
         self.center_camera()
 
+# Monkey patch the Viewer
 oc.Viewer.add_point3d = add_point3d
 ```
 
