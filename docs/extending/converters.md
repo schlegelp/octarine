@@ -70,7 +70,7 @@ v.add(p)
 If you like can even add a specialized `.add_...()` method:
 
 ```python
-@oc.viewer.update_legend
+@oc.viewer.update_viewer
 def add_point3d(self, point, name=None, color=None, radius=1, center=True):
     """Add Point3d to canvas.
 
