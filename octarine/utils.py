@@ -2,7 +2,6 @@ import six
 
 import pygfx as gfx
 import numpy as np
-import pandas as pd
 
 from collections.abc import Iterable
 
@@ -46,7 +45,7 @@ def parse_objects(x, include_geometries=True):
     scatter = [ob for ob in x if isinstance(ob, np.ndarray) and (ob.ndim == 2) and (ob.shape[1] == 3)]
 
     # Collect dataframes with X/Y/Z coordinates
-    dataframes = [ob for ob in x if isinstance(ob, pd.DataFrame)]
+    dataframes = [ob for ob in x if _is_pandas_dataframe(ob)]
     if [d for d in dataframes if False in np.isin(['x', 'y', 'z'], d.columns)]:
         logger.warning('DataFrames must have x, y and z columns.')
     dataframes = [d for d in dataframes if all(np.isin(['x', 'y', 'z'], d.columns))]
@@ -57,14 +56,6 @@ def parse_objects(x, include_geometries=True):
 
     # Collect meshes
     meshes = [ob for ob in x if is_mesh_like(ob)]
-
-    # Collect dataframes with X/Y/Z coordinates
-    dataframes = [ob for ob in x if isinstance(ob, pd.DataFrame)]
-    if [d for d in dataframes if False in np.isin(['x', 'y', 'z'], d.columns)]:
-        logger.warning('DataFrames must have x, y and z columns.')
-    # Filter to and extract x/y/z coordinates
-    dataframes = [d for d in dataframes if False not in [c in d.columns for c in ['x', 'y', 'z']]]
-    dataframes = [d[['x', 'y', 'z']].values for d in dataframes]
 
     # Collect arrays
     arrays = [ob.copy() for ob in x if isinstance(ob, np.ndarray)]
@@ -77,6 +68,19 @@ def parse_objects(x, include_geometries=True):
     points = dataframes + arrays
 
     return meshes, volumes, points, visuals
+
+
+def _is_pandas_dataframe(x):
+    """Check if object is a pandas DataFrame."""
+    # We're doing this without the use of isinstance() to avoid
+    # needing pandas as a dependency
+    if not hasattr(x, "__class__"):
+        return False
+    # Check if any of the parent classes is a pandas DataFrame
+    for b in x.__class__.__mro__:
+        if b.__module__.startswith("pandas") and b.__name__ == "DataFrame":
+            return True
+    return False
 
 
 def make_iterable(x, force_type = None):
@@ -118,7 +122,7 @@ def is_iterable(x) -> bool:
     True
 
     """
-    if isinstance(x, Iterable) and not isinstance(x, (six.string_types, pd.DataFrame)):
+    if isinstance(x, Iterable) and not isinstance(x, six.string_types) and not _is_pandas_dataframe(x):
         return True
     else:
         return False
