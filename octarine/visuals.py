@@ -441,8 +441,8 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
             # See if we can rescue this
             if len(color) == n_points:
                 breaks = np.where(np.isnan(lines[:, 0]))[0]
-                for b in breaks:
-                    color = np.insert(color, b, np.nan, axis=0)
+                offset = np.arange(len(breaks))
+                color = np.insert(color, breaks-offset, np.nan, axis=0)
             else:
                 raise ValueError(f"Got {len(color)} colors for {n_points} points.")
         color = color.astype(np.float32, copy=False)
