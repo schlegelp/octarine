@@ -2,11 +2,11 @@ import pygfx as gfx
 import trimesh as tm
 
 from .utils import is_hashable, is_points, is_lines, is_volume, is_mesh_like, is_pygfx_visual, is_pygfx_geometry
-from .visuals import points2gfx, lines2gfx, mesh2gfx, trimesh2gfx, volume2gfx, scene2gfx
+from .visuals import points2gfx, lines2gfx, mesh2gfx, trimesh2gfx, volume2gfx, scene2gfx, geometry2gfx, visual_passthrough
 
 CONVERTERS = {
-    is_pygfx_visual: lambda x: x,  # pass-through
-    is_pygfx_geometry: lambda x: gfx.Mesh(x, gfx.MeshPhongMaterial()),  # add default material and return
+    is_pygfx_visual: visual_passthrough,  # pass-through
+    is_pygfx_geometry: geometry2gfx,  # add default material and return
     tm.Trimesh: trimesh2gfx,
     tm.Scene: scene2gfx,
     is_mesh_like: mesh2gfx,

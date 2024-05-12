@@ -49,6 +49,37 @@ def mesh2gfx(mesh, color, alpha=None):
     return vis
 
 
+def geometry2gfx(geometry, color, alpha=None):
+    """Convert a pygfx.Geometry to a pygfx.Mesh.
+
+    Parameters
+    ----------
+    geometry :      pygfx.Geometry
+                    Geometry to convert.
+    color :         str | tuple | array
+                    Color to use for plotting. If multiple colors,
+                    must be a list of colors with the same length as
+                    the number of faces or vertices.
+    alpha :         float, optional
+                    Opacity value [0-1]. If provided, will override
+                    the alpha channel of the color.
+
+    """
+    # Parse color
+    mat_color_kwargs, obj_color_kwargs = parse_mesh_color(geometry, color, alpha)
+
+    if "colors" in obj_color_kwargs:
+        geometry.colors = obj_color_kwargs["colors"]
+
+    vis = gfx.Mesh(geometry, gfx.MeshPhongMaterial(**mat_color_kwargs))
+
+    # Add custom attributes
+    vis._object_type = "mesh"
+    vis._object_id = uuid.uuid4()
+
+    return vis
+
+
 def parse_mesh_color(mesh, color, alpha=None):
     """Parse color for mesh plotting."""
     mat_color_kwargs = dict()
@@ -663,3 +694,10 @@ def text2gfx(
     )
     text.local.position = position
     return text
+
+
+def visual_passthrough(x, *args, **kwargs):
+    """Pass-through converter."""
+    if any(args) or any(kwargs):
+        logger.info("Pygfx visuals are passed-through as is. Any additional arguments are ignored.")
+    return x
