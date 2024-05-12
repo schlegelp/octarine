@@ -826,7 +826,9 @@ class Viewer:
         Parameters
         ----------
         mesh :      Mesh-like
-                    Mesh to plot.
+                    Mesh to plot. If this is a pygfx.Mesh, it will be added
+                    directly to the scene without modification (i.e. `color`,
+                    `alpha`, etc. will be ignored).
         name :      str, optional
                     Name for the visual.
         color :     str | tuple, optional
@@ -849,7 +851,11 @@ class Viewer:
         elif not isinstance(name, str):
             name = str(name)
 
-        visual = mesh2gfx(mesh, color=color, alpha=alpha)
+        if not isinstance(mesh, gfx.Mesh):
+            visual = mesh2gfx(mesh, color=color, alpha=alpha)
+        else:
+            visual = mesh
+
         visual._object_id = name if name else uuid.uuid4()
 
         self._add_to_scene(visual, center)
