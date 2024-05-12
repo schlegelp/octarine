@@ -62,7 +62,7 @@ def parse_mesh_color(mesh, color, alpha=None):
             color[:, -1] = alpha
 
         # Make sure the color is what pygfx expects
-        if color.dtype in (np.float64, ):
+        if color.dtype in (np.float64,):
             color = color.astype(np.float32, copy=False)
 
         if len(color) == len(mesh.vertices):
@@ -442,7 +442,7 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
             if len(color) == n_points:
                 breaks = np.where(np.isnan(lines[:, 0]))[0]
                 offset = np.arange(len(breaks))
-                color = np.insert(color, breaks-offset, np.nan, axis=0)
+                color = np.insert(color, breaks - offset, np.nan, axis=0)
             else:
                 raise ValueError(f"Got {len(color)} colors for {n_points} points.")
         color = color.astype(np.float32, copy=False)
@@ -605,3 +605,61 @@ def scene2gfx(scene):
         visuals.append(vis)
 
     return visuals
+
+
+def text2gfx(
+    text,
+    position=(0, 0, 0),
+    color="w",
+    font_size=1,
+    anchor="topright",
+    screen_space=False,
+    markdown=False,
+):
+    """Convert text to pygfx visuals.
+
+    Parameters
+    ----------
+    text :          str
+                    Text to plot.
+    position :      tuple
+                    Position of the text.
+    color :         tuple | str
+                    Color to use for plotting.
+    font_size :     int, optional
+                    Font size.
+    anchor :        str, optional
+                    Anchor point of the text. Can be one of "topleft", "topright",
+                    "bottomleft", "bottomright", "center", "topmiddle", "bottommiddle", "middleleft",
+                    "middleright".
+    screen_space :  bool, optional
+                    Whether to use screen space coordinates.
+    markdown :      bool, optional
+                    Whether the text should be interpreted as markdown.
+
+    Returns
+    -------
+    text :          gfx.Text
+                    Pygfx visual for text.
+
+    """
+    assert isinstance(text, str), "Expected string."
+    assert isinstance(position, (list, tuple, np.ndarray)), "Expected list or tuple."
+    assert len(position) == 3, "Expected (x, y, z) position."
+
+    defaults = {
+        "font_size": font_size,
+        "anchor": anchor,
+        "screen_space": screen_space,
+    }
+    if markdown:
+        defaults["markdown"] = text
+    else:
+        defaults["text"] = text
+
+    text = gfx.Text(
+        gfx.TextGeometry(**defaults),
+        gfx.TextMaterial(color=color),
+    )
+    text.local.position = position
+    return text

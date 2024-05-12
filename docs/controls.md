@@ -81,6 +81,19 @@ You can bind custom keys using the [`octarine.Viewer.bind_key`][]`()` method:
 >>> v.bind_key(key="x", func=v.clear)
 ```
 
+## Overlay message
+
+Need to communicate with the user? Try the [`octarine.Viewer.show_message`][]`()`:
+
+```python
+>>> v = oc.Viewer()
+>>> v.show_message("Hi User!",
+...                duration=2,  # fade out after 2s
+...                position='center')
+```
+
+![user message](_static/user_message.png)
+
 ## GUI Controls
 
 ### Shell/IPython

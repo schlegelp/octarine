@@ -1,4 +1,5 @@
 import png
+import time
 import cmap
 import uuid
 import random
@@ -13,7 +14,7 @@ from collections import OrderedDict
 from wgpu.gui.auto import WgpuCanvas
 from wgpu.gui.offscreen import WgpuCanvas as WgpuCanvasOffscreen
 
-from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx
+from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx
 from .conversion import get_converter
 from . import utils, config
 
@@ -171,6 +172,10 @@ class Viewer:
 
         self.controller = controller(self.camera, register_events=self.renderer)
 
+        # Setup overlay
+        self.overlay_camera = gfx.NDCCamera()
+        self.overlay_scene = gfx.Scene()
+
         # Stats
         self.stats = gfx.Stats(self.renderer)
         self._show_fps = False
@@ -199,32 +204,48 @@ class Viewer:
         # Finally, setting some variables
         self._show_bounds = False
         self._shadows = False
-        self._animations = []
+        self._animations = {}
+        self._animations_flagged_for_removal = []
 
         # This starts the animation loop
         if show and not self._is_jupyter:
             self.show()
 
     def _animate(self):
-        """Animate the scene."""
-        to_remove = []
-        for i, func in enumerate(self._animations):
+        """Run the rendering loop."""
+        # First run the user animations
+        # Note: we're iterating over the list because the user might add / remove
+        # animations during the loop
+        for i, (func, on_error) in enumerate(list(self._animations.items())):
             try:
                 func()
             except BaseException as e:
-                logger.error(
-                    f"Removing animation function {func} because of error: {e}"
-                )
-                to_remove.append(i)
-        for i in to_remove[::-1]:
-            self.remove_animation(i)
+                if on_error == "raise":
+                    raise e
+                elif on_error == "remove":
+                    logger.error(
+                        f"Removing animation function '{func}' because of error: {e}"
+                    )
+                    # Flag animation for removal
+                    self._animations_flagged_for_removal.append(i)
 
+        # Check if any animations need to be removed
+        for f in self._animations_flagged_for_removal[::-1]:
+            self._animations.pop(f)
+        self._animations_flagged_for_removal = []
+
+        # Now render the scene
         if self._show_fps:
             with self.stats:
                 self.renderer.render(self.scene, self.camera, flush=False)
+                self.renderer.render(
+                    self.overlay_scene, self.overlay_camera, flush=False
+                )
             self.stats.render()
         else:
-            self.renderer.render(self.scene, self.camera)
+            self.renderer.render(self.scene, self.camera, flush=False)
+            self.renderer.render(self.overlay_scene, self.overlay_camera)
+
         self.canvas.request_draw()
 
     def _next_color(self):
@@ -434,19 +455,26 @@ class Viewer:
 
         return objects
 
-    def add_animation(self, x):
+    def add_animation(self, x, on_error="remove"):
         """Add animation function to the Viewer.
 
         Parameters
         ----------
-        x :     callable
-                Function to add to the animation loop.
+        x :         callable
+                    Function to add to the animation loop.
+        on_error :  "remove" | "ignore" | "raise"
+                    What to do if the function throws an error. If "remove",
+                    the function will be removed from the animation loop. If
+                    "ignore", the error will be ignored and the function will
+                    continue to be called.
 
         """
         if not callable(x):
             raise TypeError(f"Expected callable, got {type(x)}")
 
-        self._animations.append(x)
+        assert on_error in ["remove", "ignore", "raise"]
+
+        self._animations[x] = on_error
 
     def remove_animation(self, x):
         """Remove animation function from the Viewer.
@@ -459,9 +487,11 @@ class Viewer:
 
         """
         if callable(x):
-            self._animations.remove(x)
+            self._animations_flagged_for_removal.append(x)
         elif isinstance(x, int):
-            self._animations.pop(x)
+            self._animations_flagged_for_removal.append(
+                list(self._animations.keys())[x]
+            )
         else:
             raise TypeError(f"Expected callable or index (int), got {type(x)}")
 
@@ -510,6 +540,75 @@ class Viewer:
                 sidecar_kwargs={"title": self._title},
             )
             return self.widget
+
+    def show_message(
+        self, message, position="top-right", font_size=20, color=None, duration=None
+    ):
+        """Show message on canvas.
+
+        Parameters
+        ----------
+        message :   str | None
+                    Message to show. Set to `None` to remove the existing message.
+        position :  "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center"
+                    Position of the message on the canvas.
+        font_size : int, optional
+                    Font size of the message.
+        color :     str | tuple, optional
+                    Color of the message. If `None`, will use white.
+        duration :  int, optional
+                    Number of seconds after which to fade the message.
+
+        """
+        if message is None and hasattr(self, "_message_text"):
+            self.overlay_scene.remove(self._message_text)
+            del self._message_text
+            return
+
+        _positions = {
+            "top-left": (-0.95, 0.95, 0),
+            "top-right": (0.95, 0.95, 0),
+            "bottom-left": (-0.95, -0.95, 0),
+            "bottom-right": (0.95, -0.95, 0),
+            "center": (0, 0, 0),
+        }
+        if position not in _positions:
+            raise ValueError(f"Unknown position: {position}")
+
+        if not hasattr(self, "_message_text"):
+            self._message_text = text2gfx(
+                message, color="white", font_size=font_size, screen_space=True
+            )
+
+        # Make sure the text is in the scene
+        if self._message_text not in self.overlay_scene.children:
+            self.overlay_scene.add(self._message_text)
+
+        self._message_text.geometry.set_text(message)
+        self._message_text.geometry.font_size = font_size
+        self._message_text.geometry.anchor = position
+        if color is not None:
+            self._message_text.material.color = cmap.Color(color).rgba
+        self._message_text.material.opacity = 1
+        self._message_text.local.position = _positions[position]
+
+        # When do we need to start fading out?
+        if duration:
+            self._fade_out_time = time.time() + duration
+
+            def _fade_message():
+                if not hasattr(self, "_message_text"):
+                    self.remove_animation(_fade_message)
+                else:
+                    if time.time() > self._fade_out_time:
+                        # This means the text will fade fade over 1/0.02 = 50 frames
+                        self._message_text.material.opacity = max(self._message_text.material.opacity - 0.02, 0)
+
+                    if self._message_text.material.opacity <= 0:
+                        self.overlay_scene.remove(self._message_text)
+                        self.remove_animation(_fade_message)
+
+            self.add_animation(_fade_message)
 
     def show_controls(self):
         """Show controls."""
