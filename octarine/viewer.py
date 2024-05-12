@@ -252,14 +252,15 @@ class Viewer:
         """Return next color in the colormap."""
         # Cache the full palette. N.B. that ordering of colors in cmap depends on
         # the number of colors requested - i.e. we can't just grab the last color.
-        if (
-            not hasattr(self, "__cached_palette")
-            or self.palette != self.__cached_palette
-        ):
-            self.__cached_colors = list(cmap.Colormap(self.palette).iter_colors())
-            self.__cached_palette = self.palette
+        if not hasattr(self, "_cached_palette") or self.palette != self._cached_palette:
+            self._cached_colors = list(cmap.Colormap(self.palette).iter_colors())
+            self._cached_palette = self.palette
 
-        return self.__cached_colors[len(self.objects) % len(self.__cached_colors)]
+        if not hasattr(self, "_palette_index"):
+            self._palette_index = -1
+        self._palette_index += 1
+
+        return self._cached_colors[self._palette_index % len(self._cached_colors)]
 
     def _next_label(self, prefix="Object"):
         """Return next label."""
