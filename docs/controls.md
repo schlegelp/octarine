@@ -73,6 +73,14 @@ While the viewer or widget is active you can use a set of hotkeys to control the
 | `f`    | Show/hide frames per second                  |
 | `c`    | Show/hide control panel (requires PySide6)   |
 
+You can bind custom keys using the [`octarine.Viewer.bind_key`][]`()` method:
+
+```python
+>>> v = oc.Viewer()
+>>> # Bind `x` key to clearing the viewer
+>>> v.bind_key(key="x", func=v.clear)
+```
+
 ## GUI Controls
 
 ### Shell/IPython
