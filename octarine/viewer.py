@@ -662,10 +662,10 @@ class Viewer:
 
         for vis in self.scene.children:
             if vis in to_remove:
-                self.scene.children.remove(vis)
+                self.scene.remove(vis)
             elif hasattr(vis, "_object_id"):
                 if vis._object_id in to_remove:
-                    self.scene.children.remove(vis)
+                    self.scene.remove(vis)
 
     @update_viewer(legend=True, bounds=True)
     def pop(self, N=1):
