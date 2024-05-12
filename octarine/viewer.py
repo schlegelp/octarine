@@ -1224,3 +1224,40 @@ class Viewer:
             )
         else:
             raise TypeError(f"Unable to set view from {type(view)}")
+
+    def bind_key(self, key, func, modifiers=None):
+        """Bind a function to a key press.
+
+        Note that any existing keybindings for `key` + `modifiers` will be
+        silently overwritten.
+
+        Parameters
+        ----------
+        key :       str
+                    Key to bind to. Can be any key on the keyboard.
+        func :      callable
+                    Function to call when key is pressed.
+        modifiers : str | list thereof, optional
+                    Modifier(s) to use with the key. Can be "Shift", "Control",
+                    "Alt" or "Meta".
+
+        """
+        if not callable(func):
+            raise TypeError("`func` needs to be callable")
+
+        if not isinstance(key, str):
+            raise TypeError(f"Expected `key` to be a string, got {type(key)}")
+
+        if modifiers is None:
+            self._key_events[key] = func
+        else:
+            # We need to make `modifiers` is hashable
+            if isinstance(key, str):
+                key = (key,)
+            elif isinstance(key, (set, list)):
+                key = tuple(key)
+
+            if not isinstance(modifiers, tuple):
+                raise TypeError(f"Unexpected datatype for `modifiers`: {type(modifiers)}")
+
+            self._key_events[(key, modifiers)] = func
