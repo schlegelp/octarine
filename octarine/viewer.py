@@ -11,7 +11,7 @@ import pygfx as gfx
 from functools import wraps
 from collections import OrderedDict
 
-from wgpu.gui.auto import WgpuCanvas
+from wgpu.gui.auto import WgpuCanvas, run
 from wgpu.gui.offscreen import WgpuCanvas as WgpuCanvasOffscreen
 
 from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx
@@ -77,10 +77,12 @@ class Viewer:
                 (0 = ortho, >0 = perspective).
     control :   "trackball" | "panzoom" | "fly" | "orbit"
                 Controller type to use. Defaults to "trackball".
-    show :      bool, optional
-                Whether to immediately show the viewer. Note that this has no
-                effect in Jupyter. There you will have to call ``.show()`` manually
-                on the last line of a cell for the viewer to appear.
+    show :      bool
+                Whether to immediately show the viewer. A few notes:
+                 1. This has no effect in Jupyter. There you will have to call ``.show()``
+                    manually on the last line of a cell for the viewer to appear.
+                 2. When running in a non-interactive script or REPL, you have to also start
+                    the event loop manually. See the `Viewer.show()` method for more information.
     **kwargs
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
@@ -209,7 +211,7 @@ class Viewer:
 
         # This starts the animation loop
         if show and not self._is_jupyter:
-            self.show()
+            self.show(start_loop=show == "start_loop")
 
     def _animate(self):
         """Run the rendering loop."""
@@ -496,7 +498,7 @@ class Viewer:
         else:
             raise TypeError(f"Expected callable or index (int), got {type(x)}")
 
-    def show(self, use_sidecar=False, toolbar=False):
+    def show(self, use_sidecar=False, toolbar=False, start_loop=False):
         """Show viewer.
 
         Parameters
@@ -513,6 +515,15 @@ class Viewer:
                       the toolbar with ``viewer.show_controls()`` and
                       ``viewer.hide_controls()``, or the `c` hotkey.
 
+        For scripts & standard REPL:
+
+        start_loop :  bool
+                      If True, will start the blocking (!) event loop. This is
+                      the recommended way to show the viewer when using it in a script.
+                      From an interactive REPL such as IPython you should be able to
+                      just call ``Viewer.show()`` and the interactive viewer will appear
+                      while still allowing you to interact with the REPL.
+
         """
         # This is for e.g. headless testing
         if getattr(config, "HEADLESS", False):
@@ -527,7 +538,25 @@ class Viewer:
             return
         # In terminal we can just show the window
         elif not self._is_jupyter:
-            self.canvas.show()
+            # Not all backends have a show method
+            if hasattr(self.canvas, "show"):
+                self.canvas.show()
+
+            if start_loop:
+                run()
+            elif utils._type_of_script() in ("terminal", "script"):
+                logger.warning(
+                    "Running in a (potentially) non-interactive terminal or script "
+                    "environment. You may have to manually start the event loop "
+                    "for the canvas to render:\n\n"
+                    "  >>> v = octarine.Viewer(show=False)\n"
+                    "  >>> ...  # setup your viewer\n"
+                    "  >>> v.show(start_loop=True)\n\n"
+                    "Alternatively, use the `start_loop` argument:\n\n"
+                    "  >>> from wgpu.gui.auto import run\n"
+                    "  >>> ...  # setup your viewer\n"
+                    "  >>> run()\n\n"  # do not remove the \n\n here
+                )
         # For Jupyter we need to wrap the canvas in a widget
         else:
             # if not hasattr(self, 'widget'):
