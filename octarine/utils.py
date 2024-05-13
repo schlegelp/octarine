@@ -194,6 +194,12 @@ def _type_of_script() -> str:
         else:  # if 'terminal' in ipy_str:
             return 'ipython'
     except BaseException:
+        try:
+            # This is not perfect but should work in most cases
+            if hasattr(__main__.__file__):  # noqa: F821
+                return 'script'
+        except BaseException:
+            pass
         return 'terminal'
 
 
