@@ -1,6 +1,7 @@
 # The Basics
 
-You can use the `octarine.Viewer` in both Jupyter environments and interactive shells such as [IPython](https://github.com/ipython/ipython). The functionality is the same but the handling differs slightly.
+You can use the `octarine.Viewer` in Jupyter environments, (interactive) shells such as [IPython](https://github.com/ipython/ipython) and Python scripts.
+The functionality is the same but the handling differs slightly.
 
 ## Jupyter Lab/Notebook
 
@@ -70,7 +71,7 @@ v.show(use_sidecar=True)
 
 ![cube example](_static/cube_example_sidecar.png)
 
-## IPython
+## IPython and other interactive shells
 
 Start IPython by running the `ipython` command from the terminal. Once you're in
 the Python shell:
@@ -108,6 +109,36 @@ the Python shell:
     2. The active main event loop has to be compatible with the `pygfx` backend you're
     using. At this point, the safest bet is to use `%gui qt`.
 
+    `octarine` is mainly tested with IPython but there are of course other interactive REPLs out
+    there such as e.g. [`ptpython`](https://github.com/prompt-toolkit/ptpython). To use
+    `octarine` interactively, you may have to figure out how to start the (correct)
+    event loop yourself. For example. in case of `ptpython` you need to start it
+    with a `--asyncio` flag:
+
+    ```shell
+    $ ptpython --asyncio
+    ```
+
+
+## Scripts & non-interactive shell
+
+You can also use `octarine` in Python scripts or from non-interactive shells (like the default `python` shell).
+In those scenarios you will have to additionally start the event loop:
+
+```python
+import octarine as oc
+
+# Initialize the viewer but don't show yet
+v = oc.Viewer(show=False)
+
+# Add random points as scatter
+import numpy as np
+points = np.random.rand(10, 3)  # 10 random points
+v.add(points)
+
+# Show and start the event loop in one go
+v.show(start_loop=True)
+```
 
 ## Offscreen
 
@@ -116,13 +147,13 @@ window/widget? No problem:
 
 ```python
 import octarine as oc
-import pygfx as gfx
 
 # Open a fresh offscreen viewer
 # (this will not spawn a window)
 v = oc.Viewer(offscreen=True)
 
-# Add mesh to viewer
+# Add a mesh to viewer
+# (reusing the cube from examples above)
 v.add(cube)
 
 # Adjust camera view to frontal

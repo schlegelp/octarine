@@ -58,6 +58,11 @@ v.add(m, color='b')
 v.close()
 ```
 
+> [!NOTE]
+> The above example will work in interactive environments such as IPython and Jupyter. When using from the standard
+> REPL or when running as a script you will have to additionally start the event loop. Please see corresponding the
+> section in the [Introduction](https://schlegelp.github.io/octarine/intro/).
+
 ![demo gif](docs/_static/octarine_demo_720p.gif)
 
 ## Want to learn more?
