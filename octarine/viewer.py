@@ -552,9 +552,10 @@ class Viewer:
                     "  >>> v = octarine.Viewer(show=False)\n"
                     "  >>> ...  # setup your viewer\n"
                     "  >>> v.show(start_loop=True)\n\n"
-                    "Alternatively, use the `start_loop` argument:\n\n"
+                    "Alternatively, use WGPU's run() function:\n\n"
                     "  >>> from wgpu.gui.auto import run\n"
                     "  >>> ...  # setup your viewer\n"
+                    "  >>> v.show()\n"
                     "  >>> run()\n\n"  # do not remove the \n\n here
                 )
         # For Jupyter we need to wrap the canvas in a widget
