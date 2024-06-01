@@ -34,6 +34,7 @@ class Controls(QtWidgets.QWidget):
         self.active_objects = None
 
         self.color_picker = QtWidgets.QColorDialog(parent=self)
+        self.color_picker.setOption(QtWidgets.QColorDialog.ShowAlphaChannel, on=True)
         self.color_picker.currentColorChanged.connect(self.set_color)
         self.color_picker.colorSelected.connect(self.reset_active_objects)
 
