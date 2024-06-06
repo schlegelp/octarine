@@ -1395,8 +1395,10 @@ class Viewer:
 
         Parameters
         ----------
-        view :      XY | XZ | YZ
-                    View to set.
+        view :      XY | XZ | YZ | dict
+                    View to set. If a dictionary, should describe the
+                    state of the camera. Typically, this is obtained
+                    by calling `viewer.get_view()`.
 
         """
         if view == "XY":
@@ -1411,8 +1413,14 @@ class Viewer:
             self.camera.show_object(
                 self.scene, scale=1, view_dir=(-1.0, 0.0, 0.0), up=(0.0, -1.0, 0.0)
             )
+        elif isinstance(view, dict):
+            self.camera.set_state(view)
         else:
             raise TypeError(f"Unable to set view from {type(view)}")
+
+    def get_view(self):
+        """Get current camera position."""
+        return self.camera.get_state()
 
     def bind_key(self, key, func, modifiers=None):
         """Bind a function to a key press.
@@ -1447,6 +1455,8 @@ class Viewer:
                 key = tuple(key)
 
             if not isinstance(modifiers, tuple):
-                raise TypeError(f"Unexpected datatype for `modifiers`: {type(modifiers)}")
+                raise TypeError(
+                    f"Unexpected datatype for `modifiers`: {type(modifiers)}"
+                )
 
             self._key_events[(key, modifiers)] = func
