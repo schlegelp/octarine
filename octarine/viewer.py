@@ -605,7 +605,8 @@ class Viewer:
 
         """
         if message is None and hasattr(self, "_message_text"):
-            self.overlay_scene.remove(self._message_text)
+            if self._message_text.parent:
+                self.overlay_scene.remove(self._message_text)
             del self._message_text
             return
 
@@ -646,10 +647,13 @@ class Viewer:
                 else:
                     if time.time() > self._fade_out_time:
                         # This means the text will fade fade over 1/0.02 = 50 frames
-                        self._message_text.material.opacity = max(self._message_text.material.opacity - 0.02, 0)
+                        self._message_text.material.opacity = max(
+                            self._message_text.material.opacity - 0.02, 0
+                        )
 
                     if self._message_text.material.opacity <= 0:
-                        self.overlay_scene.remove(self._message_text)
+                        if self._message_text.parent:
+                            self.overlay_scene.remove(self._message_text)
                         self.remove_animation(_fade_message)
 
             self.add_animation(_fade_message)
