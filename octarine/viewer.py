@@ -284,6 +284,19 @@ class Viewer:
         return len(self._object_ids)
 
     @property
+    def blend_mode(self):
+        """Render blend mode.
+
+        This is a simple shortcut, see `Viewer.renderer.blend_mode` for more information.
+
+        """
+        return self.renderer.blend_mode
+
+    @blend_mode.setter
+    def blend_mode(self, mode):
+        self.renderer.blend_mode = mode
+
+    @property
     def controls(self):
         """Return the controls widget."""
         return getattr(self, "_controls", None)

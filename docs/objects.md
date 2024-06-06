@@ -111,6 +111,10 @@ array([[0.38, 0.  , 0.  ],
 
 ![brain volume](_static/brain_volume_example.png)
 
+Note that the default blend mode for the renderer may cause objects
+behind or inside the volume to look funny. You can change the blend
+mode by setting e.g. `v.blend_mode='additive'`.
+
 See [octarine.Viewer.add_volume][]`()` for details!
 
 ## Custom Objects
