@@ -139,9 +139,11 @@ def color_to_texture(color, N=256, gamma=1.0, fade=True):
 def volume2gfx(
     vol,
     color,
+    opacity=1.0,
     spacing=(1, 1, 1),
     offset=(0, 0, 0),
-    clim="auto",
+    clim="data",
+    slice=False,
     interpolation="linear",
     hide_zero=True,
 ):
@@ -163,6 +165,8 @@ def volume2gfx(
                     it's better to define at least two colors. For example,
                     instead of "red" use ["red", "yellow"]. If `None` will
                     use one of the built-in pygfx colormaps.
+    opacity :       float, optional
+                    Opacity of the volume.
     offset :        tuple, optional
                     Offset to apply to the volume.
     clim :          "data" | "datatype" | tuple, optional
@@ -174,6 +178,13 @@ def volume2gfx(
                         normalized
                       - tuple of min/max values or combination of "data" and
                         "datatype" strings
+    slice :         bool | tuple, optional
+                    Render volume slices instead of the full volume:
+                      - True: render slices in all dimensions
+                      - tuple of bools, e.g. `(True, True, False)`: render slices
+                        in the respective dimensions
+                      - tuple of floats, e.g. `(0.5, 0.5, 0.5)`: render slices
+                        at the respective positions (relative to the volume size)
     interpolation : str, optional
                     Interpolation method to use. Either "linear" or "nearest".
     hide_zero :     bool, optional
@@ -208,10 +219,13 @@ def volume2gfx(
         grid = grid.astype(np.uint16)
 
     # Find the potential min/max value of the volume
-    if isinstance(clim, str) and clim == "datatype":
-        cmin = cmax = "datatype"
-    elif isinstance(clim, str) and clim == "data":
-        cmin = cmax = "data"
+    if isinstance(clim, str):
+        if clim == "datatype":
+            cmin = cmax = "datatype"
+        elif isinstance(clim, str) and clim == "data":
+            cmin = cmax = "data"
+        else:
+            raise ValueError(f"Invalid value for clim: {clim}")
     else:
         cmin, cmax = clim
 
@@ -238,33 +252,60 @@ def volume2gfx(
     cmap = to_colormap(color, hide_zero=hide_zero)
 
     # Initialize the volume
-    vis = gfx.Volume(
-        gfx.Geometry(grid=tex),
-        gfx.VolumeMipMaterial(
-            clim=(cmin, cmax),
-            map=cmap,
-            interpolation=interpolation,
-            map_interpolation=interpolation,
-        ),
-    )
+    visuals = []
+    if slice in (False, None):
+        vis = gfx.Volume(
+            gfx.Geometry(grid=tex),
+            gfx.VolumeMipMaterial(
+                clim=(cmin, cmax),
+                map=cmap,
+                interpolation=interpolation,
+                map_interpolation=interpolation,
+            ),
+        )
+        visuals.append(vis)
+    else:
+        if isinstance(slice, bool):
+            slice = (0.5, 0.5, 0.5)
+        elif not isinstance(slice, (list, tuple)):
+            raise ValueError("Expected `slice` as bool or tuple.")
+        elif len(slice) != 3:
+            raise ValueError("Expected `slice` as bool or tuple of length 3.")
 
-    # To trigger an update of the colormap data later:
-    # vis.material.data[:, 1] = 0
-    # vis.material.map.update_range((0, 0, 0), vis.material.map.size)
+        slice = list(slice)
+        for ix, dim in enumerate([2, 1, 0]):  # xyz
+            # Skip if we don't want to render this slice
+            if isinstance(slice[ix], bool):
+                if slice[ix]:
+                    slice[ix] = 0.5
+                else:
+                    continue
+
+            abcd = [0, 0, 0, 0]
+            abcd[dim] = -1
+            abcd[-1] = vol.shape[2 - dim] / (1 / slice[ix]) * spacing[2 - ix]
+            material = gfx.VolumeSliceMaterial(clim=(cmin, cmax), plane=abcd)
+            visuals.append(gfx.Volume(gfx.Geometry(grid=tex), material))
 
     # Set scales and offset
-    (
-        vis.local.scale_x,
-        vis.local.scale_y,
-        vis.local.scale_z,
-    ) = spacing
-    (vis.local.x, vis.local.y, vis.local.z) = offset
+    for vis in visuals:
+        vis.material.opacity = opacity
+        (
+            vis.local.scale_x,
+            vis.local.scale_y,
+            vis.local.scale_z,
+        ) = spacing
+        (vis.local.x, vis.local.y, vis.local.z) = offset
 
-    # Add custom attributes
-    vis._object_type = "volume"
-    vis._object_id = uuid.uuid4()
+        # Add custom attributes
+        vis._object_type = "volume"
+        vis._object_id = uuid.uuid4()
 
-    return vis
+        # Note: to trigger an update of the colormap data later:
+        # vis.material.data[:, 1] = 0
+        # vis.material.map.update_range((0, 0, 0), vis.material.map.size)
+
+    return visuals
 
 
 def to_colormap(x, hide_zero):
@@ -699,5 +740,7 @@ def text2gfx(
 def visual_passthrough(x, *args, **kwargs):
     """Pass-through converter."""
     if any(args) or any(kwargs):
-        logger.info("Pygfx visuals are passed-through as is. Any additional arguments are ignored.")
+        logger.info(
+            "Pygfx visuals are passed-through as is. Any additional arguments are ignored."
+        )
     return x

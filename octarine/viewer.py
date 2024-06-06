@@ -1036,13 +1036,19 @@ class Viewer:
         spacing=(1, 1, 1),
         name=None,
         color=None,
+        opacity=1.0,
         offset=(0, 0, 0),
         clim="data",
+        slice=False,
         interpolation="linear",
         hide_zero=True,
         center=True,
     ):
         """Add image volume to canvas.
+
+        Note that the default blend mode for the renderer may cause objects
+        behind or inside the volume to look funny. You can change the blend
+        mode by setting e.g. `viewer.blend_mode='additive'`.
 
         Parameters
         ----------
@@ -1062,6 +1068,8 @@ class Viewer:
                     it's better to define at least two colors. For example,
                     instead of "red" use ["red", "yellow"]. If `None` will
                     use one of the built-in pygfx colormaps.
+        opacity :   float, optional
+                    Overall opacity of the volume. Must be between 0 and 1.
         offset :    tuple, optional
                     (x, y, z) offset for the volume. If None, will use (0, 0, 0).
         clim :      "data" | "datatype" | tuple, optional
@@ -1073,6 +1081,13 @@ class Viewer:
                         normalized
                       - tuple of min/max values or combination of "data" and
                         "datatype" strings
+        slice :         bool | tuple, optional
+                        Render volume slices instead of the full volume:
+                        - True: render slices along all three dimensions
+                        - tuple of bools, e.g. `(True, True, False)`: render slices
+                          in the respective dimensions
+                        - tuple of floats, e.g. `(0.5, 0.5, 0.5)`: render slices
+                          at the respective positions (relative to the volume size)
         interpolation : "linear" | "nearest"
                     Interpolation to use when rendering the volume. "linear"
                     (default) looks better but is slower.
@@ -1091,17 +1106,21 @@ class Viewer:
         elif not isinstance(name, str):
             name = str(name)
 
-        visual = volume2gfx(
+        visuals = volume2gfx(
             volume,
             spacing=spacing,
             offset=offset,
             color=color,
+            opacity=opacity,
             clim=clim,
+            slice=slice,
             interpolation=interpolation,
             hide_zero=hide_zero,
         )
-        visual._object_id = name if name else uuid.uuid4()
-        self._add_to_scene(visual, center)
+        name = name if name else uuid.uuid4()
+        for vis in visuals:
+            vis._object_id = name if name else uuid.uuid4()
+            self._add_to_scene(vis, center)
 
     def close(self):
         """Close the viewer."""
