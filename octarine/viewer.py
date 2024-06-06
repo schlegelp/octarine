@@ -1350,6 +1350,13 @@ class Viewer:
     def _screenshot(self, alpha=True, size=None, pixel_ratio=None):
         """Return image array for screenshot."""
         if alpha:
+            oc = [
+                self._background.color_bottom_left,
+                self._background.color_bottom_right,
+                self._background.color_top_left,
+                self._background.color_top_right,
+            ]
+            self._background.set_colors((0, 0, 0, 0))
             op = self._background.opacity
             self._background.opacity = 0
         if size:
@@ -1363,6 +1370,10 @@ class Viewer:
         # Note: this has to happen _after_ adjust parameters!
         if isinstance(self.canvas, WgpuCanvasOffscreen):
             self.canvas.draw()
+        else:
+            # This is a bit of a hack to make sure a new frame with the (potentially)
+            # updated size, pixel ratio, etc. is drawn before taking the screenshot.
+            self.canvas.draw_frame()
 
         try:
             im = self.renderer.snapshot()
@@ -1370,6 +1381,7 @@ class Viewer:
             raise
         finally:
             if alpha:
+                self._background.set_colors(*oc)
                 self._background.opacity = op
             if size:
                 self.size = os
