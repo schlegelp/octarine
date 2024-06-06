@@ -283,7 +283,7 @@ def volume2gfx(
 
             abcd = [0, 0, 0, 0]
             abcd[dim] = -1
-            abcd[-1] = vol.shape[2 - dim] / (1 / slice[ix]) * spacing[2 - ix]
+            abcd[-1] = grid.shape[2 - dim] / (1 / slice[ix]) * spacing[dim]
             material = gfx.VolumeSliceMaterial(clim=(cmin, cmax), plane=abcd)
             visuals.append(gfx.Volume(gfx.Geometry(grid=tex), material))
 
