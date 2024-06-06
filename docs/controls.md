@@ -38,6 +38,14 @@ Use [`octarine.Viewer.set_view`][]`()` to set the camera view:
 >>> v.set_view('XY')  # set view to frontal
 ```
 
+Found a nice view? You can save the camera state and re-apply later to get the exact same
+view again:
+
+```python
+>>> state = v.get_view()  # get the current view
+>>> v.set_view(state)  # re-apply the view
+```
+
 ## Colors
 Use [`octarine.Viewer.colorize`][]`()` to randomize colors:
 

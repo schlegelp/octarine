@@ -105,7 +105,7 @@ array([[0.38, 0.  , 0.  ],
 
 >>> import octarine as oc
 >>> v = oc.Viewer()
->>> v.add_volume(vol, dims=(.38, .38, .38))
+>>> v.add_volume(vol, spacing=(.38, .38, .38))
 >>> v.show_bounds = True
 ```
 
@@ -114,6 +114,20 @@ array([[0.38, 0.  , 0.  ],
 Note that the default blend mode for the renderer may cause objects
 behind or inside the volume to look funny. You can change the blend
 mode by setting e.g. `v.blend_mode='additive'`.
+
+Alternatively, you can also add slices through the volume:
+
+```python
+>>> import cmap
+>>> v.add_volume(
+...     vol,
+...     color=cmap.Colormap('Greys'),  # use a different colormap
+...     spacing=.38,  # single value for isometric data
+...     slice=True  # can also be a tuple, e.g. (True, False, True)
+... )
+```
+
+![brain volume](_static/brain_volume_example2.png)
 
 See [octarine.Viewer.add_volume][]`()` for details!
 
