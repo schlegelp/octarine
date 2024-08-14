@@ -322,7 +322,7 @@ class Viewer:
     @property
     def selected(self):
         """Return IDs of or set selected objects."""
-        return self.__selected
+        return self._selected
 
     @selected.setter
     def selected(self, val):
@@ -331,7 +331,7 @@ class Viewer:
         objects = self.objects  # grab once to speed things up
         logger.debug(f"{len(val)} objects selected ({len(self.selected)} previously)")
         # First un-highlight neurons no more selected
-        for s in [s for s in self.__selected if s not in val]:
+        for s in [s for s in self._selected if s not in val]:
             for v in objects[s]:
                 if isinstance(v, gfx.Mesh):
                     v.color = v._stored_color
@@ -340,7 +340,7 @@ class Viewer:
 
         # Highlight new additions
         for s in val:
-            if s not in self.__selected:
+            if s not in self._selected:
                 for v in objects[s]:
                     # Keep track of old colour
                     v.unfreeze()
@@ -351,7 +351,7 @@ class Viewer:
                     else:
                         v.set_data(color=self.highlight_color)
 
-        self.__selected = list(val)
+        self._selected = list(val)
 
         # Update legend
         if self.show_legend:
@@ -360,7 +360,7 @@ class Viewer:
         # Update data text
         # Currently only the development version of vispy supports escape
         # character (e.g. \n)
-        t = "| ".join([f"{objects[s][0]._name} - #{s}" for s in self.__selected])
+        t = "| ".join([f"{objects[s][0]._name} - #{s}" for s in self._selected])
         self._data_text.text = t
 
     @property
