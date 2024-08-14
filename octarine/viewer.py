@@ -140,15 +140,23 @@ class Viewer:
 
         # Set up a default scene
         self.scene = gfx.Scene()
-        self.scene.add(gfx.AmbientLight(intensity=0.5))
-        self.scene.add(gfx.PointLight(intensity=4))
-        # Adjust shadow bias (this helps with shadow acne)
-        self.scene.children[-1].shadow.bias = 0.0000005
 
-        # Modify the light
-        light = self.scene.children[-1]
-        light.local.z = -10000  # move light forward
-        light.local.euler_x = 2.5  # rotate light
+        # A minor ambient light
+        self.scene.add(gfx.AmbientLight(intensity=0.5))
+
+        # A strong point light form front/top/left
+        self.scene.add(gfx.PointLight(intensity=4))
+        self.scene.children[-1].shadow.bias = 0.0000005 # this helps with shadow acne
+        self.scene.children[-1].local.x = -1000000  # move to the left
+        self.scene.children[-1].local.y = -1000000  # move up
+        self.scene.children[-1].local.z = -1000000  # move light forward
+
+        # A weaker point light from the back
+        self.scene.add(gfx.PointLight(intensity=1))
+        self.scene.children[-1].shadow.bias = 0.0000005 # this helps with shadow acne
+        self.scene.children[-1].local.x = 1000000  # move to the left
+        self.scene.children[-1].local.y = 1000000  # move up
+        self.scene.children[-1].local.z = 1000000  # move light forward
 
         # Set up a default background
         self._background = gfx.BackgroundMaterial((0, 0, 0))
