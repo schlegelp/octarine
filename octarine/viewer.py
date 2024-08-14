@@ -8,7 +8,7 @@ import inspect
 import numpy as np
 import pygfx as gfx
 
-from functools import wraps
+from functools import wraps, lru_cache
 from collections import OrderedDict
 
 from wgpu.gui.auto import WgpuCanvas, run
@@ -37,11 +37,15 @@ logger = config.get_logger(__name__)
 
 def update_viewer(legend=True, bounds=True):
     def outer(func):
-        """Decorator to update legend."""
+        """Decorator to update legend and other properties."""
 
         @wraps(func)
         def inner(*args, **kwargs):
             func(*args, **kwargs)
+
+            # Always clear the cached objects dictionary
+            args[0]._objects.cache_clear()
+
             if legend:
                 if getattr(args[0], "controls", None):
                     args[0].controls.update_legend()
@@ -470,12 +474,18 @@ class Viewer:
 
     @property
     def objects(self):
+        return self._objects()
+
+    @lru_cache(maxsize=1)
+    def _objects(self):
         """Ordered dictionary {name->[visuals]} of all objects in order of addition."""
         objects = OrderedDict()
-        for ob in self._object_ids:
-            objects[ob] = [
-                v for v in self.visuals if getattr(v, "_object_id", None) == ob
-            ]
+        for v in self.visuals:
+            if hasattr(v, "_object_id"):
+                if v._object_id in objects:
+                    objects[v._object_id].append(v)
+                else:
+                    objects[v._object_id] = [v]
 
         return objects
 
