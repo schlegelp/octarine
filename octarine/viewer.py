@@ -1238,19 +1238,17 @@ class Viewer:
 
         """
         objects = self.objects  # grab once to speed things up
-        if not isinstance(obj, type(None)):
-            obj = utils.make_iterable(obj)
-        else:
+        if obj is None:
             obj = objects
+        else:
+            obj = utils.make_iterable(obj)
 
         for ob in obj:
             if ob not in objects:
                 logger.warning(f"Object {ob} not found on canvas.")
                 continue
             for v in objects[ob]:
-                v.unfreeze()
                 v._pinned = False
-                v.freeze()
 
     @update_viewer(legend=True, bounds=False)
     def set_colors(self, c):
