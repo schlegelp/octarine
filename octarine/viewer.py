@@ -954,12 +954,15 @@ class Viewer:
                     list of options. Please note that you may have to
                     increase the size of the marker to see some of the shapes.
         size :      int | float
-                    Marker size. Can
+                    Marker size. Can be a single value or an array of
+                    sizes for each point.
         size_space : "screen" | "world" | "model", optional
                     Units to use for the marker size. "screen" (default)
                     will keep the line width constant on the screen, while
                     "world" and "model" will keep it constant in world and
-                    model coordinates, respectively.
+                    model coordinates, respectively. In the latter two cases,
+                    `size` corresponds to the diameter (not radius) of the
+                    marker!
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
