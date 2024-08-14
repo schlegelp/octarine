@@ -4,6 +4,7 @@ import cmap
 import uuid
 import random
 import inspect
+import warnings
 
 import numpy as np
 import pygfx as gfx
@@ -1389,7 +1390,9 @@ class Viewer:
         else:
             # This is a bit of a hack to make sure a new frame with the (potentially)
             # updated size, pixel ratio, etc. is drawn before taking the screenshot.
-            self.canvas.draw_frame()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                self.canvas.draw_frame()
 
         try:
             im = self.renderer.snapshot()
