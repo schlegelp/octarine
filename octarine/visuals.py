@@ -448,7 +448,8 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
                 Color to use for plotting. Can be a single color
                 or one for every point in the line(s).
     linewidth : float, optional
-                Line width.
+                Line width. Set to 0 to use thin lines which can speed
+                up rendering.
     linewidth_space : "screen" | "world" | "model", optional
                 Units to use for the line width. "screen" (default)
                 will keep the line width constant on the screen, while
@@ -508,15 +509,19 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
     if isinstance(color, np.ndarray) and color.ndim == 2:
         # If colors are provided for each node we have to make sure
         # that we also include `None` for the breaks in the segments
-        n_points = (~np.isnan(lines[:, 0])).sum()
-        if n_points != len(lines):
-            # See if we can rescue this
-            if len(color) == n_points:
-                breaks = np.where(np.isnan(lines[:, 0]))[0]
-                offset = np.arange(len(breaks))
-                color = np.insert(color, breaks - offset, np.nan, axis=0)
-            else:
-                raise ValueError(f"Got {len(color)} colors for {n_points} points.")
+
+        # See if we can rescue this if there is now a mismatch in the
+        # number of colors and points
+        if len(color) != len(lines):
+            # Count the number of non-NaN points
+            n_points = (~np.isnan(lines[:, 0])).sum()
+            if n_points != len(lines):
+                if len(color) == n_points:
+                    breaks = np.where(np.isnan(lines[:, 0]))[0]
+                    offset = np.arange(len(breaks))
+                    color = np.insert(color, breaks - offset, np.nan, axis=0)
+                else:
+                    raise ValueError(f"Got {len(color)} colors for {n_points} points.")
         color = color.astype(np.float32, copy=False)
         geometry_kwargs["colors"] = color
         material_kwargs["color_mode"] = "vertex"
@@ -525,14 +530,21 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
             color = color.astype(np.float32, copy=False)
         material_kwargs["color"] = color
 
-    vis = gfx.Line(
-        gfx.Geometry(positions=lines.astype(np.float32, copy=False), **geometry_kwargs),
-        gfx.LineMaterial(
+    if linewidth > 0:
+        mat = gfx.LineMaterial(
             thickness=linewidth,
             thickness_space=linewidth_space,
             dash_pattern=dash_pattern,
             **material_kwargs,
-        ),
+        )
+    else:
+        mat = gfx.LineThinMaterial(
+            **material_kwargs,
+        )
+
+    vis = gfx.Line(
+        gfx.Geometry(positions=lines.astype(np.float32, copy=False), **geometry_kwargs),
+        mat,
     )
 
     # Add custom attributes
