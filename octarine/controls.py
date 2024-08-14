@@ -233,10 +233,23 @@ class Controls(QtWidgets.QWidget):
                 except BaseException:
                     # Note to self: need to make sure we also cater for color arrays
                     # which are in the geometry object
-                    color = 'k'
-                item, item_widget = self.make_legend_entry(obj, color=color)
+                    color = "k"
+                item, item_widget = self.make_legend_entry(
+                    obj, color=color, type=type(objects[obj][0])
+                )
                 self.legend.addItem(item)
                 self.legend.setItemWidget(item, item_widget)
+
+        # # Now check if the visibility of the objects has changed
+        visible = self.viewer.visible
+        for i in range(self.legend.count()):
+            item = self.legend.item(i)
+            item_widget = self.legend.itemWidget(item)
+            line_checkbox = item_widget.findChild(QtWidgets.QCheckBox)
+            if item._id in visible:
+                line_checkbox.setChecked(True)
+            else:
+                line_checkbox.setChecked(False)
 
     def color_button_clicked(self):
         """Set the active object to be the buttons target."""

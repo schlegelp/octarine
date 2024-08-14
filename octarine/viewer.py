@@ -1165,6 +1165,7 @@ class Viewer:
         if hasattr(self, "widget") and not getattr(self.widget, "_is_closed", False):
             self.widget.close(close_viewer=False)
 
+    @update_viewer(legend=True, bounds=True)
     def hide_objects(self, obj):
         """Hide given object(s).
 
@@ -1185,10 +1186,12 @@ class Viewer:
                 if v.visible:
                     v.visible = False
 
+    @update_viewer(legend=True, bounds=True)
     def hide_selected(self):
         """Hide currently selected object(s)."""
         self.hide_neurons(self.selected)
 
+    @update_viewer(legend=True, bounds=True)
     def unhide_objects(self, obj=None):
         """Unhide given object(s).
 
