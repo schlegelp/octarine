@@ -32,6 +32,9 @@ def mesh2gfx(mesh, color, alpha=None):
 
     # Parse color
     mat_color_kwargs, obj_color_kwargs = parse_mesh_color(mesh, color, alpha)
+    # In theory we should be able to change pick_write on-the-fly since pygfx 0.3.0
+    # But that doesn't seem to be the case.
+    mat_color_kwargs['pick_write'] = True
 
     vis = gfx.Mesh(
         gfx.Geometry(
@@ -70,6 +73,10 @@ def geometry2gfx(geometry, color, alpha=None):
 
     if "colors" in obj_color_kwargs:
         geometry.colors = obj_color_kwargs["colors"]
+
+    # In theory we should be able to change pick_write on-the-fly since pygfx 0.3.0
+    # But that doesn't seem to be the case.
+    mat_color_kwargs['pick_write'] = True
 
     vis = gfx.Mesh(geometry, gfx.MeshPhongMaterial(**mat_color_kwargs))
 
@@ -389,7 +396,9 @@ def points2gfx(points, color, size=2, marker=None, size_space="screen"):
 
     geometry_kwargs = {}
     material_kwargs = {}
-    # material_kwargs["pick_write"] = True  # for picking
+    # In theory we should be able to change pick_write on-the-fly since pygfx 0.3.0
+    # But that doesn't seem to be the case.
+    material_kwargs['pick_write'] = True
 
     # Parse sizes
     if utils.is_iterable(size):
@@ -505,6 +514,10 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
     geometry_kwargs = {}
     material_kwargs = {}
 
+    # In theory we should be able to change pick_write on-the-fly since pygfx 0.3.0
+    # But that doesn't seem to be the case.
+    material_kwargs['pick_write'] = True
+
     # Parse color(s)
     if isinstance(color, np.ndarray) and color.ndim == 2:
         # If colors are provided for each node we have to make sure
@@ -614,7 +627,10 @@ def simple_material_from_trimesh(material):
     if not isinstance(material, tm.visual.material.SimpleMaterial):
         raise NotImplementedError()
 
-    gfx_material = gfx.MeshPhongMaterial(color=material.ambient / 255)
+    gfx_material = gfx.MeshPhongMaterial(
+        color=material.ambient / 255,
+        pick_write=True,  # we can't seem to change this on-the-fly
+        )
 
     gfx_material.shininess = material.glossiness
     gfx_material.specular = gfx.Color(*(material.specular / 255))
