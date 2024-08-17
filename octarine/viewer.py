@@ -1240,6 +1240,122 @@ class Viewer:
                 if not v.visible:
                     v.visible = True
 
+    def highlight_objects(self, obj, color=0.2):
+        """Highlight given object(s) by increasing their brightness.
+
+        Parameters
+        ----------
+        obj :   str | int | list | visual
+                Object(s) to highlight. Can be the name(s) or ID(s) of
+                the object(s), their index(es) in the list of visuals,
+                or the visual(s) themselves. Objects already highlighted
+                will be silently ignored.
+        color : float | tuple
+                Color to use for highlighting. If a float, will change
+                the HSV value of the current color. If a tuple, will
+                use the RGB(A) color.
+
+        See Also
+        --------
+        Viewer.unhighlight_objects
+                Use to remove highlights.
+
+        """
+        if not utils.is_iterable(obj):
+            objects = [obj]
+        else:
+            objects = obj
+
+        all_objects = self.objects  # grab once to speed things up
+
+        for ob in objects:
+            if ob in all_objects:
+                list_ = all_objects[ob]
+            elif isinstance(ob, int):
+                list_ = list(self.objects.values())[ob]
+            elif isinstance(ob, gfx.WorldObject):
+                list_ = [ob]
+            else:
+                raise TypeError(f"Unknown object type: {type(ob)}")
+
+            for o in list_:
+                # Skip if object is pinned
+                if getattr(o, "_pinned", False):
+                    continue
+                # Skip if object is already highlighted
+                if getattr(o, "_highlighted", False):
+                    continue
+
+                if isinstance(color, (float, int)):
+                    # Work in HSL space
+                    h, s, l = o.material.color.to_hsl()
+                    # If the value is not maxed yet, increase it
+                    if l < 1:
+                        l = min(l + color, 1)
+                    else:
+                        l = max(l - color, 0)
+
+                    new_color = gfx.Color.from_hsl(h, s, l)
+                else:
+                    # See if pygfx can handle the color
+                    new_color = gfx.Color(color)
+
+                o.material._original_color = o.material.color
+                o.material.color = new_color
+                o._highlighted = True
+
+    def unhighlight_objects(self, obj=None):
+        """Unhighlight given object(s).
+
+        Parameters
+        ----------
+        obj :   str | int | list | visual
+                Object(s) to unhighlight. Can be the name(s) or ID(s) of
+                the object(s), their index(es) in the list of visuals,
+                or the visual(s) themselves. If None, will unhighlight all
+                objects. Objects that aren't highlighted will be silently
+                ignored.
+
+        See Also
+        --------
+        Viewer.highlight_objects
+                Use to highlight objects
+
+        """
+        # Important note: it looks like any attribute we added previously
+        # will (at some point) have been silently renamed to "_Viewer{attribute}"
+        if obj is None:
+            obj = [v for v in self.visuals if getattr(v, "_highlighted", False)]
+
+        if not utils.is_iterable(obj):
+            objects = [obj]
+        else:
+            objects = obj
+
+        all_objects = self.objects  # grab once to speed things up
+
+        for ob in objects:
+            if ob in all_objects:
+                list_ = all_objects[ob]
+            elif isinstance(ob, int):
+                list_ = list(self.visuals.values())[ob]
+            elif isinstance(ob, gfx.WorldObject):
+                list_ = [ob]
+            else:
+                raise TypeError(f"Unknown object type: {type(ob)}")
+
+            for o in list_:
+                # Skip if object is pinned
+                if getattr(o, "_pinned", False):
+                    continue
+
+                # Skip if object isn't actually highlighed
+                if not getattr(o, "_highlighted", False):
+                    continue
+                o.material.color = o.material._original_color
+                del o.material._original_color
+                del o._highlighted
+
     def pin_objects(self, obj):
         """Pin given object(s).
 
