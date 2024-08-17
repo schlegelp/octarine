@@ -510,6 +510,15 @@ class Viewer:
 
         return objects
 
+
+    @property
+    def highlighted(self):
+        """Return IDs of currently highlighted objects."""
+        highlighted = []
+        for obj in self.objects:
+            if any([getattr(v, "_highlighted", False) for v in self.objects[obj]]):
+                highlighted.append(obj)
+        return highlighted
     def add_animation(self, x, on_error="remove"):
         """Add animation function to the Viewer.
 
