@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 import pygfx as gfx
 
-from functools import wraps, lru_cache
+from functools import wraps, lru_cache, partial
 from collections import OrderedDict
 
 from wgpu.gui.auto import WgpuCanvas, run
@@ -241,6 +241,9 @@ class Viewer:
         self._shadows = False
         self._animations = {}
         self._animations_flagged_for_removal = []
+        self._on_double_click = None
+        self._on_hover = None
+        self._objects_pickable = False
 
         # This starts the animation loop
         if show and not self._is_jupyter:
@@ -541,6 +544,130 @@ class Viewer:
             if any([getattr(v, "_highlighted", False) for v in self.objects[obj]]):
                 highlighted.append(obj)
         return highlighted
+
+    @property
+    def on_hover(self):
+        """Determines what to do when hovering over objects.
+
+        Can be set to:
+         - `None`: do nothing
+         - "highlight": hide object
+
+        """
+        return self._on_hover
+
+    @on_hover.setter
+    def on_hover(self, v):
+        valid = (None, "highlight")
+        if v not in valid:
+            raise ValueError(f"Unknown value for on_hover: {v}. Must be one of {valid}.")
+
+        # No need to do anything if the value is the same
+        if v == self._on_hover:
+            return
+
+        if v:
+            # Make objects pickable
+            self.objects_pickable = True
+
+            # Add the event handler
+            self.scene.add_event_handler(self._highlight_on_hover_event, "pointer_move")
+        else:
+            self.scene.remove_event_handler(
+                self._highlight_on_hover_event, "pointer_move"
+            )
+            current_hover = getattr(self, "_current_hover_object", None)
+
+            # Make sure to unhighlight the current hover object
+            if current_hover:
+                self.unhighlight_objects(current_hover)
+                self._current_hover_object = None
+
+        self._on_hover = v
+
+    def _highlight_on_hover_event(self, event):
+        """This is the event callback for highlighting objects on hover."""
+        # print(event.time_stamp, event.pick_info)
+        # If any buttons (including mouse) are pressed (e.g. during panning) ignore the event
+        if event.buttons:
+            return
+
+        # Parse the current object
+        new_hover = event.pick_info["world_object"]
+        current_hover = getattr(self, "_current_hover_object", None)
+
+        # Break early if there is nothing to do
+        if new_hover is None and current_hover is None:
+            # print("  No hover")
+            return
+
+        new_hover_id = [k for k, v in self.objects.items() if new_hover in v]
+        # print(f"  New Hover: {new_hover_id}")
+        new_hover_id = new_hover_id[0] if new_hover_id else None
+
+        # See if we need to de-highlight the current hover object
+        if current_hover:
+            # If the new object is the same as the current one, we don't need to do anything
+            if current_hover == new_hover_id:
+                # print("  Hover hasn't changed")
+                return
+            if current_hover in self.objects:
+                # print(" Unhighlighting current hover")
+                self.unhighlight_objects(current_hover)
+            self._current_hover_object = None
+
+        # Highlight the new object
+        if new_hover_id:
+            # print("  Highlighting new hover")
+            self.highlight_objects(
+                new_hover_id, color=getattr(self, "_highlight_on_hover_color", 0.2)
+            )
+            self._current_hover_object = new_hover_id
+
+    @property
+    def on_double_click(self):
+        """Determines what to do when double clicking on objects.
+
+        Can be set to:
+         - `None`: do nothing
+         - "hide": hide object
+         - "remove": remove object
+         - "select": select object
+
+        """
+        return self._on_double_click
+
+    @on_double_click.setter
+    def on_double_click(self, v):
+        valid = (None, "hide", "remove", "select")
+        if v not in valid:
+            raise ValueError(
+                f"Unknown value for on_double_click: {v}. Must be one of {valid}."
+            )
+
+        # No need to do anything if the value is the same
+        if v == self._on_double_click:
+            return
+
+        # First try to remove the current event handler for double clicks
+        try:
+            self.scene.remove_event_handler(
+                getattr(self, "_on_double_click_func", None), "double_click"
+            )
+        except KeyError:
+            pass
+
+        if v:
+            # Make objects pickable
+            self.objects_pickable = True
+
+            # Now add the new event handler
+            func = partial(handle_object_event, viewer=self, actions=(v,))
+            self.scene.add_event_handler(func, "double_click")
+            self.__on_double_click_func = func
+
+        self._on_double_click = v
+
     def add_animation(self, x, on_error="remove"):
         """Add animation function to the Viewer.
 
@@ -1660,3 +1787,36 @@ class Viewer:
                 )
 
             self._key_events[(key, modifiers)] = func
+
+
+def handle_object_event(event, viewer, actions):
+    """Handle object events."""
+    # Parse the object (this will be e.g. a Mesh visual)
+    obj = event.pick_info["world_object"]
+
+    # Get the ID of the object
+    new_hover_id = [k for k, v in viewer.objects.items() if obj in v]
+    new_hover_id = new_hover_id[0] if new_hover_id else None
+
+    if new_hover_id:
+        if "hide" in actions:
+            viewer.hide_objects(new_hover_id)
+        if "unhide" in actions:
+            viewer.unhide_objects(new_hover_id)
+        if "highlight" in actions:
+            viewer.highlight_objects(new_hover_id)
+        if "unhighlight" in actions:
+            viewer.unhighlight_objects(new_hover_id)
+        if "pin" in actions:
+            viewer.pin_objects(new_hover_id)
+        if "unpin" in actions:
+            viewer.unpin_objects(new_hover_id)
+        if "remove" in actions:
+            viewer.remove_objects(new_hover_id)
+        if "select" in actions:
+            if new_hover_id in viewer.selected:
+                viewer.selected = [i for i in viewer.selected if i != new_hover_id]
+            else:
+                viewer.selected = np.append(viewer.selected, new_hover_id)
+
+        logger.debug(f"Object: {new_hover_id}, Action: {actions}")
