@@ -585,11 +585,12 @@ class Viewer:
         # Start the animation loop
         self.canvas.request_draw(self._animate)
 
-        # If this is an offscreen canvas, we don't need to show anything
+        # If this is an offscreen canvas, we don't need to do anything
         if isinstance(self.canvas, WgpuCanvasOffscreen):
             return
+
         # In terminal we can just show the window
-        elif not self._is_jupyter:
+        if not self._is_jupyter:
             # Not all backends have a show method
             if hasattr(self.canvas, "show"):
                 self.canvas.show()
