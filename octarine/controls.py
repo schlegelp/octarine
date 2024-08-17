@@ -4,7 +4,9 @@ import pygfx as gfx
 try:
     from PySide6 import QtWidgets, QtCore
 except ImportError:
-    raise ImportError("Showing controls requires PySide6. Please install it via:\n `pip install PySide6`.")
+    raise ImportError(
+        "Showing controls requires PySide6. Please install it via:\n `pip install PySide6`."
+    )
 
 # TODOs:
 # - add custom legend formatting (e.g. "{object.name}")
@@ -14,58 +16,143 @@ except ImportError:
 # - highlight object in legend when hovered over in scene
 # - make legend tabbed (QTabWidget)
 
+
 class Controls(QtWidgets.QWidget):
-    def __init__(self, viewer, width=200, height=400):
+    def __init__(self, viewer, width=300, height=400):
         super().__init__()
         self.viewer = viewer
         self.setWindowTitle("Legend")
         self.resize(width, height)
 
-        self.btn_layout = QtWidgets.QVBoxLayout()
-        self.setLayout(self.btn_layout)
+        self.tab_layout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.tab_layout)
 
-        # Build legend
-        self.build_gui()
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.tabs.setTabPosition(QtWidgets.QTabWidget.West)
+        self.tabs.setMovable(True)
+
+        self.tab_layout.addWidget(self.tabs)
+
+        self.tab1 = QtWidgets.QWidget()
+        self.tab2 = QtWidgets.QWidget()
+        self.tab1_layout = QtWidgets.QVBoxLayout()
+        self.tab2_layout = QtWidgets.QVBoxLayout()
+        self.tab1.setLayout(self.tab1_layout)
+        self.tab2.setLayout(self.tab2_layout)
+
+        self.tabs.addTab(self.tab1, "Legend")
+        self.tabs.addTab(self.tab2, "Controls")
+
+        # self.btn_layout = QtWidgets.QVBoxLayout()
+        # self.setLayout(self.btn_layout)
+
+        # # Build legend
+        # self.build_gui()
+
+        # Build gui
+        self.build_legend_gui()
+        self.build_controls_gui()
 
         # Populate legend
         self.update_legend()
 
         # This determines the target for color changes
         self.active_objects = None
+        self.active_volume = None
 
         self.color_picker = QtWidgets.QColorDialog(parent=self)
         self.color_picker.setOption(QtWidgets.QColorDialog.ShowAlphaChannel, on=True)
         self.color_picker.currentColorChanged.connect(self.set_color)
         self.color_picker.colorSelected.connect(self.reset_active_objects)
 
-    def build_gui(self):
-        """Build the GUI."""
+    def build_legend_gui(self):
+        """Build the legend GUI."""
         # Add legend (i.e. a list widget)
         self.legend = self.create_legend()
 
         # Add the dropdown to action all selected objects
         self.sel_action = QtWidgets.QPushButton(text="Action")
         self.sel_action_menu = QtWidgets.QMenu(self)
-        self.sel_action_menu.addAction("Hide")
+        self.sel_action_menu.addAction("Invert Visibility")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.invert_visibility)
+        self.sel_action_menu.addAction("Hide All")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.hide_all)
+        self.sel_action_menu.addAction("Show All")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.show_all)
+        self.sel_action_menu.addAction("Delete All")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.delete_all)
+        self.sel_action_menu.addAction("Select All")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.select_all)
+        self.sel_action_menu.addAction("Clear Selection")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.select_none)
+        self.sel_action_menu.addAction("Invert Selection")
+        self.sel_action_menu.actions()[-1].triggered.connect(self.invert_selection)
+        self.sel_action_menu.addAction("Hide selected")
         self.sel_action_menu.actions()[-1].triggered.connect(self.hide_selected)
-        self.sel_action_menu.addAction("Show")
+        self.sel_action_menu.addAction("Show selected")
         self.sel_action_menu.actions()[-1].triggered.connect(self.show_selected)
-        self.sel_action_menu.addAction("Delete")
+        self.sel_action_menu.addAction("Delete selected")
         self.sel_action_menu.actions()[-1].triggered.connect(self.delete_selected)
-        self.sel_action_menu.addAction("Color")
+        self.sel_action_menu.addAction("Color selected")
         self.sel_action_menu.actions()[-1].triggered.connect(self.color_selected)
         self.sel_action.setMenu(self.sel_action_menu)
-        self.btn_layout.addWidget(self.sel_action)
+        self.tab1_layout.addWidget(self.sel_action)
 
-        # Add horizontal divider
-        self.add_split()
+    def build_controls_gui(self):
+        """Build the legend GUI."""
 
-        # First: add button to toggle flat shading
+        # Add dropdown to determine what's happening on hover
+        self.on_hover_label = QtWidgets.QLabel("On Hover:")
+        self.tab2_layout.addWidget(self.on_hover_label)
+        self.on_hover_dropdown = QtWidgets.QComboBox()
+        self.on_hover_dropdown.addItems(["Nothing", "Highlight"])
+        self.on_hover_dropdown.setToolTip(
+            "Action to perform when hovering over an object."
+        )
+        self.on_hover_dropdown.currentIndexChanged.connect(
+            lambda x: setattr(
+                self.viewer,
+                "on_hover",
+                self.on_hover_dropdown.currentText().lower()
+                if self.on_hover_dropdown.currentText() != "Nothing"
+                else None,
+            )
+        )
+        self.tab2_layout.addWidget(self.on_hover_dropdown)
+
+        # Add dropdown to determine what's happening on double click
+        self.on_dclick_label = QtWidgets.QLabel("On Double Click:")
+        self.tab2_layout.addWidget(self.on_dclick_label)
+        self.on_dclick_dropdown = QtWidgets.QComboBox()
+        self.on_dclick_dropdown.addItems(["Nothing", "Hide", "Remove", "Select"])
+        self.on_dclick_dropdown.setToolTip(
+            "Action to perform when double clicking on an object."
+        )
+        self.on_dclick_dropdown.currentIndexChanged.connect(
+            lambda x: setattr(
+                self.viewer,
+                "on_dclick",
+                self.on_dclick_dropdown.currentText().lower()
+                if self.on_dclick_dropdown.currentText() != "Nothing"
+                else None,
+            )
+        )
+        self.tab2_layout.addWidget(self.on_dclick_dropdown)
+
+        # Horizontal divider
+        self.tab2_layout.addWidget(QHLine())
+
+        # Add button to toggle wireframe
+        self.mesh_wireframe_checkbox = QtWidgets.QCheckBox("Wireframe")
+        self.mesh_wireframe_checkbox.setChecked(False)
+
+        # Add button to toggle flat shading
         self.mesh_flat_checkbox = self.create_checkbox(
-            "Flat Shading", gfx.Mesh, "material.flat_shading"
+            "Flat Shading", self.tab2_layout, gfx.Mesh, "material.flat_shading"
         )
 
-        # Second: add button to toggle wireframe
+        # Add button to toggle wireframe
         self.mesh_wireframe_checkbox = QtWidgets.QCheckBox("Wireframe")
         self.mesh_wireframe_checkbox.setChecked(False)
 
@@ -75,12 +162,25 @@ class Controls(QtWidgets.QWidget):
                     vis.material.wireframe = self.mesh_wireframe_checkbox.isChecked()
 
         self.mesh_wireframe_checkbox.toggled.connect(set_wireframe)
-        self.btn_layout.addWidget(self.mesh_wireframe_checkbox)
+        self.tab2_layout.addWidget(self.mesh_wireframe_checkbox)
 
-        # Add horizontal divider
-        self.add_split()
+        # Add button to toggle FPS
+        self.fps_checkbox = QtWidgets.QCheckBox("Show FPS")
+        self.fps_checkbox.setChecked(self.viewer._show_fps)
 
-        # Third: add controls to adjust ambient light
+        self.fps_checkbox.toggled.connect(
+            lambda x: setattr(
+                self.viewer,
+                "_show_fps",
+                self.fps_checkbox.isChecked(),
+            )
+        )
+        self.tab2_layout.addWidget(self.fps_checkbox)
+
+        # Horizontal divider
+        self.tab2_layout.addWidget(QHLine())
+
+        # Add controls to adjust ambient light
         self.ambient_light_checkbox = QtWidgets.QCheckBox("Ambient Light")
         self.ambient_light_checkbox.setChecked(True)
 
@@ -90,26 +190,21 @@ class Controls(QtWidgets.QWidget):
                     vis.visible = self.ambient_light_checkbox.isChecked()
 
         self.ambient_light_checkbox.toggled.connect(toggle_ambient_light)
-        self.btn_layout.addWidget(self.ambient_light_checkbox)
+        self.tab2_layout.addWidget(self.ambient_light_checkbox)
 
         self.ambient_light_slider = self.create_slider(
-                    "Intensity", 0, 10, gfx.AmbientLight, "intensity", step=0.01
-                )
-
-        # Add horizontal divider
-        # self.add_split()
+            "Intensity",
+            0,
+            10,
+            gfx.AmbientLight,
+            "intensity",
+            step=0.01,
+            parent_layout=self.tab2_layout,
+        )
 
         # This would make it so the legend does not stretch when
         # we resize the window vertically
-        # self.btn_layout.addStretch(1)
-
-        return
-
-    def add_split(self):
-        """Add horizontal divider."""
-        # self.btn_layout.addSpacing(5)
-        self.btn_layout.addWidget(QHLine())
-        # self.btn_layout.addSpacing(5)
+        self.tab2_layout.addStretch(1)
 
     def create_legend(self, spacing=0, index=None):
         """Generate the legend widget."""
@@ -127,13 +222,13 @@ class Controls(QtWidgets.QWidget):
         #     list_widget.setItemWidget(item, item_widget)
 
         if index is not None:
-            self.btn_layout.insertWidget(index, list_widget)
+            self.tab1_layout.insertWidget(index, list_widget)
         else:
-            self.btn_layout.addWidget(list_widget)
+            self.tab1_layout.addWidget(list_widget)
 
         return list_widget
 
-    def make_legend_entry(self, name, color=None):
+    def make_legend_entry(self, name, color=None, type=None):
         """Generate a legend entry.
 
         Parameters
@@ -153,7 +248,7 @@ class Controls(QtWidgets.QWidget):
         """
         # Initialize widget and item
         item_widget = QtWidgets.QWidget()
-        item_widget.setObjectName(name)
+        item_widget.setObjectName(str(name))
         item = QtWidgets.QListWidgetItem()
         item._id = name  # this helps to identify the item
 
@@ -163,7 +258,7 @@ class Controls(QtWidgets.QWidget):
 
         # Generate the checkbox
         line_checkbox = QtWidgets.QCheckBox()
-        line_checkbox.setObjectName(name)  # this helps to identify the checkbox
+        line_checkbox.setObjectName(str(name))  # this helps to identify the checkbox
         line_checkbox.setMaximumWidth(40)
         line_checkbox.setToolTip("Toggle visibility")
         line_checkbox.setChecked(True)
@@ -176,7 +271,10 @@ class Controls(QtWidgets.QWidget):
         line_checkbox.toggled.connect(set_property)
 
         # Generate the button
-        line_push_button = self.create_color_btn(name, color=color, callback=None)
+        if type == gfx.Volume:
+            line_push_button = self.create_volume_btn(name, callback=None)
+        else:
+            line_push_button = self.create_color_btn(name, color=color, callback=None)
 
         # Generate item layout
         item_layout = QtWidgets.QHBoxLayout()
@@ -217,10 +315,10 @@ class Controls(QtWidgets.QWidget):
             try:
                 color = objects[item._id][0].material.color
             except BaseException:
-                color = gfx.Color('k')
+                color = gfx.Color("k")
             # Find the button in this widget
             item_widget = self.legend.itemWidget(item)
-            line_push_button = item_widget.findChild(QtWidgets.QPushButton, item._id)
+            line_push_button = item_widget.findChild(QtWidgets.QPushButton)
             # Update color
             if line_push_button:
                 line_push_button.setStyleSheet(f"background-color: {color.css}")
@@ -259,6 +357,14 @@ class Controls(QtWidgets.QWidget):
         self.active_objects = push_button.objectName()
         self.color_picker.show()
 
+    def volume_button_clicked(self):
+        """Set the active object to be the buttons target."""
+        sender = self.sender()
+        push_button = self.findChild(QtWidgets.QPushButton, sender.objectName())
+        # print(f'click: {push_button.objectName()}')
+        self.active_volume = push_button.objectName()
+        self.volume_controls.show()
+
     def set_color(self, color):
         """Color current active object(s). This is the callback for the color picker."""
         if self.active_objects is None:
@@ -273,6 +379,23 @@ class Controls(QtWidgets.QWidget):
 
         self.viewer.set_colors({name: color for name in targets})
 
+    def select_all(self):
+        """Select all objects."""
+        self.legend.selectAll()
+
+    def select_none(self):
+        """Select no objects."""
+        self.legend.clearSelection()
+
+    def invert_selection(self):
+        """Invert selection."""
+        for i in range(self.legend.count()):
+            item = self.legend.item(i)
+            if item.isSelected():
+                self.legend.setItemSelected(item, False)
+            else:
+                self.legend.setItemSelected(item, True)
+
     def get_selected(self):
         """Get selected items."""
         sel = []
@@ -285,17 +408,36 @@ class Controls(QtWidgets.QWidget):
         self.active_objects = "selected"
         self.color_picker.show()
 
+    def hide_all(self):
+        """Hide all objects."""
+        self.viewer.hide_objects(self.viewer.objects)
+
     def hide_selected(self):
         """Hide selected objects."""
         sel = self.get_selected()
         if sel:
             self.viewer.hide_objects(self.get_selected())
 
+    def show_all(self):
+        """Show all objects."""
+        self.viewer.unhide_objects(None)
+
     def show_selected(self):
         """Show selected objects."""
         sel = self.get_selected()
         if sel:
             self.viewer.unhide_objects(self.get_selected())
+
+    def invert_visibility(self):
+        """Invert visibility of all objects."""
+        vis = self.viewer.visible
+        invis = self.viewer.invisible
+        self.viewer.hide_objects(vis)
+        self.viewer.unhide_objects(invis)
+
+    def delete_all(self):
+        """Delete all objects."""
+        self.viewer.remove_objects(self.viewer.objects)
 
     def delete_selected(self):
         """Delete selected objects."""
@@ -315,14 +457,14 @@ class Controls(QtWidgets.QWidget):
         # Make sure it doesn't take up too much space
         color_btn.setMaximumWidth(20)
         color_btn.setMaximumHeight(20)
-        color_btn.setObjectName(name)
+        color_btn.setObjectName(str(name))
 
         # Set tooltip
         color_btn.setToolTip("Click to change color")
 
         # Set color (will be updated subsequently via controls.update_legend())
         if color is None:
-            color = 'w'
+            color = "w"
         color = gfx.Color(color)
         color_btn.setStyleSheet(f"background-color: {color.css}")
 
@@ -331,7 +473,41 @@ class Controls(QtWidgets.QWidget):
 
         return color_btn
 
-    def create_checkbox(self, name, targets=None, property=None, callback=None, toggle=[], index=None, default_value=False):
+    def create_volume_btn(self, name, callback=None, color="w"):
+        """Generate a button to bring up the volume control."""
+        # Generate button
+        volume_btn = QtWidgets.QPushButton()
+
+        # Make sure it doesn't take up too much space
+        volume_btn.setMaximumWidth(20)
+        volume_btn.setMaximumHeight(20)
+        volume_btn.setObjectName(str(name))
+
+        # Set tooltip
+        volume_btn.setToolTip("Click to adjust volume")
+
+        # Set color (will be updated subsequently via controls.update_legend())
+        if color is None:
+            color = "w"
+        color = gfx.Color(color)
+        volume_btn.setStyleSheet(f"background-color: {color.css}")
+
+        # Connect callback (this just sets the active object)
+        volume_btn.clicked.connect(self.volume_button_clicked)
+
+        return volume_btn
+
+    def create_checkbox(
+        self,
+        name,
+        parent_layout,
+        targets=None,
+        property=None,
+        callback=None,
+        toggle=[],
+        index=None,
+        default_value=False,
+    ):
         """Create a checkbox to toggle a property."""
         checkbox = QtWidgets.QCheckBox(name)
 
@@ -354,12 +530,14 @@ class Controls(QtWidgets.QWidget):
 
         # set_property()
         if index is not None:
-            self.btn_layout.insertWidget(index, checkbox)
+            parent_layout.insertWidget(index, checkbox)
         else:
-            self.btn_layout.addWidget(checkbox)
+            parent_layout.addWidget(checkbox)
         return checkbox
 
-    def create_slider(self, name, min, max, targets, property, step=1, callback=None):
+    def create_slider(
+        self, name, min, max, targets, property, parent_layout, step=1, callback=None
+    ):
         """Generate a slider to adjust a property."""
         layout = QtWidgets.QHBoxLayout()
         layout.addWidget(QtWidgets.QLabel(name))
@@ -399,7 +577,7 @@ class Controls(QtWidgets.QWidget):
 
         layout.addWidget(slide)
 
-        self.btn_layout.addLayout(layout)
+        parent_layout.addLayout(layout)
         return slide
 
     def close(self):
