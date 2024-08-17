@@ -24,6 +24,8 @@ __all__ = ["Viewer"]
 
 logger = config.get_logger(__name__)
 
+AUTOSTART_EVENT_LOOP = True
+
 # TODO
 # - add styles for viewer (lights, background, etc.) - e.g. .set_style(dark)
 #   - e.g. material.metalness = 2 looks good for background meshes
@@ -87,7 +89,8 @@ class Viewer:
                  1. This has no effect in Jupyter. There you will have to call ``.show()``
                     manually on the last line of a cell for the viewer to appear.
                  2. When running in a non-interactive script or REPL, you have to also start
-                    the event loop manually. See the `Viewer.show()` method for more information.
+                    the event loop manually.
+                See the `Viewer.show()` method for more information.
     **kwargs
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
@@ -111,10 +114,27 @@ class Viewer:
         if utils._type_of_script() == "ipython":
             ip = get_ipython()  # noqa: F821
             if not ip.active_eventloop:
-                # ip.enable_gui('qt6')
-                raise ValueError(
-                    'IPython event loop not running. Please use e.g. "%gui qt" to hook into the event loop.'
-                )
+                if AUTOSTART_EVENT_LOOP:
+                    try:
+                        ip.enable_gui("qt6")
+                        logger.debug(
+                            "Looks like you're running in an IPython environment but haven't "
+                            "started a GUI event loop. We've started one for you using the "
+                            "Qt6 backend."
+                        )
+                    except ModuleNotFoundError:
+                        raise ValueError(
+                            "Looks like you're running in an IPython environment but haven't "
+                            "started a GUI event loop. We tried to start one for you using the "
+                            "Qt6 backend (via %gui qt6) but that failed. You may have to start "
+                            "the event loop manually. See "
+                            "https://ipython.readthedocs.io/en/stable/config/eventloops.html"
+                            "for details."
+                        )
+                else:
+                    raise ValueError(
+                        'IPython event loop not running. Please use e.g. "%gui qt6" to hook into the event loop.'
+                    )
 
         self._title = title
 
