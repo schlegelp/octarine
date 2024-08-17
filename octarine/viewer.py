@@ -510,6 +510,28 @@ class Viewer:
 
         return objects
 
+    @property
+    def objects_pickable(self):
+        return self._objects_pickable
+
+    @objects_pickable.setter
+    def objects_pickable(self, v):
+        if not isinstance(v, bool):
+            raise TypeError(f"Expected bool, got {type(v)}")
+
+        # No need to do anything if the value is the same
+        if v == self._objects_pickable:
+            return
+
+        self._objects_pickable = v
+
+        # Set pick_write to new value for all materials
+        for objects in self.objects.values():
+            for ob in objects:
+                try:
+                    ob.material.pick_write = v
+                except AttributeError:
+                    pass
 
     @property
     def highlighted(self):
@@ -911,6 +933,13 @@ class Viewer:
 
         This is just a convenient collection point for us to trigger a bunch of updates in one go,
         """
+        # If we need objects to be pickable, set the material accordingly
+        if self.objects_pickable:
+            try:
+                visual.material.pick_write = True
+            except AttributeError:
+                pass
+
         self.scene.add(visual)
 
         if center:
