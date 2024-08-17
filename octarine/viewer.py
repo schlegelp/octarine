@@ -244,6 +244,7 @@ class Viewer:
         self._on_double_click = None
         self._on_hover = None
         self._objects_pickable = False
+        self._selected = []
 
         # This starts the animation loop
         if show and not self._is_jupyter:
