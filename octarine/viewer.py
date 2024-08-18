@@ -4,11 +4,12 @@ import cmap
 import uuid
 import random
 import inspect
+import warnings
 
 import numpy as np
 import pygfx as gfx
 
-from functools import wraps
+from functools import wraps, lru_cache, partial
 from collections import OrderedDict
 
 from wgpu.gui.auto import WgpuCanvas, run
@@ -22,6 +23,8 @@ from . import utils, config
 __all__ = ["Viewer"]
 
 logger = config.get_logger(__name__)
+
+AUTOSTART_EVENT_LOOP = True
 
 # TODO
 # - add styles for viewer (lights, background, etc.) - e.g. .set_style(dark)
@@ -37,11 +40,15 @@ logger = config.get_logger(__name__)
 
 def update_viewer(legend=True, bounds=True):
     def outer(func):
-        """Decorator to update legend."""
+        """Decorator to update legend and other properties."""
 
         @wraps(func)
         def inner(*args, **kwargs):
             func(*args, **kwargs)
+
+            # Always clear the cached objects dictionary
+            args[0]._objects.cache_clear()
+
             if legend:
                 if getattr(args[0], "controls", None):
                     args[0].controls.update_legend()
@@ -82,7 +89,8 @@ class Viewer:
                  1. This has no effect in Jupyter. There you will have to call ``.show()``
                     manually on the last line of a cell for the viewer to appear.
                  2. When running in a non-interactive script or REPL, you have to also start
-                    the event loop manually. See the `Viewer.show()` method for more information.
+                    the event loop manually.
+                See the `Viewer.show()` method for more information.
     **kwargs
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
@@ -106,10 +114,27 @@ class Viewer:
         if utils._type_of_script() == "ipython":
             ip = get_ipython()  # noqa: F821
             if not ip.active_eventloop:
-                # ip.enable_gui('qt6')
-                raise ValueError(
-                    'IPython event loop not running. Please use e.g. "%gui qt" to hook into the event loop.'
-                )
+                if AUTOSTART_EVENT_LOOP:
+                    try:
+                        ip.enable_gui("qt6")
+                        logger.debug(
+                            "Looks like you're running in an IPython environment but haven't "
+                            "started a GUI event loop. We've started one for you using the "
+                            "Qt6 backend."
+                        )
+                    except ModuleNotFoundError:
+                        raise ValueError(
+                            "Looks like you're running in an IPython environment but haven't "
+                            "started a GUI event loop. We tried to start one for you using the "
+                            "Qt6 backend (via %gui qt6) but that failed. You may have to start "
+                            "the event loop manually. See "
+                            "https://ipython.readthedocs.io/en/stable/config/eventloops.html"
+                            "for details."
+                        )
+                else:
+                    raise ValueError(
+                        'IPython event loop not running. Please use e.g. "%gui qt6" to hook into the event loop.'
+                    )
 
         self._title = title
 
@@ -140,15 +165,23 @@ class Viewer:
 
         # Set up a default scene
         self.scene = gfx.Scene()
-        self.scene.add(gfx.AmbientLight(intensity=0.5))
-        self.scene.add(gfx.PointLight(intensity=4))
-        # Adjust shadow bias (this helps with shadow acne)
-        self.scene.children[-1].shadow.bias = 0.0000005
 
-        # Modify the light
-        light = self.scene.children[-1]
-        light.local.z = -10000  # move light forward
-        light.local.euler_x = 2.5  # rotate light
+        # A minor ambient light
+        self.scene.add(gfx.AmbientLight(intensity=0.5))
+
+        # A strong point light form front/top/left
+        self.scene.add(gfx.PointLight(intensity=4))
+        self.scene.children[-1].shadow.bias = 0.0000005 # this helps with shadow acne
+        self.scene.children[-1].local.x = -1000000  # move to the left
+        self.scene.children[-1].local.y = -1000000  # move up
+        self.scene.children[-1].local.z = -1000000  # move light forward
+
+        # A weaker point light from the back
+        self.scene.add(gfx.PointLight(intensity=1))
+        self.scene.children[-1].shadow.bias = 0.0000005 # this helps with shadow acne
+        self.scene.children[-1].local.x = 1000000  # move to the left
+        self.scene.children[-1].local.y = 1000000  # move up
+        self.scene.children[-1].local.z = 1000000  # move light forward
 
         # Set up a default background
         self._background = gfx.BackgroundMaterial((0, 0, 0))
@@ -208,6 +241,10 @@ class Viewer:
         self._shadows = False
         self._animations = {}
         self._animations_flagged_for_removal = []
+        self._on_double_click = None
+        self._on_hover = None
+        self._objects_pickable = False
+        self._selected = []
 
         # This starts the animation loop
         if show and not self._is_jupyter:
@@ -322,7 +359,7 @@ class Viewer:
     @property
     def selected(self):
         """Return IDs of or set selected objects."""
-        return self.__selected
+        return self._selected
 
     @selected.setter
     def selected(self, val):
@@ -331,7 +368,7 @@ class Viewer:
         objects = self.objects  # grab once to speed things up
         logger.debug(f"{len(val)} objects selected ({len(self.selected)} previously)")
         # First un-highlight neurons no more selected
-        for s in [s for s in self.__selected if s not in val]:
+        for s in [s for s in self._selected if s not in val]:
             for v in objects[s]:
                 if isinstance(v, gfx.Mesh):
                     v.color = v._stored_color
@@ -340,7 +377,7 @@ class Viewer:
 
         # Highlight new additions
         for s in val:
-            if s not in self.__selected:
+            if s not in self._selected:
                 for v in objects[s]:
                     # Keep track of old colour
                     v.unfreeze()
@@ -351,7 +388,7 @@ class Viewer:
                     else:
                         v.set_data(color=self.highlight_color)
 
-        self.__selected = list(val)
+        self._selected = list(val)
 
         # Update legend
         if self.show_legend:
@@ -360,7 +397,7 @@ class Viewer:
         # Update data text
         # Currently only the development version of vispy supports escape
         # character (e.g. \n)
-        t = "| ".join([f"{objects[s][0]._name} - #{s}" for s in self.__selected])
+        t = "| ".join([f"{objects[s][0]._name} - #{s}" for s in self._selected])
         self._data_text.text = t
 
     @property
@@ -462,14 +499,175 @@ class Viewer:
 
     @property
     def objects(self):
+        return self._objects()
+
+    @lru_cache(maxsize=1)
+    def _objects(self):
         """Ordered dictionary {name->[visuals]} of all objects in order of addition."""
         objects = OrderedDict()
-        for ob in self._object_ids:
-            objects[ob] = [
-                v for v in self.visuals if getattr(v, "_object_id", None) == ob
-            ]
+        for v in self.visuals:
+            if hasattr(v, "_object_id"):
+                if v._object_id in objects:
+                    objects[v._object_id].append(v)
+                else:
+                    objects[v._object_id] = [v]
 
         return objects
+
+    @property
+    def objects_pickable(self):
+        return self._objects_pickable
+
+    @objects_pickable.setter
+    def objects_pickable(self, v):
+        if not isinstance(v, bool):
+            raise TypeError(f"Expected bool, got {type(v)}")
+
+        # No need to do anything if the value is the same
+        if v == self._objects_pickable:
+            return
+
+        self._objects_pickable = v
+
+        # Set pick_write to new value for all materials
+        for objects in self.objects.values():
+            for ob in objects:
+                try:
+                    ob.material.pick_write = v
+                except AttributeError:
+                    pass
+
+    @property
+    def highlighted(self):
+        """Return IDs of currently highlighted objects."""
+        highlighted = []
+        for obj in self.objects:
+            if any([getattr(v, "_highlighted", False) for v in self.objects[obj]]):
+                highlighted.append(obj)
+        return highlighted
+
+    @property
+    def on_hover(self):
+        """Determines what to do when hovering over objects.
+
+        Can be set to:
+         - `None`: do nothing
+         - "highlight": hide object
+
+        """
+        return self._on_hover
+
+    @on_hover.setter
+    def on_hover(self, v):
+        valid = (None, "highlight")
+        if v not in valid:
+            raise ValueError(f"Unknown value for on_hover: {v}. Must be one of {valid}.")
+
+        # No need to do anything if the value is the same
+        if v == self._on_hover:
+            return
+
+        if v:
+            # Make objects pickable
+            self.objects_pickable = True
+
+            # Add the event handler
+            self.scene.add_event_handler(self._highlight_on_hover_event, "pointer_move")
+        else:
+            self.scene.remove_event_handler(
+                self._highlight_on_hover_event, "pointer_move"
+            )
+            current_hover = getattr(self, "_current_hover_object", None)
+
+            # Make sure to unhighlight the current hover object
+            if current_hover:
+                self.unhighlight_objects(current_hover)
+                self._current_hover_object = None
+
+        self._on_hover = v
+
+    def _highlight_on_hover_event(self, event):
+        """This is the event callback for highlighting objects on hover."""
+        # print(event.time_stamp, event.pick_info)
+        # If any buttons (including mouse) are pressed (e.g. during panning) ignore the event
+        if event.buttons:
+            return
+
+        # Parse the current object
+        new_hover = event.pick_info["world_object"]
+        current_hover = getattr(self, "_current_hover_object", None)
+
+        # Break early if there is nothing to do
+        if new_hover is None and current_hover is None:
+            # print("  No hover")
+            return
+
+        new_hover_id = [k for k, v in self.objects.items() if new_hover in v]
+        # print(f"  New Hover: {new_hover_id}")
+        new_hover_id = new_hover_id[0] if new_hover_id else None
+
+        # See if we need to de-highlight the current hover object
+        if current_hover:
+            # If the new object is the same as the current one, we don't need to do anything
+            if current_hover == new_hover_id:
+                # print("  Hover hasn't changed")
+                return
+            if current_hover in self.objects:
+                # print(" Unhighlighting current hover")
+                self.unhighlight_objects(current_hover)
+            self._current_hover_object = None
+
+        # Highlight the new object
+        if new_hover_id:
+            # print("  Highlighting new hover")
+            self.highlight_objects(
+                new_hover_id, color=getattr(self, "_highlight_on_hover_color", 0.2)
+            )
+            self._current_hover_object = new_hover_id
+
+    @property
+    def on_double_click(self):
+        """Determines what to do when double clicking on objects.
+
+        Can be set to:
+         - `None`: do nothing
+         - "hide": hide object
+         - "remove": remove object
+         - "select": select object
+
+        """
+        return self._on_double_click
+
+    @on_double_click.setter
+    def on_double_click(self, v):
+        valid = (None, "hide", "remove", "select")
+        if v not in valid:
+            raise ValueError(
+                f"Unknown value for on_double_click: {v}. Must be one of {valid}."
+            )
+
+        # No need to do anything if the value is the same
+        if v == self._on_double_click:
+            return
+
+        # First try to remove the current event handler for double clicks
+        try:
+            self.scene.remove_event_handler(
+                getattr(self, "_on_double_click_func", None), "double_click"
+            )
+        except KeyError:
+            pass
+
+        if v:
+            # Make objects pickable
+            self.objects_pickable = True
+
+            # Now add the new event handler
+            func = partial(handle_object_event, viewer=self, actions=(v,))
+            self.scene.add_event_handler(func, "double_click")
+            self.__on_double_click_func = func
+
+        self._on_double_click = v
 
     def add_animation(self, x, on_error="remove"):
         """Add animation function to the Viewer.
@@ -546,11 +744,12 @@ class Viewer:
         # Start the animation loop
         self.canvas.request_draw(self._animate)
 
-        # If this is an offscreen canvas, we don't need to show anything
+        # If this is an offscreen canvas, we don't need to do anything
         if isinstance(self.canvas, WgpuCanvasOffscreen):
             return
+
         # In terminal we can just show the window
-        elif not self._is_jupyter:
+        if not self._is_jupyter:
             # Not all backends have a show method
             if hasattr(self.canvas, "show"):
                 self.canvas.show()
@@ -862,6 +1061,13 @@ class Viewer:
 
         This is just a convenient collection point for us to trigger a bunch of updates in one go,
         """
+        # If we need objects to be pickable, set the material accordingly
+        if self.objects_pickable:
+            try:
+                visual.material.pick_write = True
+            except AttributeError:
+                pass
+
         self.scene.add(visual)
 
         if center:
@@ -935,12 +1141,15 @@ class Viewer:
                     list of options. Please note that you may have to
                     increase the size of the marker to see some of the shapes.
         size :      int | float
-                    Marker size. Can
+                    Marker size. Can be a single value or an array of
+                    sizes for each point.
         size_space : "screen" | "world" | "model", optional
                     Units to use for the marker size. "screen" (default)
                     will keep the line width constant on the screen, while
                     "world" and "model" will keep it constant in world and
-                    model coordinates, respectively.
+                    model coordinates, respectively. In the latter two cases,
+                    `size` corresponds to the diameter (not radius) of the
+                    marker!
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -1146,6 +1355,7 @@ class Viewer:
         if hasattr(self, "widget") and not getattr(self.widget, "_is_closed", False):
             self.widget.close(close_viewer=False)
 
+    @update_viewer(legend=True, bounds=True)
     def hide_objects(self, obj):
         """Hide given object(s).
 
@@ -1166,10 +1376,12 @@ class Viewer:
                 if v.visible:
                     v.visible = False
 
+    @update_viewer(legend=True, bounds=True)
     def hide_selected(self):
         """Hide currently selected object(s)."""
         self.hide_neurons(self.selected)
 
+    @update_viewer(legend=True, bounds=True)
     def unhide_objects(self, obj=None):
         """Unhide given object(s).
 
@@ -1194,6 +1406,122 @@ class Viewer:
                     continue
                 if not v.visible:
                     v.visible = True
+
+    def highlight_objects(self, obj, color=0.2):
+        """Highlight given object(s) by increasing their brightness.
+
+        Parameters
+        ----------
+        obj :   str | int | list | visual
+                Object(s) to highlight. Can be the name(s) or ID(s) of
+                the object(s), their index(es) in the list of visuals,
+                or the visual(s) themselves. Objects already highlighted
+                will be silently ignored.
+        color : float | tuple
+                Color to use for highlighting. If a float, will change
+                the HSV value of the current color. If a tuple, will
+                use the RGB(A) color.
+
+        See Also
+        --------
+        Viewer.unhighlight_objects
+                Use to remove highlights.
+
+        """
+        if not utils.is_iterable(obj):
+            objects = [obj]
+        else:
+            objects = obj
+
+        all_objects = self.objects  # grab once to speed things up
+
+        for ob in objects:
+            if ob in all_objects:
+                list_ = all_objects[ob]
+            elif isinstance(ob, int):
+                list_ = list(self.objects.values())[ob]
+            elif isinstance(ob, gfx.WorldObject):
+                list_ = [ob]
+            else:
+                raise TypeError(f"Unknown object type: {type(ob)}")
+
+            for o in list_:
+                # Skip if object is pinned
+                if getattr(o, "_pinned", False):
+                    continue
+                # Skip if object is already highlighted
+                if getattr(o, "_highlighted", False):
+                    continue
+
+                if isinstance(color, (float, int)):
+                    # Work in HSL space
+                    h, s, l = o.material.color.to_hsl()
+                    # If the value is not maxed yet, increase it
+                    if l < 1:
+                        l = min(l + color, 1)
+                    else:
+                        l = max(l - color, 0)
+
+                    new_color = gfx.Color.from_hsl(h, s, l)
+                else:
+                    # See if pygfx can handle the color
+                    new_color = gfx.Color(color)
+
+                o.material._original_color = o.material.color
+                o.material.color = new_color
+                o._highlighted = True
+
+    def unhighlight_objects(self, obj=None):
+        """Unhighlight given object(s).
+
+        Parameters
+        ----------
+        obj :   str | int | list | visual
+                Object(s) to unhighlight. Can be the name(s) or ID(s) of
+                the object(s), their index(es) in the list of visuals,
+                or the visual(s) themselves. If None, will unhighlight all
+                objects. Objects that aren't highlighted will be silently
+                ignored.
+
+        See Also
+        --------
+        Viewer.highlight_objects
+                Use to highlight objects
+
+        """
+        # Important note: it looks like any attribute we added previously
+        # will (at some point) have been silently renamed to "_Viewer{attribute}"
+        if obj is None:
+            obj = [v for v in self.visuals if getattr(v, "_highlighted", False)]
+
+        if not utils.is_iterable(obj):
+            objects = [obj]
+        else:
+            objects = obj
+
+        all_objects = self.objects  # grab once to speed things up
+
+        for ob in objects:
+            if ob in all_objects:
+                list_ = all_objects[ob]
+            elif isinstance(ob, int):
+                list_ = list(self.visuals.values())[ob]
+            elif isinstance(ob, gfx.WorldObject):
+                list_ = [ob]
+            else:
+                raise TypeError(f"Unknown object type: {type(ob)}")
+
+            for o in list_:
+                # Skip if object is pinned
+                if getattr(o, "_pinned", False):
+                    continue
+
+                # Skip if object isn't actually highlighed
+                if not getattr(o, "_highlighted", False):
+                    continue
+                o.material.color = o.material._original_color
+                del o.material._original_color
+                del o._highlighted
 
     def pin_objects(self, obj):
         """Pin given object(s).
@@ -1220,19 +1548,17 @@ class Viewer:
 
         """
         objects = self.objects  # grab once to speed things up
-        if not isinstance(obj, type(None)):
-            obj = utils.make_iterable(obj)
-        else:
+        if obj is None:
             obj = objects
+        else:
+            obj = utils.make_iterable(obj)
 
         for ob in obj:
             if ob not in objects:
                 logger.warning(f"Object {ob} not found on canvas.")
                 continue
             for v in objects[ob]:
-                v.unfreeze()
                 v._pinned = False
-                v.freeze()
 
     @update_viewer(legend=True, bounds=False)
     def set_colors(self, c):
@@ -1373,7 +1699,9 @@ class Viewer:
         else:
             # This is a bit of a hack to make sure a new frame with the (potentially)
             # updated size, pixel ratio, etc. is drawn before taking the screenshot.
-            self.canvas.draw_frame()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                self.canvas.draw_frame()
 
         try:
             im = self.renderer.snapshot()
@@ -1460,3 +1788,36 @@ class Viewer:
                 )
 
             self._key_events[(key, modifiers)] = func
+
+
+def handle_object_event(event, viewer, actions):
+    """Handle object events."""
+    # Parse the object (this will be e.g. a Mesh visual)
+    obj = event.pick_info["world_object"]
+
+    # Get the ID of the object
+    new_hover_id = [k for k, v in viewer.objects.items() if obj in v]
+    new_hover_id = new_hover_id[0] if new_hover_id else None
+
+    if new_hover_id:
+        if "hide" in actions:
+            viewer.hide_objects(new_hover_id)
+        if "unhide" in actions:
+            viewer.unhide_objects(new_hover_id)
+        if "highlight" in actions:
+            viewer.highlight_objects(new_hover_id)
+        if "unhighlight" in actions:
+            viewer.unhighlight_objects(new_hover_id)
+        if "pin" in actions:
+            viewer.pin_objects(new_hover_id)
+        if "unpin" in actions:
+            viewer.unpin_objects(new_hover_id)
+        if "remove" in actions:
+            viewer.remove_objects(new_hover_id)
+        if "select" in actions:
+            if new_hover_id in viewer.selected:
+                viewer.selected = [i for i in viewer.selected if i != new_hover_id]
+            else:
+                viewer.selected = np.append(viewer.selected, new_hover_id)
+
+        logger.debug(f"Object: {new_hover_id}, Action: {actions}")
