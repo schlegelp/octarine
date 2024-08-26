@@ -48,3 +48,26 @@ cube rotate faster:
 
 You could decouple the rotation from the frame rate by incrementing the rotation
 depending on how much time has passed since the last call.
+
+
+## What next?
+
+<div class="grid cards" markdown>
+
+-   :material-cube:{ .lg .middle } __Objects__
+
+    ---
+
+    Check out the guide on different object types.
+
+    [:octicons-arrow-right-24: Adding Objects](objects.md)
+
+-   :material-camera-control:{ .lg .middle } __Control__
+
+    ---
+
+    Learn how to control the viewer, adjust colors, etc.
+
+    [:octicons-arrow-right-24: Controls](controls.md)
+
+</div>

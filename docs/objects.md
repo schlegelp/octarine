@@ -138,3 +138,24 @@ by `Octarine`?
 
 Go check out the [Extending Octarine](extending.md) tutorial to learn how!
 
+## What next?
+
+<div class="grid cards" markdown>
+
+-   :material-format-font:{ .lg .middle } __Animations__
+
+    ---
+
+    Add movement to the viewer.
+
+    [:octicons-arrow-right-24: Animations](animations.md)
+
+-   :material-camera-control:{ .lg .middle } __Control__
+
+    ---
+
+    Learn how to control the viewer, adjust colors, etc.
+
+    [:octicons-arrow-right-24: Controls](controls.md)
+
+</div>

@@ -20,21 +20,24 @@ cube = gfx.Mesh(
 
 # Add to viewer
 v.add(cube)
-
-# This will show the viewer this cell
-v.show()
 ```
 
 !!! important
 
-    The `.show()` method generates and returns a widget wrapping the `Viewer`. In order for it to be displayed
-    this _has_ to be on the last line of the cell. The only other alternative is this:
+    In Jupyter, the `.show()` method generates and displays a widget wrapping the `Viewer`. In a script/terminal,
+    the `.show()` message will cause the window to appear. By default, the viewer is displayed right away but you
+    can decide to belay that like so:
 
     ```python
-    from IPython.display import display
-    display(v.show())  # display the widget
+    v = oc.Viewer(show=False)  # set show=False when initializing the viewer
     ...
-    do other stuff
+    do stuff
+    ```
+
+    Then in another cell:
+
+    ```python
+    v.show()
     ```
 
 ![cube example](_static/cube_example_jupyter.png)
@@ -42,8 +45,8 @@ v.show()
 !!! tip "Resizing the widget"
 
     You can adjust the size of the widget either when creating the viewer via
-    the `height` and `width` arguments, or afterwards by clicking + dragging the
-    lower right corner of the widget.
+    the `size` argument, or afterwards by clicking + dragging the lower right corner of
+    the widget.
 
 ### Sidecar
 

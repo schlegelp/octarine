@@ -133,3 +133,26 @@ To activate them you can either press the `c` hotkey or:
 ```
 
 <center><img src="https://schlegelp.github.io/octarine/_static/jupyter_toolbar.png" alt="jupyter toolbar" width="75%"/></center>
+
+
+## What next?
+
+<div class="grid cards" markdown>
+
+-   :material-cube:{ .lg .middle } __Objects__
+
+    ---
+
+    Check out the guide on different object types.
+
+    [:octicons-arrow-right-24: Adding Objects](objects.md)
+
+-   :material-format-font:{ .lg .middle } __Animations__
+
+    ---
+
+    Add movement to the viewer.
+
+    [:octicons-arrow-right-24: Animations](animations.md)
+
+</div>
