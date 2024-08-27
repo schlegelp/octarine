@@ -24,6 +24,9 @@ __all__ = ["Viewer"]
 
 logger = config.get_logger(__name__)
 
+# This keeps track of open viewers
+viewers = []
+
 AUTOSTART_EVENT_LOOP = True
 
 # TODO
@@ -245,6 +248,8 @@ class Viewer:
         self._on_hover = None
         self._objects_pickable = False
         self._selected = []
+
+        viewers.append(self)
 
         # This starts the animation loop
         if show and not self._is_jupyter:
@@ -561,7 +566,9 @@ class Viewer:
     def on_hover(self, v):
         valid = (None, "highlight")
         if v not in valid:
-            raise ValueError(f"Unknown value for on_hover: {v}. Must be one of {valid}.")
+            raise ValueError(
+                f"Unknown value for on_hover: {v}. Must be one of {valid}."
+            )
 
         # No need to do anything if the value is the same
         if v == self._on_hover:
@@ -1354,6 +1361,11 @@ class Viewer:
         # Close the Jupyter widget
         if hasattr(self, "widget") and not getattr(self.widget, "_is_closed", False):
             self.widget.close(close_viewer=False)
+
+        try:
+            viewers.remove(self)
+        except ValueError:
+            pass
 
     @update_viewer(legend=True, bounds=True)
     def hide_objects(self, obj):
