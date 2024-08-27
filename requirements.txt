@@ -3,6 +3,8 @@ numpy
 pypng
 six
 cmap
+trimesh
+importlib-metadata>=4.6  # 4.6 is the earliest supporting entry_points(group=XXXX)
 
 #extra: all
 
@@ -21,6 +23,3 @@ mkdocs-literate-nav
 mkdocs-gen-files
 mkdocs-glightbox
 mkdocs-section-index
-
-trimesh
-importlib-metadata>=4.6  # 4.6 is the earliest supporting entry_points(group=XXXX)
