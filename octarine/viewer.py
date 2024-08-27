@@ -89,11 +89,8 @@ class Viewer:
                 Controller type to use. Defaults to "trackball".
     show :      bool
                 Whether to immediately show the viewer. A few notes:
-                 1. This has no effect in Jupyter. There you will have to call ``.show()``
-                    manually on the last line of a cell for the viewer to appear.
-                 2. When running in a non-interactive script or REPL, you have to also start
-                    the event loop manually.
-                See the `Viewer.show()` method for more information.
+                 1. When running in a non-interactive script or REPL, you have to also start
+                    the event loop manually. See the `Viewer.show()` method for more information.
     **kwargs
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
@@ -777,19 +774,23 @@ class Viewer:
                     "  >>> v.show()\n"
                     "  >>> run()\n\n"  # do not remove the \n\n here
                 )
-        # For Jupyter we need to wrap the canvas in a widget
         else:
             # if not hasattr(self, 'widget'):
             from .jupyter import JupyterOutput
+            from IPython.display import display
 
             # Construct the widget
-            self.widget = JupyterOutput(
-                self,
-                use_sidecar=use_sidecar,
-                toolbar=toolbar,
-                sidecar_kwargs={"title": self._title},
-            )
-            return self.widget
+            if not hasattr(self, "widget"):
+                self.widget = JupyterOutput(
+                    self,
+                    use_sidecar=use_sidecar,
+                    toolbar=toolbar,
+                    sidecar_kwargs={"title": self._title},
+                )
+
+            # This will display the viewer right here and there
+            display(self.widget)
+
 
     def show_message(
         self, message, position="top-right", font_size=20, color=None, duration=None
