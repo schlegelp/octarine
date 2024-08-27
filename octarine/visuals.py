@@ -500,13 +500,13 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
     if dash_pattern is None:
         dash_pattern = ()  # pygfx expects an empty tuple for solid lines
     elif isinstance(dash_pattern, str):
-        if dash_pattern == "solid":
+        if dash_pattern in ("solid", '-'):
             dash_pattern = ()
-        elif dash_pattern == "dashed":
+        elif dash_pattern in ("dashed", "--"):
             dash_pattern = (5, 2)
-        elif dash_pattern == "dotted":
+        elif dash_pattern in ("dotted", ":"):
             dash_pattern = (1, 2)
-        elif dash_pattern == "dashdot":
+        elif dash_pattern in ("dashdot", "-."):
             dash_pattern = (5, 2, 1, 2)
         else:
             raise ValueError(f"Unknown dash pattern: {dash_pattern}")
