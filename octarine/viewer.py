@@ -592,8 +592,7 @@ class Viewer:
 
     def _highlight_on_hover_event(self, event):
         """This is the event callback for highlighting objects on hover."""
-        # print(event.time_stamp, event.pick_info)
-        # If any buttons (including mouse) are pressed (e.g. during panning) ignore the event
+        # If any buttons are pressed (e.g. mouse left during panning) ignore the event
         if event.buttons:
             return
 
@@ -607,23 +606,19 @@ class Viewer:
             return
 
         new_hover_id = [k for k, v in self.objects.items() if new_hover in v]
-        # print(f"  New Hover: {new_hover_id}")
         new_hover_id = new_hover_id[0] if new_hover_id else None
 
         # See if we need to de-highlight the current hover object
         if current_hover:
             # If the new object is the same as the current one, we don't need to do anything
             if current_hover == new_hover_id:
-                # print("  Hover hasn't changed")
                 return
             if current_hover in self.objects:
-                # print(" Unhighlighting current hover")
                 self.unhighlight_objects(current_hover)
             self._current_hover_object = None
 
         # Highlight the new object
         if new_hover_id:
-            # print("  Highlighting new hover")
             self.highlight_objects(
                 new_hover_id, color=getattr(self, "_highlight_on_hover_color", 0.2)
             )
