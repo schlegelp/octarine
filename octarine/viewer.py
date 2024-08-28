@@ -12,7 +12,6 @@ import pygfx as gfx
 from functools import wraps, lru_cache, partial
 from collections import OrderedDict
 
-from wgpu.gui.auto import WgpuCanvas, run
 from wgpu.gui.offscreen import WgpuCanvas as WgpuCanvasOffscreen
 
 from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx
@@ -149,6 +148,7 @@ class Viewer:
             return
 
         if not offscreen:
+            from wgpu.gui.auto import WgpuCanvas
             self.canvas = WgpuCanvas(**defaults)
         else:
             self.canvas = WgpuCanvasOffscreen(**defaults)
@@ -754,6 +754,7 @@ class Viewer:
                 self.canvas.show()
 
             if start_loop:
+                from wgpu.gui.auto import run
                 run()
             elif utils._type_of_script() in ("terminal", "script"):
                 logger.warning(
