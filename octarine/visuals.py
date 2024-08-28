@@ -5,6 +5,8 @@ import pygfx as gfx
 import numpy as np
 import trimesh as tm
 
+from importlib.util import find_spec
+
 from . import config, utils
 
 logger = config.get_logger(__name__)
@@ -579,8 +581,11 @@ def trimesh2gfx(mesh, color=None, alpha=None, use_material=True):
     kwargs = dict(
         positions=np.ascontiguousarray(mesh.vertices, dtype="f4"),
         indices=np.ascontiguousarray(mesh.faces, dtype="i4"),
-        normals=np.ascontiguousarray(mesh.vertex_normals, dtype="f4"),
     )
+    # trimesh needs scipy to compute normals
+    if find_spec("scipy"):
+        kwargs['normals'] = np.ascontiguousarray(mesh.vertex_normals, dtype="f4")
+
     if mesh.visual.kind == "texture" and getattr(mesh.visual, "uv", None) is not None:
         # convert the uv coordinates from opengl to wgpu conventions.
         # wgpu uses the D3D and Metal coordinate systems.
