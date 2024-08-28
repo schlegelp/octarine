@@ -9,7 +9,7 @@ importlib-metadata>=4.6  # 4.6 is the earliest supporting entry_points(group=XXX
 #extra: all
 
 jupyter_rfb
-PySide6
+PySide6-Essentials
 ipywidgets  # ipywidget is installed with jupyter_rfb
 sidecar
 
