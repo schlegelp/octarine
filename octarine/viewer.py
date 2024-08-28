@@ -20,7 +20,7 @@ from .conversion import get_converter
 from . import utils, config
 
 
-__all__ = ["Viewer"]
+__all__ = ["Viewer", "viewers"]
 
 logger = config.get_logger(__name__)
 
