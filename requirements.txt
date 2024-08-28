@@ -23,3 +23,7 @@ mkdocs-literate-nav
 mkdocs-gen-files
 mkdocs-glightbox
 mkdocs-section-index
+
+#extra: dev
+
+pytest
