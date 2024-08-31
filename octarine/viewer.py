@@ -109,6 +109,11 @@ class Viewer:
         show=True,
         **kwargs,
     ):
+        # We need to import WgpuCanvas before we (potentially) start the event loop
+        # If we don't we get a segfault.
+        if not offscreen:
+            from wgpu.gui.auto import WgpuCanvas
+
         # Check if we're running in an IPython environment
         if utils._type_of_script() == "ipython":
             ip = get_ipython()  # noqa: F821
@@ -148,7 +153,6 @@ class Viewer:
             return
 
         if not offscreen:
-            from wgpu.gui.auto import WgpuCanvas
             self.canvas = WgpuCanvas(**defaults)
         else:
             self.canvas = WgpuCanvasOffscreen(**defaults)
