@@ -10,7 +10,7 @@
     both shell (`IPython`) and Jupyter:
 
     ``` sh
-    pip install octarine3d[all]
+    pip install "octarine3d[all]"
     ```
 
     It includes `PySide6`, `jupyter_rfb` and `sidecar` as additional dependencies.

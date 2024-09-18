@@ -24,7 +24,7 @@ Why another 3D viewer? There are plenty options out there:
 ## Installation :rocket:
 
 ```bash
-pip install octarine3d[all]
+pip install "octarine3d[all]"
 ```
 
 This will install the minimal requirements plus `PySide6` and `jupyter_rfb` as window managers for IPython/shell
