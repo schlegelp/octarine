@@ -47,19 +47,24 @@ def update_viewer(legend=True, bounds=True):
         @wraps(func)
         def inner(*args, **kwargs):
             func(*args, **kwargs)
+            viewer = args[0]
 
             # Always clear the cached objects dictionary
-            args[0]._objects.cache_clear()
+            viewer._objects.cache_clear()
 
             if legend:
-                if getattr(args[0], "controls", None):
-                    args[0].controls.update_legend()
-                if getattr(args[0], "widget", None):
-                    if args[0].widget.toolbar:
-                        args[0].widget.toolbar.update_legend()
+                if getattr(viewer, "controls", None):
+                    viewer.controls.update_legend()
+                if getattr(viewer, "widget", None):
+                    if viewer.widget.toolbar:
+                        viewer.widget.toolbar.update_legend()
             if bounds:
-                if getattr(args[0], "show_bounds", False):
-                    args[0].update_bounds()
+                if getattr(viewer, "show_bounds", False):
+                    viewer.update_bounds()
+
+            # Any time we update the viewer, we should set it to stale
+            viewer._render_stale = True
+            viewer.canvas.request_draw()
 
         return inner
 
@@ -175,14 +180,14 @@ class Viewer:
 
         # A strong point light form front/top/left
         self.scene.add(gfx.PointLight(intensity=4))
-        self.scene.children[-1].shadow.bias = 0.0000005 # this helps with shadow acne
+        self.scene.children[-1].shadow.bias = 0.0000005  # this helps with shadow acne
         self.scene.children[-1].local.x = -1000000  # move to the left
         self.scene.children[-1].local.y = -1000000  # move up
         self.scene.children[-1].local.z = -1000000  # move light forward
 
         # A weaker point light from the back
         self.scene.add(gfx.PointLight(intensity=1))
-        self.scene.children[-1].shadow.bias = 0.0000005 # this helps with shadow acne
+        self.scene.children[-1].shadow.bias = 0.0000005  # this helps with shadow acne
         self.scene.children[-1].local.x = 1000000  # move to the left
         self.scene.children[-1].local.y = 1000000  # move up
         self.scene.children[-1].local.z = 1000000  # move light forward
@@ -258,6 +263,24 @@ class Viewer:
 
     def _animate(self):
         """Run the rendering loop."""
+        rm = self.render_trigger
+
+        if rm == "auto":
+            # If we don't have any animations, we can probably skip rendering when
+            # the window is not active
+            if not self._animations:
+                rm = "reactive"
+
+        if rm == "active_window":
+            # Note to self: we need to explore how to do this with different backends / Window managers
+            if hasattr(self.canvas, "isActiveWindow"):
+                if not self.canvas.isActiveWindow():
+                    return
+        elif rm == "reactive":
+            # If the scene is not stale, we can skip rendering
+            if not getattr(self, "_render_stale", False):
+                return
+
         # First run the user animations
         # Note: we're iterating over the list because the user might add / remove
         # animations during the loop
@@ -290,6 +313,9 @@ class Viewer:
         else:
             self.renderer.render(self.scene, self.camera, flush=False)
             self.renderer.render(self.overlay_scene, self.overlay_camera)
+
+        # Set stale to False
+        self._render_stale = False
 
         self.canvas.request_draw()
 
@@ -338,6 +364,51 @@ class Viewer:
     @blend_mode.setter
     def blend_mode(self, mode):
         self.renderer.blend_mode = mode
+
+    @property
+    def render_trigger(self):
+        """Determines when the scene is (re)rendered.
+
+        By default, we leave it to the renderer to decide when to render the scene.
+        You can adjust that behaviour by setting render mode to:
+         - None (default): leave it to the renderer to decide when to render the scene
+         - "auto": try to be smart about when to render
+         - "active_window": rendering is only done when the window is active
+         - "reactive": rendering is only triggered when the scene changes
+
+        """
+        return getattr(self, "_render_trigger", None)
+
+    @render_trigger.setter
+    def render_trigger(self, mode):
+        valid = (None, "auto", "active_window", "reactive")
+        if mode not in valid:
+            raise ValueError(f"Unknown render mode: {mode}. Must be one of {valid}.")
+
+        if mode == getattr(self, "_render_trigger", None):
+            return
+
+        if mode == "reactive":
+            self._set_stale_func = lambda event: setattr(self, "_render_stale", True)
+            self.renderer.add_event_handler(
+                self._set_stale_func,
+                "pointer_down",
+                "pointer_move",
+                "pointer_up",
+                "wheel",
+                # "before_render",
+            )
+        elif getattr(self, "_render_trigger", None) == "reactive":
+            self.renderer.remove_event_handler(
+                self._set_stale_func,
+                "pointer_down",
+                "pointer_move",
+                "pointer_up",
+                "wheel",
+                # "before_render",
+            )
+
+        self._render_trigger = mode
 
     @property
     def controls(self):
