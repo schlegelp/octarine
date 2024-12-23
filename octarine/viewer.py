@@ -254,6 +254,7 @@ class Viewer:
         self._on_hover = None
         self._objects_pickable = False
         self._selected = []
+        self._render_trigger = "continuous"
 
         viewers.append(self)
 
@@ -371,23 +372,25 @@ class Viewer:
 
         By default, we leave it to the renderer to decide when to render the scene.
         You can adjust that behaviour by setting render mode to:
-         - None (default): leave it to the renderer to decide when to render the scene
+         - "continuous" (default): leave it to the renderer to decide when to render the scene
          - "auto": try to be smart about when to render
          - "active_window": rendering is only done when the window is active
          - "reactive": rendering is only triggered when the scene changes
 
         """
-        return getattr(self, "_render_trigger", None)
+        return self._render_trigger
 
     @render_trigger.setter
     def render_trigger(self, mode):
-        valid = (None, "auto", "active_window", "reactive")
+        valid = ("continuous", "auto", "active_window", "reactive")
         if mode not in valid:
             raise ValueError(f"Unknown render mode: {mode}. Must be one of {valid}.")
 
+        # No need to do anything if the value is the same
         if mode == getattr(self, "_render_trigger", None):
             return
 
+        # Add/remove event handlers as necessary
         if mode == "reactive":
             self._set_stale_func = lambda event: setattr(self, "_render_stale", True)
             self.renderer.add_event_handler(
@@ -398,7 +401,7 @@ class Viewer:
                 "wheel",
                 # "before_render",
             )
-        elif getattr(self, "_render_trigger", None) == "reactive":
+        elif self._render_trigger == "reactive":
             self.renderer.remove_event_handler(
                 self._set_stale_func,
                 "pointer_down",

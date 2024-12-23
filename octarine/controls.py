@@ -202,6 +202,44 @@ class Controls(QtWidgets.QWidget):
             parent_layout=self.tab2_layout,
         )
 
+        # Horizontal divider
+        self.tab2_layout.addWidget(QHLine())
+
+        # Add dropdown to determine render mode
+        self.render_mode_label = QtWidgets.QLabel("Render trigger:")
+        self.tab2_layout.addWidget(self.render_mode_label)
+        self.render_mode_dropdown = QtWidgets.QComboBox()
+        self.render_mode_dropdown.setToolTip(
+            "Set trigger for re-rendering the scene. See documentation for details."
+        )
+        self.render_mode_dropdown.addItems(
+            ["Continuous", "Auto", "Reactive", "Active Window"]
+        )
+        self.render_mode_dropdown.setItemData(
+            0, "Continuously render the scene.", QtCore.Qt.ToolTipRole
+        )
+        self.render_mode_dropdown.setItemData(
+            1, "Automatically pick the best mode.", QtCore.Qt.ToolTipRole
+        )
+        self.render_mode_dropdown.setItemData(
+            2,
+            "Render when the scene changes. This will not work with animations.",
+            QtCore.Qt.ToolTipRole,
+        )
+        self.render_mode_dropdown.setItemData(
+            3, "Render only when the active window changes.", QtCore.Qt.ToolTipRole
+        )
+        self.render_mode_dropdown.currentIndexChanged.connect(
+            lambda x: setattr(
+                self.viewer,
+                "render_trigger",
+                ["continuous", "auto", "reactive", "active_window"][
+                    self.render_mode_dropdown.currentIndex()
+                ],
+            )
+        )
+        self.tab2_layout.addWidget(self.render_mode_dropdown)
+
         # This would make it so the legend does not stretch when
         # we resize the window vertically
         self.tab2_layout.addStretch(1)
