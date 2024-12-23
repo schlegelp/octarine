@@ -345,9 +345,17 @@ def to_colormap(x, hide_zero):
     if hide_zero:
         # Add an alpha column if needed
         if tex.data.shape[1] == 3:
-            colors = np.hstack(
-                (tex.data, np.ones((tex.data.shape[0], 1))), dtype=tex.data.dtype
-            )
+            np_ver = [int(i) for i in  np.__version__.split('.')]
+            # Prior to version 1.24.0, numpy's hstack did not accept a `dtype`
+            # parameter directly
+            if np_ver[0] <= 1 and np_ver[1] < 24:
+                colors = np.hstack(
+                    (tex.data, np.ones((tex.data.shape[0], 1)))
+                ).astype(tex.data.dtype)
+            else:
+                colors = np.hstack(
+                    (tex.data, np.ones((tex.data.shape[0], 1))), dtype=tex.data.dtype
+                )
             tex = gfx.Texture(colors, dim=1)
         # Otherwise make a copy to avoid modifying the original data
         else:
