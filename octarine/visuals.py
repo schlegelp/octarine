@@ -336,6 +336,8 @@ def to_colormap(x, hide_zero):
     elif isinstance(x, (dict, list)):
         # cmap can interpret dict and list of colors
         tex = cmap.Colormap(x).to_pygfx()
+    elif isinstance(x, str):
+        tex = cmap.Colormap(x).to_pygfx()
     else:
         # Last ditch effort: see if cmap can handle it
         tex = cmap.Colormap([x]).to_pygfx()
