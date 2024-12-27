@@ -1,4 +1,5 @@
 import png
+import sys
 import time
 import cmap
 import uuid
@@ -250,6 +251,7 @@ class Viewer:
         self._shadows = False
         self._animations = {}
         self._animations_flagged_for_removal = []
+        self._animations_frame_counter = 0
         self._on_double_click = None
         self._on_hover = None
         self._objects_pickable = False
@@ -266,28 +268,22 @@ class Viewer:
         """Run the rendering loop."""
         rm = self.render_trigger
 
-        if rm == "auto":
-            # If we don't have any animations, we can probably skip rendering when
-            # the window is not active
-            if not self._animations:
-                rm = "reactive"
-
-        if rm == "active_window":
-            # Note to self: we need to explore how to do this with different backends / Window managers
-            if hasattr(self.canvas, "isActiveWindow"):
-                if not self.canvas.isActiveWindow():
-                    return
-        elif rm == "reactive":
-            # If the scene is not stale, we can skip rendering
-            if not getattr(self, "_render_stale", False):
-                return
-
         # First run the user animations
-        # Note: we're iterating over the list because the user might add / remove
+        self._animations_frame_counter += 1
+        if self._animations_frame_counter == sys.maxsize:  # reset to avoid overflow
+            self._animations_frame_counter = 0
+        # N.B. we're iterating over the list because the user might add / remove
         # animations during the loop
-        for i, (func, on_error) in enumerate(list(self._animations.items())):
+        for i, (func, (on_error, run_every, req_render)) in enumerate(
+            list(self._animations.items())
+        ):
+            # Skip if we're not supposed to run this frame
+            if run_every and (self._animations_frame_counter % run_every) != 0:
+                continue
             try:
                 func()
+                if req_render:
+                    self._render_stale = True
             except BaseException as e:
                 if on_error == "raise":
                     raise e
@@ -302,6 +298,20 @@ class Viewer:
         for f in self._animations_flagged_for_removal[::-1]:
             self._animations.pop(f)
         self._animations_flagged_for_removal = []
+
+        # Now check if we need to render the scene
+        if rm == "active_window":
+            # Note to self: we need to explore how to do this with different backends / Window managers
+            # Not sure if this will work with e.g. Jupyter (does it know when the notebook is active?)
+            if hasattr(self.canvas, "isActiveWindow"):
+                if not self.canvas.isActiveWindow():
+                    self.canvas.request_draw()
+                    return
+        elif rm == "reactive":
+            # If the scene is not stale, we can skip rendering
+            if not getattr(self, "_render_stale", False):
+                self.canvas.request_draw()
+                return
 
         # Now render the scene
         if self._show_fps:
@@ -373,16 +383,16 @@ class Viewer:
         By default, we leave it to the renderer to decide when to render the scene.
         You can adjust that behaviour by setting render mode to:
          - "continuous" (default): leave it to the renderer to decide when to render the scene
-         - "auto": try to be smart about when to render
-         - "active_window": rendering is only done when the window is active
          - "reactive": rendering is only triggered when the scene changes
+         - "active_window": rendering is only done when the window is active; this currently
+           only works with the PySide backend
 
         """
         return self._render_trigger
 
     @render_trigger.setter
     def render_trigger(self, mode):
-        valid = ("continuous", "auto", "active_window", "reactive")
+        valid = ("continuous", "active_window", "reactive")
         if mode not in valid:
             raise ValueError(f"Unknown render mode: {mode}. Must be one of {valid}.")
 
@@ -746,7 +756,7 @@ class Viewer:
 
         self._on_double_click = v
 
-    def add_animation(self, x, on_error="remove"):
+    def add_animation(self, x, on_error="remove", run_every=None, req_render=True):
         """Add animation function to the Viewer.
 
         Parameters
@@ -758,6 +768,13 @@ class Viewer:
                     the function will be removed from the animation loop. If
                     "ignore", the error will be ignored and the function will
                     continue to be called.
+        run_every : int, optional
+                    Use to run the function every n frames.
+        req_render : bool, optional
+                    Whether this animation requires a re-render of the scene.
+                    This is mainly a flag to help the viewer to decide
+                    whether/when to trigger a render. See also the `render_trigger`
+                    property.
 
         """
         if not callable(x):
@@ -765,7 +782,7 @@ class Viewer:
 
         assert on_error in ["remove", "ignore", "raise"]
 
-        self._animations[x] = on_error
+        self._animations[x] = (on_error, run_every, req_render)
 
     def remove_animation(self, x):
         """Remove animation function from the Viewer.

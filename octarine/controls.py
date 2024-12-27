@@ -212,31 +212,29 @@ class Controls(QtWidgets.QWidget):
         self.render_mode_dropdown.setToolTip(
             "Set trigger for re-rendering the scene. See documentation for details."
         )
-        self.render_mode_dropdown.addItems(
-            ["Continuous", "Auto", "Reactive", "Active Window"]
-        )
+        self.render_mode_dropdown.addItems(["Continuous", "Reactive", "Active Window"])
         self.render_mode_dropdown.setItemData(
             0, "Continuously render the scene.", QtCore.Qt.ToolTipRole
         )
         self.render_mode_dropdown.setItemData(
-            1, "Automatically pick the best mode.", QtCore.Qt.ToolTipRole
-        )
-        self.render_mode_dropdown.setItemData(
-            2,
-            "Render when the scene changes. This will not work with animations.",
+            1,
+            "Render only when the scene changes.",
             QtCore.Qt.ToolTipRole,
         )
         self.render_mode_dropdown.setItemData(
-            3, "Render only when the active window changes.", QtCore.Qt.ToolTipRole
+            2, "Render only when the window is active.", QtCore.Qt.ToolTipRole
         )
+        render_trigger_vals = ["continuous", "reactive", "active_window"]
         self.render_mode_dropdown.currentIndexChanged.connect(
             lambda x: setattr(
                 self.viewer,
                 "render_trigger",
-                ["continuous", "auto", "reactive", "active_window"][
-                    self.render_mode_dropdown.currentIndex()
-                ],
+                render_trigger_vals[self.render_mode_dropdown.currentIndex()],
             )
+        )
+        # Set default item to whatever the currently set render trigger is
+        self.render_mode_dropdown.setCurrentIndex(
+            render_trigger_vals.index(self.viewer.render_trigger)
         )
         self.tab2_layout.addWidget(self.render_mode_dropdown)
 
