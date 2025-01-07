@@ -390,7 +390,7 @@ class Controls(QtWidgets.QWidget):
         sender = self.sender()
         push_button = self.findChild(QtWidgets.QPushButton, sender.objectName())
         # print(f'click: {push_button.objectName()}')
-        self.active_objects = push_button.objectName()
+        self.active_objects = push_button._id
         self.color_picker.show()
 
     def volume_button_clicked(self):
@@ -494,6 +494,7 @@ class Controls(QtWidgets.QWidget):
         color_btn.setMaximumWidth(20)
         color_btn.setMaximumHeight(20)
         color_btn.setObjectName(str(name))
+        color_btn._id = name  # this helps to identify the associated object
 
         # Set tooltip
         color_btn.setToolTip("Click to change color")
