@@ -181,7 +181,7 @@ class Controls(QtWidgets.QWidget):
         self.fps_checkbox.toggled.connect(
             lambda x: setattr(
                 self.viewer,
-                "_show_fps",
+                "show_fps",
                 self.fps_checkbox.isChecked(),
             )
         )
