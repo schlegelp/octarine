@@ -17,6 +17,16 @@ except ImportError:
 # - make legend tabbed (QTabWidget)
 
 
+def set_viewer_stale(func):
+    """Decorator to set the viewer stale after a function call."""
+
+    def wrapper(self, *args, **kwargs):
+        self.viewer._render_stale = True
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
 class Controls(QtWidgets.QWidget):
     def __init__(self, viewer, width=300, height=400):
         super().__init__()
@@ -401,6 +411,7 @@ class Controls(QtWidgets.QWidget):
         self.active_volume = push_button.objectName()
         self.volume_controls.show()
 
+    @set_viewer_stale
     def set_color(self, color):
         """Color current active object(s). This is the callback for the color picker."""
         if self.active_objects is None:
@@ -444,26 +455,31 @@ class Controls(QtWidgets.QWidget):
         self.active_objects = "selected"
         self.color_picker.show()
 
+    @set_viewer_stale
     def hide_all(self):
         """Hide all objects."""
         self.viewer.hide_objects(self.viewer.objects)
 
+    @set_viewer_stale
     def hide_selected(self):
         """Hide selected objects."""
         sel = self.get_selected()
         if sel:
             self.viewer.hide_objects(self.get_selected())
 
+    @set_viewer_stale
     def show_all(self):
         """Show all objects."""
         self.viewer.unhide_objects(None)
 
+    @set_viewer_stale
     def show_selected(self):
         """Show selected objects."""
         sel = self.get_selected()
         if sel:
             self.viewer.unhide_objects(self.get_selected())
 
+    @set_viewer_stale
     def invert_visibility(self):
         """Invert visibility of all objects."""
         vis = self.viewer.visible
@@ -471,10 +487,12 @@ class Controls(QtWidgets.QWidget):
         self.viewer.hide_objects(vis)
         self.viewer.unhide_objects(invis)
 
+    @set_viewer_stale
     def delete_all(self):
         """Delete all objects."""
         self.viewer.remove_objects(self.viewer.objects)
 
+    @set_viewer_stale
     def delete_selected(self):
         """Delete selected objects."""
         sel = self.get_selected()
