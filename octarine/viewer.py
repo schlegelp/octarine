@@ -563,6 +563,14 @@ class Viewer:
         return isinstance(self.canvas, WgpuCanvasOffscreen)
 
     @property
+    def _window_manager(self):
+        """Which window manager is being used."""
+        try:
+            return type(self.canvas).__module__.split(".")[-1]
+        except BaseException:
+            return "na"
+
+    @property
     def _object_ids(self):
         """All object IDs on this canvas in order of addition."""
         obj_ids = []
