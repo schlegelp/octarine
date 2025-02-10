@@ -453,42 +453,26 @@ class Viewer:
 
     @selected.setter
     def selected(self, val):
-        val = utils.make_iterable(val)
+        val = utils.make_iterable(val) if val is not None else []
 
         objects = self.objects  # grab once to speed things up
         logger.debug(f"{len(val)} objects selected ({len(self.selected)} previously)")
-        # First un-highlight neurons no more selected
+        # First un-highlight neurons which aren't selected anymore
         for s in [s for s in self._selected if s not in val]:
             for v in objects[s]:
-                if isinstance(v, gfx.Mesh):
-                    v.color = v._stored_color
-                else:
-                    v.set_data(color=v._stored_color)
+                v.material.color = v._stored_color
 
         # Highlight new additions
         for s in val:
             if s not in self._selected:
                 for v in objects[s]:
                     # Keep track of old colour
-                    v.unfreeze()
-                    v._stored_color = v.color
-                    v.freeze()
-                    if isinstance(v, gfx.Mesh):
-                        v.color = self.highlight_color
-                    else:
-                        v.set_data(color=self.highlight_color)
-
+                    v._stored_color = v.material.color
+                    v.material.color = gfx.Color(self.highlight_color)
         self._selected = list(val)
 
-        # Update legend
-        if self.show_legend:
-            self.update_legend()
-
-        # Update data text
-        # Currently only the development version of vispy supports escape
-        # character (e.g. \n)
-        t = "| ".join([f"{objects[s][0]._name} - #{s}" for s in self._selected])
-        self._data_text.text = t
+        # Update legend and set render stale (if applicable)
+        update_helper(self, legend=True, bounds=False)
 
     @property
     def size(self):
