@@ -1757,7 +1757,7 @@ class Viewer:
 
     def _toggle_fps(self):
         """Switch FPS measurement on and off."""
-        self._show_fps = not self._show_fps
+        self.show_fps = not self.show_fps
 
     def screenshot(
         self, filename="screenshot.png", size=None, pixel_ratio=None, alpha=True
