@@ -103,6 +103,7 @@ class Viewer:
 
     # Palette used for assigning colors to objects
     palette = "seaborn:tab10"
+    highlight_color = "yellow"
 
     def __init__(
         self,
