@@ -47,29 +47,33 @@ def update_viewer(legend=True, bounds=True):
 
         @wraps(func)
         def inner(*args, **kwargs):
+            # Run function first
             func(*args, **kwargs)
-            viewer = args[0]
-
-            # Always clear the cached objects dictionary
-            viewer._objects.cache_clear()
-
-            if legend:
-                if getattr(viewer, "controls", None):
-                    viewer.controls.update_legend()
-                if getattr(viewer, "widget", None):
-                    if viewer.widget.toolbar:
-                        viewer.widget.toolbar.update_legend()
-            if bounds:
-                if getattr(viewer, "show_bounds", False):
-                    viewer.update_bounds()
-
-            # Any time we update the viewer, we should set it to stale
-            viewer._render_stale = True
-            viewer.canvas.request_draw()
+            update_helper(viewer=args[0], legend=legend, bounds=bounds)
 
         return inner
 
     return outer
+
+
+def update_helper(viewer, legend=True, bounds=True):
+    """Helper function to update legend and other properties."""
+    # Always clear the cached objects dictionary
+    viewer._objects.cache_clear()
+
+    if legend:
+        if getattr(viewer, "controls", None):
+            viewer.controls.update_legend()
+        if getattr(viewer, "widget", None):
+            if viewer.widget.toolbar:
+                viewer.widget.toolbar.update_legend()
+    if bounds:
+        if getattr(viewer, "show_bounds", False):
+            viewer.update_bounds()
+
+    # Any time we update the viewer, we should set it to stale
+    viewer._render_stale = True
+    viewer.canvas.request_draw()
 
 
 class Viewer:
@@ -77,25 +81,30 @@ class Viewer:
 
     Parameters
     ----------
-    offscreen : bool, optional
+    offscreen : bool
                 If True, will use an offscreen Canvas. Useful if you only
                 want a screenshot.
-    title :     str, optional
+    title :     str
                 Title of the viewer window.
-    max_fps :   int, optional
+    max_fps :   int
                 Maximum frames per second to render.
     size :      tuple, optional
                 Size of the viewer window.
-    camera :    "ortho" | "perspective", optional
+    camera :    "ortho" | "perspective"
                 Type of camera to use. Defaults to "ortho". Note you can always
                 change the camera type by adjust the `Viewer.camera.fov` attribute
                 (0 = ortho, >0 = perspective).
     control :   "trackball" | "panzoom" | "fly" | "orbit"
                 Controller type to use. Defaults to "trackball".
-    show :      bool
-                Whether to immediately show the viewer. A few notes:
-                 1. When running in a non-interactive script or REPL, you have to also start
-                    the event loop manually. See the `Viewer.show()` method for more information.
+    show :      "auto" (default) | bool
+                Whether to immediately show the viewer. When set to "auto" (default),
+                will immmediately show the viewer if:
+                 - we are in a Jupyter environment
+                 - we are in an iPython session and we can hook into an iPython event loop
+                If neither of the above applies or `show=False`, you will have to manually run
+                `Viewer.show()`. This gives you the chance to add objects to the viewer
+                before it is shown and the blocking event loop is started.
+                The `show` parameter is ignored if `offscreen` is True.
     **kwargs
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
