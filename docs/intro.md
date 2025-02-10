@@ -151,8 +151,7 @@ window/widget? No problem:
 ```python
 import octarine as oc
 
-# Open a fresh offscreen viewer
-# (this will not spawn a window)
+# Open a fresh offscreen viewer (this will not spawn a window)
 v = oc.Viewer(offscreen=True)
 
 # Add a mesh to viewer
@@ -167,3 +166,34 @@ v.screenshot('cube.png', alpha=True)
 ```
 
 ![cube screenshot](_static/cube_screenshot.png)
+
+
+## What next?
+
+<div class="grid cards" markdown>
+
+-   :material-cube:{ .lg .middle } __Objects__
+
+    ---
+
+    Check out the guide on different object types.
+
+    [:octicons-arrow-right-24: Adding Objects](objects.md)
+
+-   :material-format-font:{ .lg .middle } __Animations__
+
+    ---
+
+    Add movement to the viewer.
+
+    [:octicons-arrow-right-24: Animations](animations.md)
+
+-   :material-camera-control:{ .lg .middle } __Control__
+
+    ---
+
+    Learn how to control the viewer, adjust colors, etc.
+
+    [:octicons-arrow-right-24: Controls](controls.md)
+
+</div>

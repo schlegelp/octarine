@@ -51,4 +51,25 @@ they've been added:
 >>> v.remove_objects('Duck')
 ```
 
-Check out [Viewer Controls](controls.md) for details on how to manipulate objects.
+## What next?
+
+<div class="grid cards" markdown>
+
+-   :material-cube:{ .lg .middle } __Objects__
+
+    ---
+
+    Manipulate viewer and objects (color, size, visibility, etc).
+
+    [:octicons-arrow-right-24: Viewer Controls](controls.md)
+
+-   :material-select:{ .lg .middle } __Selection__
+
+    ---
+
+    Selecting objects on the viewer.
+
+    [:octicons-arrow-right-24: Selection](selection.md)
+
+</div>
+

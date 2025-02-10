@@ -15,15 +15,19 @@ nav:
   - "The Basics": intro.md
   - "Adding Objects": objects.md
   - "Managing Objects": manage.md
+  - "Viewer Controls": controls.md
+  - "Selecting Objects": selections.md
+  - "Animations": animations.md
+  - "Render Triggers": triggers.md
   - "Extending Octarine":
     - extending/index.md
     - "Custom Converters": extending/converters.md
     - Plugins: extending/plugins.md
-  - "Viewer Controls": controls.md
-  - "Animations": animations.md
+  - Changelog: changelog.md
   - FAQ: faq.md
   - API:
     - Viewer: api/viewer.md
+    - Selection: api/selection.md
     - Utility: api/utils.md
 
 theme:
