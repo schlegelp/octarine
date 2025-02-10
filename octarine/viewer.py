@@ -1023,6 +1023,18 @@ class Viewer:
         """Set to ``True`` to show bounding box."""
         return self._show_bounds
 
+    @property
+    def show_fps(self):
+        """Show frames per second."""
+        return self._show_fps
+
+    @show_fps.setter
+    def show_fps(self, v):
+        if not isinstance(v, bool):
+            raise TypeError(f"Expected bool, got {type(v)}")
+        self._show_fps = v
+        self._render_stale = True
+
     def toggle_bounds(self):
         """Toggle bounding box."""
         self.show_bounds = not self.show_bounds
