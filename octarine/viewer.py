@@ -1895,10 +1895,10 @@ class Viewer:
             self._key_events[key] = func
         else:
             # We need to make `modifiers` is hashable
-            if isinstance(key, str):
-                key = (key,)
-            elif isinstance(key, (set, list)):
-                key = tuple(key)
+            if isinstance(modifiers, str):
+                modifiers = (modifiers,)
+            elif isinstance(modifiers, (set, list)):
+                modifiers = tuple(modifiers)
 
             if not isinstance(modifiers, tuple):
                 raise TypeError(
