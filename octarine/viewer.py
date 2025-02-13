@@ -1939,3 +1939,26 @@ def handle_object_event(event, viewer, actions):
                 viewer.selected = np.append(viewer.selected, new_hover_id)
 
         logger.debug(f"Object: {new_hover_id}, Action: {actions}")
+
+
+def start_ipython_event_loop(gui):
+    ip = get_ipython()  # noqa
+    if not ip.active_eventloop:
+        try:
+            ip.enable_gui(gui)
+            logger.debug(
+                "Looks like you're running in an IPython environment but haven't "
+                "started a GUI event loop. We've started one for you using the "
+                f"{gui} backend."
+            )
+        except ModuleNotFoundError:
+            logger.warning(
+                "Looks like you're running an IPython environment but haven't "
+                "started a GUI event loop. We tried to start one for you using the "
+                f"{gui} backend (via %gui {gui}) but that failed. If you want a"
+                "non-blocking Octarine viewer, you may have to start the event loop "
+                "manually (see https://ipython.readthedocs.io/en/stable/config/eventloops.html)."
+                "Otherwise just call `Viewer.show()` to start a blocking viewer."
+            )
+            return False
+    return True
