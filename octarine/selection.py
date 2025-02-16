@@ -518,7 +518,7 @@ class SelectionGizmo:
             objects = self.gizmo._viewer.objects[name]
             for ob in objects:
                 # Extract the data depending on the type of object
-                if not isinstance(ob, (gfx.Mesh, gfx.Points)):
+                if not isinstance(ob, (gfx.Mesh, gfx.Points, gfx.Line)):
                     # Note to self: we could use object boundaries where no data is available
                     if self.gizmo._debug:
                         print(f"Object {ob} not supported")
@@ -545,7 +545,15 @@ class SelectionGizmo:
 
                 # Store the results
                 is_clipped = bool(np.any(mask))  # avoid getting np.True_/np.False_
-                is_contained = bool(np.all(mask))
+
+                if isinstance(ob, gfx.Line):
+                    # Lines can have breaks where the data will be `nan` - these will
+                    # always count as not inside the selection box. We need to ignore
+                    # these when checking for full containment.
+                    data_not_nan = np.all(~np.isnan(data), axis=1)
+                    is_contained = bool(np.all(mask[data_not_nan]))
+                else:
+                    is_contained = bool(np.all(mask))
 
                 # If the object is either fully contained or fully outside, we don't
                 # really need to pass the mask
