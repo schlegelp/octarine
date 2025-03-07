@@ -340,7 +340,15 @@ def to_colormap(x, hide_zero):
         tex = cmap.Colormap(x).to_pygfx()
     else:
         # Last ditch effort: see if cmap can handle it
-        tex = cmap.Colormap([x]).to_pygfx()
+        c = cmap.Colormap([x])
+
+        # If x is a single (RGB) color, cmap will create a colormap
+        # with the first color being `None` and the second being `x`.
+        # We need to set the first color to black
+        if len(c.color_stops) == 2 and c.color_stops[0].color == "none":
+            c = cmap.Colormap(["k", x])
+
+        tex = c.to_pygfx()
 
     if hide_zero:
         # Add an alpha column if needed
