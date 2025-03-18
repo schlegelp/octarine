@@ -240,9 +240,12 @@ class Viewer:
 
         # Setup key events
         self._key_events = {}
-        self._key_events["1"] = lambda: self.set_view("XY")
-        self._key_events["2"] = lambda: self.set_view("XZ")
-        self._key_events["3"] = lambda: self.set_view("YZ")
+        self._key_events["1"] = lambda: self.set_view("XY")  # frontal view
+        self._key_events["2"] = lambda: self.set_view("XZ")  # lateral view
+        self._key_events["3"] = lambda: self.set_view("YZ")  # top view
+        self._key_events[("1", ("Shift",))] = lambda: self.set_view("-XY")  # back view
+        self._key_events[("2", ("Shift",))] = lambda: self.set_view("-XZ")  # other lateral view
+        self._key_events[("3", ("Shift",))] = lambda: self.set_view("-YZ")  # bottom view
         self._key_events["f"] = lambda: self._toggle_fps()
         self._key_events["c"] = lambda: self._toggle_controls()
 
@@ -1886,18 +1889,30 @@ class Viewer:
         Parameters
         ----------
         view :      XY | XZ | YZ | dict
-                    View to set. If a dictionary, should describe the
-                    state of the camera. Typically, this is obtained
-                    by calling `viewer.get_view()`.
+                    View to set. Can be inverted to e.g. "-XY" to show view from back.
+                    If a dictionary, should describe the state of the camera. Typically,
+                    this is obtained by calling `viewer.get_view()`.
 
         """
         if view == "XY":
             self.camera.show_object(
                 self.scene, view_dir=(0.0, 0.0, 1.0), up=(0.0, -1.0, 0.0)
             )
+        elif view == "-XY":
+            self.camera.show_object(
+                self.scene, view_dir=(0.0, 0.0, -1.0), up=(0.0, -1.0, 0.0)
+            )
         elif view == "XZ":
             self.camera.show_object(
                 self.scene, scale=1, view_dir=(0.0, 1.0, 0.0), up=(0.0, 0.0, 1.0)
+            )
+        elif view == "-XZ":
+            self.camera.show_object(
+                self.scene, scale=1, view_dir=(0.0, -1.0, 0.0), up=(0.0, 0.0, 1.0)
+            )
+        elif view == "YZ":
+            self.camera.show_object(
+                self.scene, scale=1, view_dir=(1.0, 0.0, 0.0), up=(0.0, -1.0, 0.0)
             )
         elif view == "YZ":
             self.camera.show_object(
