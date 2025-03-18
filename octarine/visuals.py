@@ -735,7 +735,7 @@ def text2gfx(
     position=(0, 0, 0),
     color="w",
     font_size=1,
-    anchor="topright",
+    anchor="top-right",
     screen_space=False,
     markdown=False,
 ):
@@ -752,9 +752,10 @@ def text2gfx(
     font_size :     int, optional
                     Font size.
     anchor :        str, optional
-                    Anchor point of the text. Can be one of "topleft", "topright",
-                    "bottomleft", "bottomright", "center", "topmiddle", "bottommiddle", "middleleft",
-                    "middleright".
+                    Anchor point of the text. Combination of vertical and horizontal
+                    alignment, e.g. "top-center".
+                     - vertical: "top", "bottom", "middle", "baseline"
+                     - horizontal: "left", "right", "center"
     screen_space :  bool, optional
                     Whether to use screen space coordinates.
     markdown :      bool, optional
