@@ -231,6 +231,9 @@ class Viewer:
         self.overlay_camera = gfx.NDCCamera()
         self.overlay_scene = gfx.Scene()
 
+        # Setup transform gizmo
+        self.transform_gizmo = None
+
         # Stats
         self.stats = gfx.Stats(self.renderer)
         self._show_fps = False
@@ -327,12 +330,16 @@ class Viewer:
         if self._show_fps:
             with self.stats:
                 self.renderer.render(self.scene, self.camera, flush=False)
+                if self.transform_gizmo:
+                    self.renderer.render(self.transform_gizmo, self.camera, flush=False)
                 self.renderer.render(
                     self.overlay_scene, self.overlay_camera, flush=False
                 )
             self.stats.render()
         else:
             self.renderer.render(self.scene, self.camera, flush=False)
+            if self.transform_gizmo:
+                self.renderer.render(self.transform_gizmo, self.camera, flush=False)
             self.renderer.render(self.overlay_scene, self.overlay_camera)
 
         # Set stale to False
@@ -384,6 +391,10 @@ class Viewer:
 
     @blend_mode.setter
     def blend_mode(self, mode):
+        if mode == "additive" and self.transform_gizmo is not None:
+            logger.warning(
+                "Setting blend mode to 'additive' may break interaction with the transform gizmo."
+            )
         self.renderer.blend_mode = mode
 
     @property
@@ -561,6 +572,36 @@ class Viewer:
     def max_fps(self, v):
         assert isinstance(v, int)
         self.canvas._subwidget._max_fps = v
+
+    @property
+    def moveable_object(self):
+        """Get/Set the object that can be moved via the transform gizmo."""
+        if self.transform_gizmo is None:
+            return None
+        return self.transform_gizmo._object_to_control
+
+    @moveable_object.setter
+    def moveable_object(self, obj):
+        if obj is None:
+            if self.transform_gizmo:
+                self.transform_gizmo._object_to_control = None
+            return
+
+        if isinstance(obj, str):
+            if obj not in self.objects:
+                raise ValueError(f"Object '{obj}' not found.")
+            elif len(self.objects[obj]) > 1:
+                raise ValueError(f"Object '{obj}' consists of multiple WorldObjects.")
+            obj = self.objects[obj][0]
+        elif not isinstance(obj, gfx.WorldObject):
+            raise TypeError(f"Expected pygfx object, got {type(obj)}")
+
+        if self.transform_gizmo is None:
+            # The transform gizmo is rendered independent of the scene (so it always stay on top)
+            self.transform_gizmo = gfx.TransformGizmo(obj)
+            self.transform_gizmo.add_default_event_handlers(self.renderer, self.camera)
+        else:
+            self.transform_gizmo._object_to_control = obj
 
     @property
     def _is_jupyter(self):
@@ -840,13 +881,13 @@ class Viewer:
         # Start the animation loop
         self.canvas.request_draw(self._animate)
 
-        # If this is an offscreen canvas, we don't need to do anything
+        # If this is an offscreen canvas, we don't need to do anything else
         if isinstance(self.canvas, WgpuCanvasOffscreen):
             return
 
         # In terminal we can just show the window
         if not self._is_jupyter:
-            # Not all backends have a show method
+            # Not all backends have a show method (e.g. GLFW does not)
             if hasattr(self.canvas, "show"):
                 self.canvas.show()
 
@@ -1001,6 +1042,9 @@ class Viewer:
 
         # Remove everything but the lights and backgrounds
         self.scene.remove(*self.visuals)
+
+        # Rset the transform gizmo
+        self.transform_gizmo = None
 
     @update_viewer(legend=True, bounds=True)
     def remove_objects(self, to_remove):
