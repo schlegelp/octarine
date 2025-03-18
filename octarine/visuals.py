@@ -269,7 +269,6 @@ def volume2gfx(
                 clim=(cmin, cmax),
                 map=cmap,
                 interpolation=interpolation,
-                map_interpolation=interpolation,
             ),
         )
         visuals.append(vis)
