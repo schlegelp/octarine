@@ -751,8 +751,8 @@ def text2gfx(
     font_size :     int, optional
                     Font size.
     anchor :        str, optional
-                    Anchor point of the text. Combination of vertical and horizontal
-                    alignment, e.g. "top-center".
+                    Anchor point of the text. Combination of vertical and
+                    horizontal alignment (e.g. "top-center"):
                      - vertical: "top", "bottom", "middle", "baseline"
                      - horizontal: "left", "right", "center"
     screen_space :  bool, optional
@@ -781,8 +781,8 @@ def text2gfx(
         defaults["text"] = text
 
     text = gfx.Text(
-        gfx.TextGeometry(**defaults),
-        gfx.TextMaterial(color=color),
+        **defaults,
+        material=gfx.TextMaterial(color=color),
     )
     text.local.position = position
     return text

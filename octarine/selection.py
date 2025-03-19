@@ -167,24 +167,20 @@ class BaseSelectionGizmo(WorldObject):
         if self._show_info:
             self._show_info = (
                 gfx.Text(
-                    gfx.TextGeometry(
-                        markdown="",
-                        font_size=self._info_font_size,
-                        anchor="bottomright",
-                    ),
-                    gfx.TextMaterial(
+                    markdown="",
+                    font_size=self._info_font_size,
+                    anchor="bottomright",
+                    material=gfx.TextMaterial(
                         color=self._outline_color
                         if self._outline_color
                         else self._fill_color
                     ),
                 ),
                 gfx.Text(
-                    gfx.TextGeometry(
-                        markdown="",
-                        font_size=self._info_font_size,
-                        anchor="topleft",
-                    ),
-                    gfx.TextMaterial(
+                    markdown="",
+                    font_size=self._info_font_size,
+                    anchor="topleft",
+                    material=gfx.TextMaterial(
                         color=self._outline_color
                         if self._outline_color
                         else self._fill_color
@@ -407,10 +403,10 @@ class BaseSelectionGizmo(WorldObject):
         if not self._sel_info:
             return
 
-        self._show_info[0].geometry.set_text(
+        self._show_info[0].set_text(
             f"({self._sel_info['start'][0]:.2f}, {self._sel_info['start'][1]:.2f})"
         )
-        self._show_info[1].geometry.set_text(
+        self._show_info[1].set_text(
             f"({self._sel_info['end'][0]:.2f}, {self._sel_info['end'][1]:.2f})"
         )
 
@@ -429,7 +425,7 @@ class SelectionGizmo:
     viewer : Viewer
         The viewer to which the gizmo is attached.
     callback : callable, optional
-        A function to call when the selection is done. Must accept the selectionas a dictionary (see
+        A function to call when the selection is done. Must accept the selection as a dictionary (see
         [`SelectionGizmo._find_selected_objects`][octarine.selection.SelectionGizmo._find_selected_objects]
         for details). Can also be added post-hoc using `SelectionGizmo.add_callback().
     ignore_invisible :  bool
