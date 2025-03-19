@@ -9,6 +9,7 @@ import warnings
 
 import numpy as np
 import pygfx as gfx
+import trimesh as tm
 
 from functools import wraps, lru_cache, partial
 from collections import OrderedDict
@@ -1255,6 +1256,11 @@ class Viewer:
                     If True, re-center camera to all objects on canvas.
 
         """
+        if isinstance(mesh, tm.Scene):
+            for _, ob in mesh.geometry.items():
+                self.add_mesh(ob, name=name, color=color, alpha=alpha, center=False)
+            return
+
         if not utils.is_mesh_like(mesh):
             raise TypeError(f"Expected mesh-like object, got {type(mesh)}")
         if color is None:
