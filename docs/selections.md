@@ -1,6 +1,68 @@
 # Selecting objects
 
-In this section you will learn to setup a selection widget to a viewer.
+This section will demonstrate how to select objects in your viewer.
+`Octarine` offers two options:
+
+1. "Picking" by clicking on individual objects
+2. Drawing a selection rectangle to select objects
+
+## Picking
+
+`Octarine` wraps `pygfx`'s basic picking system. This allows you to easily select objects
+by double clicking on them:
+
+```python
+v = oc.Viewer()
+
+# Make 3 cubes that are slightly offset against each other
+import pygfx as gfx
+for i in range(3):
+    color = ['red', 'green', 'blue'][i]
+    cube = gfx.Mesh(
+        gfx.box_geometry(200, 200, 200),
+        gfx.MeshPhongMaterial(color=color),
+    )
+    cube.local.x = 300 * i
+    v.add(cube, name=f"{color} cube")
+
+# Tell viewer to select objects on double click
+v.on_double_click = "select"
+```
+
+<video controls>
+<source src="../_static/picking_example1.mov" type="video/mp4">
+</video>
+
+See the help for `v.on_double_click` for other presets.
+
+!!! tip "Selection color"
+
+    You can change the color used to highlight selected objects:
+
+    ```python
+    v.highlight_color = "purple"
+    ```
+
+Alternatively, you can also adjust the behavior when hovering over objects:
+
+```python
+# Highlight objects when hovering over them
+v.on_hover = "highlight"
+```
+
+If you want a custom behaviour, have a look at the logic behind the
+`Viewer.on_double_click` setter - `pygfx` makes it ridiculously easy to
+hook into the event system. We're also happy to extend the current
+list of options - please open a [Github Issue](https://github.com/schlegelp/octarine/issues/new)
+if you have suggestions!
+
+Last but not least, these setting can also be accessed through the control panel:
+
+![picking controls](_static/picking_controls.png)
+
+
+## Drawing Selections
+In this section you will learn to hook up a selection widget to a viewer to make more complex selections.
 
 We'll start by importing `octarine` and the [`SelectionGizmo`][octarine.selection.SelectionGizmo]:
 
