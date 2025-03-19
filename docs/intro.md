@@ -131,7 +131,7 @@ In those scenarios you will have to additionally start the event loop:
 ```python
 import octarine as oc
 
-# Initialize the viewer but don't show yet
+# Initialize the viewer but don't show yet as that would start blocking
 v = oc.Viewer(show=False)
 
 # Add random points as scatter
@@ -166,6 +166,23 @@ v.screenshot('cube.png', alpha=True)
 ```
 
 ![cube screenshot](_static/cube_screenshot.png)
+
+
+!!! tip "Keeping track of your Viewer(s)"
+
+    What if you forget to assign your viewer to a variable?
+
+    ```python
+    >>> oc.Viewer()
+    ```
+
+    Easy! `Octarine` tracks all instantiated viewers for you:
+
+    ```python
+    >>> oc.viewers
+    [<octarine.viewer.Viewer at 0x138a74310>]
+    >>> v = oc.viewers[0]
+    ```
 
 
 ## What next?
