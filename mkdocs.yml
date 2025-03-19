@@ -79,6 +79,7 @@ markdown_extensions:
   - tables
   - toc:
       permalink: "#"
+      toc_depth: 3
 
 plugins:
   # the privacy plugin will bundle external assets (like Google Fonts)
