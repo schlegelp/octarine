@@ -245,8 +245,12 @@ class Viewer:
         self._key_events["2"] = lambda: self.set_view("XZ")  # lateral view
         self._key_events["3"] = lambda: self.set_view("YZ")  # top view
         self._key_events[("1", ("Shift",))] = lambda: self.set_view("-XY")  # back view
-        self._key_events[("2", ("Shift",))] = lambda: self.set_view("-XZ")  # other lateral view
-        self._key_events[("3", ("Shift",))] = lambda: self.set_view("-YZ")  # bottom view
+        self._key_events[("2", ("Shift",))] = lambda: self.set_view(
+            "-XZ"
+        )  # other lateral view
+        self._key_events[("3", ("Shift",))] = lambda: self.set_view(
+            "-YZ"
+        )  # bottom view
         self._key_events["f"] = lambda: self._toggle_fps()
         self._key_events["c"] = lambda: self._toggle_controls()
 
