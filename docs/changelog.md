@@ -68,8 +68,15 @@ _Date: 19/09/24_
 ## Version `0.2.0` { data-toc-label="0.2.0" }
 _Date: 19/09/24_
 
+#### Improvements
+- added a basic picking system
+- color picker now shows alpha channel
+- general improvements to volume rendering
+- use `Viewer.blend_mode` to set blend mode
+- `Viewer.set_view` now also accepts a dictionary with camera state
+
 #### Fixes
-- fixes an issue with `importlib-metadata` dependency
+- fixes an issue with `Viewer.screenshot`
 
 **Full Changelog**: [v0.1.4...v0.2.0](https://github.com/schlegelp/octarine/compare/v0.1.4...v0.2.0)
 
