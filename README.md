@@ -79,7 +79,12 @@ so we can discuss the best way to address the issue.
 ## Development :dash:
 
 ### Tests
-TODO
+
+We're currently running only a very limited test suite. What's there can be run with:
+
+```bash
+pytest -v
+```
 
 ### Docs
 
