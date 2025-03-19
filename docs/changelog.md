@@ -14,6 +14,9 @@ pip uninstall octarine3d -y
 pip install git+https://github.com/schlegelp/octarine.git
 ```
 
+#### Breaking
+- drop support for Python 3.8 (follows `pygfx`)
+
 #### Improvements
 - bumps minimum version of pygfx to `0.8.0`.
 - added render trigger options (see [Render Triggers](triggers.md))
