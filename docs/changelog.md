@@ -14,15 +14,20 @@ pip uninstall octarine3d -y
 pip install git+https://github.com/schlegelp/octarine.git
 ```
 
+## Version `0.3.0` { data-toc-label="0.2.5" }
+_Date: 19/03/25_
+
 #### Breaking
 - drop support for Python 3.8 (follows `pygfx`)
 
 #### Improvements
-- bumps minimum version of pygfx to `0.8.0`.
+- bumps minimum version of pygfx to `0.9.0`.
 - added render trigger options (see [Render Triggers](triggers.md))
 - new selection widget (see [Selecting Objects](selections.md))
 - new transform widget (see [Moving Objects](manage.md#moving-objects-interactively))
 - various improvements in the documentation
+
+**Full Changelog**: [v0.2.5...v0.3.0](https://github.com/schlegelp/octarine/compare/v0.2.5...v0.3.0)
 
 ## Version `0.2.5` { data-toc-label="0.2.5" }
 _Date: 31/09/24_
