@@ -3,7 +3,7 @@ numpy
 pypng
 six
 cmap
-trimesh
+trimesh[easy]
 importlib-metadata>=4.6  # 4.6 is the earliest supporting entry_points(group=XXXX)
 
 #extra: all
