@@ -1,5 +1,7 @@
 # Managing objects
 
+## Accessing objects
+
 As you add objects to the [octarine.Viewer][], you might want to keep track of
 them so you can e.g. colorize or remove them at a later point.
 
@@ -42,8 +44,10 @@ OrderedDict([('Duck', [<pygfx.Mesh at 0x37f5f8a12>])])
 
 This can also be used to combine multiple objects under the same ID.
 
-Why are these IDs relevant? Well, they help you manipulate objects after
-they've been added:
+## Modifying objects
+
+Why are the object IDs discussed above relevant? Well, they help you manipulate
+objects after they've been added:
 
 ```python
 >>> v.set_colors({'Duck': 'w'})
@@ -51,4 +55,42 @@ they've been added:
 >>> v.remove_objects('Duck')
 ```
 
-Check out [Viewer Controls](controls.md) for details on how to manipulate objects.
+## Moving objects interactively
+
+You can designate a single object to be moved interactively:
+
+```python
+>>> v.moveable_object = "Duck"
+```
+
+![transform widget](_static/transform_widget.png)
+
+To remove the transform widget again simple do:
+
+```python
+>>> v.moveable_object = None
+```
+
+
+## What next?
+
+<div class="grid cards" markdown>
+
+-   :material-cube:{ .lg .middle } __Objects__
+
+    ---
+
+    Manipulate viewer and objects (color, size, visibility, etc).
+
+    [:octicons-arrow-right-24: Viewer Controls](controls.md)
+
+-   :material-select:{ .lg .middle } __Selection__
+
+    ---
+
+    Selecting objects on the viewer.
+
+    [:octicons-arrow-right-24: Selection](selections.md)
+
+</div>
+

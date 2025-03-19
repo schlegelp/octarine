@@ -269,7 +269,6 @@ def volume2gfx(
                 clim=(cmin, cmax),
                 map=cmap,
                 interpolation=interpolation,
-                map_interpolation=interpolation,
             ),
         )
         visuals.append(vis)
@@ -336,16 +335,34 @@ def to_colormap(x, hide_zero):
     elif isinstance(x, (dict, list)):
         # cmap can interpret dict and list of colors
         tex = cmap.Colormap(x).to_pygfx()
+    elif isinstance(x, str):
+        tex = cmap.Colormap(x).to_pygfx()
     else:
         # Last ditch effort: see if cmap can handle it
-        tex = cmap.Colormap([x]).to_pygfx()
+        c = cmap.Colormap([x])
+
+        # If x is a single (RGB) color, cmap will create a colormap
+        # with the first color being `None` and the second being `x`.
+        # We need to set the first color to black
+        if len(c.color_stops) == 2 and c.color_stops[0].color == "none":
+            c = cmap.Colormap(["k", x])
+
+        tex = c.to_pygfx()
 
     if hide_zero:
         # Add an alpha column if needed
         if tex.data.shape[1] == 3:
-            colors = np.hstack(
-                (tex.data, np.ones((tex.data.shape[0], 1))), dtype=tex.data.dtype
-            )
+            np_ver = [int(i) for i in  np.__version__.split('.')]
+            # Prior to version 1.24.0, numpy's hstack did not accept a `dtype`
+            # parameter directly
+            if np_ver[0] <= 1 and np_ver[1] < 24:
+                colors = np.hstack(
+                    (tex.data, np.ones((tex.data.shape[0], 1)))
+                ).astype(tex.data.dtype)
+            else:
+                colors = np.hstack(
+                    (tex.data, np.ones((tex.data.shape[0], 1))), dtype=tex.data.dtype
+                )
             tex = gfx.Texture(colors, dim=1)
         # Otherwise make a copy to avoid modifying the original data
         else:
@@ -717,7 +734,7 @@ def text2gfx(
     position=(0, 0, 0),
     color="w",
     font_size=1,
-    anchor="topright",
+    anchor="top-right",
     screen_space=False,
     markdown=False,
 ):
@@ -734,9 +751,10 @@ def text2gfx(
     font_size :     int, optional
                     Font size.
     anchor :        str, optional
-                    Anchor point of the text. Can be one of "topleft", "topright",
-                    "bottomleft", "bottomright", "center", "topmiddle", "bottommiddle", "middleleft",
-                    "middleright".
+                    Anchor point of the text. Combination of vertical and
+                    horizontal alignment (e.g. "top-center"):
+                     - vertical: "top", "bottom", "middle", "baseline"
+                     - horizontal: "left", "right", "center"
     screen_space :  bool, optional
                     Whether to use screen space coordinates.
     markdown :      bool, optional
@@ -763,8 +781,8 @@ def text2gfx(
         defaults["text"] = text
 
     text = gfx.Text(
-        gfx.TextGeometry(**defaults),
-        gfx.TextMaterial(color=color),
+        **defaults,
+        material=gfx.TextMaterial(color=color),
     )
     text.local.position = position
     return text

@@ -17,11 +17,21 @@ except ImportError:
 # - make legend tabbed (QTabWidget)
 
 
+def set_viewer_stale(func):
+    """Decorator to set the viewer stale after a function call."""
+
+    def wrapper(self, *args, **kwargs):
+        self.viewer._render_stale = True
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
 class Controls(QtWidgets.QWidget):
     def __init__(self, viewer, width=300, height=400):
         super().__init__()
         self.viewer = viewer
-        self.setWindowTitle("Legend")
+        self.setWindowTitle("Controls")
         self.resize(width, height)
 
         self.tab_layout = QtWidgets.QVBoxLayout()
@@ -132,7 +142,7 @@ class Controls(QtWidgets.QWidget):
         self.on_dclick_dropdown.currentIndexChanged.connect(
             lambda x: setattr(
                 self.viewer,
-                "on_dclick",
+                "on_double_click",
                 self.on_dclick_dropdown.currentText().lower()
                 if self.on_dclick_dropdown.currentText() != "Nothing"
                 else None,
@@ -171,7 +181,7 @@ class Controls(QtWidgets.QWidget):
         self.fps_checkbox.toggled.connect(
             lambda x: setattr(
                 self.viewer,
-                "_show_fps",
+                "show_fps",
                 self.fps_checkbox.isChecked(),
             )
         )
@@ -201,6 +211,42 @@ class Controls(QtWidgets.QWidget):
             step=0.01,
             parent_layout=self.tab2_layout,
         )
+
+        # Horizontal divider
+        self.tab2_layout.addWidget(QHLine())
+
+        # Add dropdown to determine render mode
+        self.render_mode_label = QtWidgets.QLabel("Render trigger:")
+        self.tab2_layout.addWidget(self.render_mode_label)
+        self.render_mode_dropdown = QtWidgets.QComboBox()
+        self.render_mode_dropdown.setToolTip(
+            "Set trigger for re-rendering the scene. See documentation for details."
+        )
+        self.render_mode_dropdown.addItems(["Continuous", "Reactive", "Active Window"])
+        self.render_mode_dropdown.setItemData(
+            0, "Continuously render the scene.", QtCore.Qt.ToolTipRole
+        )
+        self.render_mode_dropdown.setItemData(
+            1,
+            "Render only when the scene changes.",
+            QtCore.Qt.ToolTipRole,
+        )
+        self.render_mode_dropdown.setItemData(
+            2, "Render only when the window is active.", QtCore.Qt.ToolTipRole
+        )
+        render_trigger_vals = ["continuous", "reactive", "active_window"]
+        self.render_mode_dropdown.currentIndexChanged.connect(
+            lambda x: setattr(
+                self.viewer,
+                "render_trigger",
+                render_trigger_vals[self.render_mode_dropdown.currentIndex()],
+            )
+        )
+        # Set default item to whatever the currently set render trigger is
+        self.render_mode_dropdown.setCurrentIndex(
+            render_trigger_vals.index(self.viewer.render_trigger)
+        )
+        self.tab2_layout.addWidget(self.render_mode_dropdown)
 
         # This would make it so the legend does not stretch when
         # we resize the window vertically
@@ -354,7 +400,7 @@ class Controls(QtWidgets.QWidget):
         sender = self.sender()
         push_button = self.findChild(QtWidgets.QPushButton, sender.objectName())
         # print(f'click: {push_button.objectName()}')
-        self.active_objects = push_button.objectName()
+        self.active_objects = push_button._id
         self.color_picker.show()
 
     def volume_button_clicked(self):
@@ -365,6 +411,7 @@ class Controls(QtWidgets.QWidget):
         self.active_volume = push_button.objectName()
         self.volume_controls.show()
 
+    @set_viewer_stale
     def set_color(self, color):
         """Color current active object(s). This is the callback for the color picker."""
         if self.active_objects is None:
@@ -408,26 +455,31 @@ class Controls(QtWidgets.QWidget):
         self.active_objects = "selected"
         self.color_picker.show()
 
+    @set_viewer_stale
     def hide_all(self):
         """Hide all objects."""
         self.viewer.hide_objects(self.viewer.objects)
 
+    @set_viewer_stale
     def hide_selected(self):
         """Hide selected objects."""
         sel = self.get_selected()
         if sel:
             self.viewer.hide_objects(self.get_selected())
 
+    @set_viewer_stale
     def show_all(self):
         """Show all objects."""
         self.viewer.unhide_objects(None)
 
+    @set_viewer_stale
     def show_selected(self):
         """Show selected objects."""
         sel = self.get_selected()
         if sel:
             self.viewer.unhide_objects(self.get_selected())
 
+    @set_viewer_stale
     def invert_visibility(self):
         """Invert visibility of all objects."""
         vis = self.viewer.visible
@@ -435,10 +487,12 @@ class Controls(QtWidgets.QWidget):
         self.viewer.hide_objects(vis)
         self.viewer.unhide_objects(invis)
 
+    @set_viewer_stale
     def delete_all(self):
         """Delete all objects."""
         self.viewer.remove_objects(self.viewer.objects)
 
+    @set_viewer_stale
     def delete_selected(self):
         """Delete selected objects."""
         sel = self.get_selected()
@@ -458,6 +512,7 @@ class Controls(QtWidgets.QWidget):
         color_btn.setMaximumWidth(20)
         color_btn.setMaximumHeight(20)
         color_btn.setObjectName(str(name))
+        color_btn._id = name  # this helps to identify the associated object
 
         # Set tooltip
         color_btn.setToolTip("Click to change color")

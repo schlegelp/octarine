@@ -131,7 +131,7 @@ In those scenarios you will have to additionally start the event loop:
 ```python
 import octarine as oc
 
-# Initialize the viewer but don't show yet
+# Initialize the viewer but don't show yet as that would start blocking
 v = oc.Viewer(show=False)
 
 # Add random points as scatter
@@ -151,8 +151,7 @@ window/widget? No problem:
 ```python
 import octarine as oc
 
-# Open a fresh offscreen viewer
-# (this will not spawn a window)
+# Open a fresh offscreen viewer (this will not spawn a window)
 v = oc.Viewer(offscreen=True)
 
 # Add a mesh to viewer
@@ -167,3 +166,51 @@ v.screenshot('cube.png', alpha=True)
 ```
 
 ![cube screenshot](_static/cube_screenshot.png)
+
+
+!!! tip "Keeping track of your Viewer(s)"
+
+    What if you forget to assign your viewer to a variable?
+
+    ```python
+    >>> oc.Viewer()
+    ```
+
+    Easy! `Octarine` tracks all instantiated viewers for you:
+
+    ```python
+    >>> oc.viewers
+    [<octarine.viewer.Viewer at 0x138a74310>]
+    >>> v = oc.viewers[0]
+    ```
+
+
+## What next?
+
+<div class="grid cards" markdown>
+
+-   :material-cube:{ .lg .middle } __Objects__
+
+    ---
+
+    Check out the guide on different object types.
+
+    [:octicons-arrow-right-24: Adding Objects](objects.md)
+
+-   :material-format-font:{ .lg .middle } __Animations__
+
+    ---
+
+    Add movement to the viewer.
+
+    [:octicons-arrow-right-24: Animations](animations.md)
+
+-   :material-camera-control:{ .lg .middle } __Control__
+
+    ---
+
+    Learn how to control the viewer, adjust colors, etc.
+
+    [:octicons-arrow-right-24: Controls](controls.md)
+
+</div>

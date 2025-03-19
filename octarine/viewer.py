@@ -1,4 +1,5 @@
 import png
+import sys
 import time
 import cmap
 import uuid
@@ -8,6 +9,7 @@ import warnings
 
 import numpy as np
 import pygfx as gfx
+import trimesh as tm
 
 from functools import wraps, lru_cache, partial
 from collections import OrderedDict
@@ -46,24 +48,33 @@ def update_viewer(legend=True, bounds=True):
 
         @wraps(func)
         def inner(*args, **kwargs):
+            # Run function first
             func(*args, **kwargs)
-
-            # Always clear the cached objects dictionary
-            args[0]._objects.cache_clear()
-
-            if legend:
-                if getattr(args[0], "controls", None):
-                    args[0].controls.update_legend()
-                if getattr(args[0], "widget", None):
-                    if args[0].widget.toolbar:
-                        args[0].widget.toolbar.update_legend()
-            if bounds:
-                if getattr(args[0], "show_bounds", False):
-                    args[0].update_bounds()
+            update_helper(viewer=args[0], legend=legend, bounds=bounds)
 
         return inner
 
     return outer
+
+
+def update_helper(viewer, legend=True, bounds=True):
+    """Helper function to update legend and other properties."""
+    # Always clear the cached objects dictionary
+    viewer._objects.cache_clear()
+
+    if legend:
+        if getattr(viewer, "controls", None):
+            viewer.controls.update_legend()
+        if getattr(viewer, "widget", None):
+            if viewer.widget.toolbar:
+                viewer.widget.toolbar.update_legend()
+    if bounds:
+        if getattr(viewer, "show_bounds", False):
+            viewer.update_bounds()
+
+    # Any time we update the viewer, we should set it to stale
+    viewer._render_stale = True
+    viewer.canvas.request_draw()
 
 
 class Viewer:
@@ -71,25 +82,30 @@ class Viewer:
 
     Parameters
     ----------
-    offscreen : bool, optional
+    offscreen : bool
                 If True, will use an offscreen Canvas. Useful if you only
                 want a screenshot.
-    title :     str, optional
+    title :     str
                 Title of the viewer window.
-    max_fps :   int, optional
+    max_fps :   int
                 Maximum frames per second to render.
     size :      tuple, optional
                 Size of the viewer window.
-    camera :    "ortho" | "perspective", optional
+    camera :    "ortho" | "perspective"
                 Type of camera to use. Defaults to "ortho". Note you can always
                 change the camera type by adjust the `Viewer.camera.fov` attribute
                 (0 = ortho, >0 = perspective).
     control :   "trackball" | "panzoom" | "fly" | "orbit"
                 Controller type to use. Defaults to "trackball".
-    show :      bool
-                Whether to immediately show the viewer. A few notes:
-                 1. When running in a non-interactive script or REPL, you have to also start
-                    the event loop manually. See the `Viewer.show()` method for more information.
+    show :      "auto" (default) | bool
+                Whether to immediately show the viewer. When set to "auto" (default),
+                will immmediately show the viewer if:
+                 - we are in a Jupyter environment
+                 - we are in an iPython session and we can hook into an iPython event loop
+                If neither of the above applies or `show=False`, you will have to manually run
+                `Viewer.show()`. This gives you the chance to add objects to the viewer
+                before it is shown and the blocking event loop is started.
+                The `show` parameter is ignored if `offscreen` is True.
     **kwargs
                 Keyword arguments are passed through to ``WgpuCanvas``.
 
@@ -97,6 +113,7 @@ class Viewer:
 
     # Palette used for assigning colors to objects
     palette = "seaborn:tab10"
+    highlight_color = "yellow"
 
     def __init__(
         self,
@@ -175,14 +192,14 @@ class Viewer:
 
         # A strong point light form front/top/left
         self.scene.add(gfx.PointLight(intensity=4))
-        self.scene.children[-1].shadow.bias = 0.0000005 # this helps with shadow acne
+        self.scene.children[-1].shadow.bias = 0.0000005  # this helps with shadow acne
         self.scene.children[-1].local.x = -1000000  # move to the left
         self.scene.children[-1].local.y = -1000000  # move up
         self.scene.children[-1].local.z = -1000000  # move light forward
 
         # A weaker point light from the back
         self.scene.add(gfx.PointLight(intensity=1))
-        self.scene.children[-1].shadow.bias = 0.0000005 # this helps with shadow acne
+        self.scene.children[-1].shadow.bias = 0.0000005  # this helps with shadow acne
         self.scene.children[-1].local.x = 1000000  # move to the left
         self.scene.children[-1].local.y = 1000000  # move up
         self.scene.children[-1].local.z = 1000000  # move light forward
@@ -215,15 +232,25 @@ class Viewer:
         self.overlay_camera = gfx.NDCCamera()
         self.overlay_scene = gfx.Scene()
 
+        # Setup transform gizmo
+        self.transform_gizmo = None
+
         # Stats
         self.stats = gfx.Stats(self.renderer)
         self._show_fps = False
 
         # Setup key events
         self._key_events = {}
-        self._key_events["1"] = lambda: self.set_view("XY")
-        self._key_events["2"] = lambda: self.set_view("XZ")
-        self._key_events["3"] = lambda: self.set_view("YZ")
+        self._key_events["1"] = lambda: self.set_view("XY")  # frontal view
+        self._key_events["2"] = lambda: self.set_view("XZ")  # lateral view
+        self._key_events["3"] = lambda: self.set_view("YZ")  # top view
+        self._key_events[("1", ("Shift",))] = lambda: self.set_view("-XY")  # back view
+        self._key_events[("2", ("Shift",))] = lambda: self.set_view(
+            "-XZ"
+        )  # other lateral view
+        self._key_events[("3", ("Shift",))] = lambda: self.set_view(
+            "-YZ"
+        )  # bottom view
         self._key_events["f"] = lambda: self._toggle_fps()
         self._key_events["c"] = lambda: self._toggle_controls()
 
@@ -245,10 +272,12 @@ class Viewer:
         self._shadows = False
         self._animations = {}
         self._animations_flagged_for_removal = []
+        self._animations_frame_counter = 0
         self._on_double_click = None
         self._on_hover = None
         self._objects_pickable = False
         self._selected = []
+        self._render_trigger = "continuous"
 
         viewers.append(self)
 
@@ -258,12 +287,24 @@ class Viewer:
 
     def _animate(self):
         """Run the rendering loop."""
+        rm = self.render_trigger
+
         # First run the user animations
-        # Note: we're iterating over the list because the user might add / remove
+        self._animations_frame_counter += 1
+        if self._animations_frame_counter == sys.maxsize:  # reset to avoid overflow
+            self._animations_frame_counter = 0
+        # N.B. we're iterating over the list because the user might add / remove
         # animations during the loop
-        for i, (func, on_error) in enumerate(list(self._animations.items())):
+        for i, (func, (on_error, run_every, req_render)) in enumerate(
+            list(self._animations.items())
+        ):
+            # Skip if we're not supposed to run this frame
+            if run_every and (self._animations_frame_counter % run_every) != 0:
+                continue
             try:
                 func()
+                if req_render:
+                    self._render_stale = True
             except BaseException as e:
                 if on_error == "raise":
                     raise e
@@ -279,17 +320,38 @@ class Viewer:
             self._animations.pop(f)
         self._animations_flagged_for_removal = []
 
+        # Now check if we need to render the scene
+        if rm == "active_window":
+            # Note to self: we need to explore how to do this with different backends / Window managers
+            # Not sure if this will work with e.g. Jupyter (does it know when the notebook is active?)
+            if hasattr(self.canvas, "isActiveWindow"):
+                if not self.canvas.isActiveWindow():
+                    self.canvas.request_draw()
+                    return
+        elif rm == "reactive":
+            # If the scene is not stale, we can skip rendering
+            if not getattr(self, "_render_stale", False):
+                self.canvas.request_draw()
+                return
+
         # Now render the scene
         if self._show_fps:
             with self.stats:
                 self.renderer.render(self.scene, self.camera, flush=False)
+                if self.transform_gizmo:
+                    self.renderer.render(self.transform_gizmo, self.camera, flush=False)
                 self.renderer.render(
                     self.overlay_scene, self.overlay_camera, flush=False
                 )
             self.stats.render()
         else:
             self.renderer.render(self.scene, self.camera, flush=False)
+            if self.transform_gizmo:
+                self.renderer.render(self.transform_gizmo, self.camera, flush=False)
             self.renderer.render(self.overlay_scene, self.overlay_camera)
+
+        # Set stale to False
+        self._render_stale = False
 
         self.canvas.request_draw()
 
@@ -337,7 +399,58 @@ class Viewer:
 
     @blend_mode.setter
     def blend_mode(self, mode):
+        if mode == "additive" and self.transform_gizmo is not None:
+            logger.warning(
+                "Setting blend mode to 'additive' may break interaction with the transform gizmo."
+            )
         self.renderer.blend_mode = mode
+
+    @property
+    def render_trigger(self):
+        """Determines when the scene is (re)rendered.
+
+        By default, we leave it to the renderer to decide when to render the scene.
+        You can adjust that behaviour by setting render mode to:
+         - "continuous" (default): leave it to the renderer to decide when to render the scene
+         - "reactive": rendering is only triggered when the scene changes
+         - "active_window": rendering is only done when the window is active; this currently
+           only works with the PySide backend
+
+        """
+        return self._render_trigger
+
+    @render_trigger.setter
+    def render_trigger(self, mode):
+        valid = ("continuous", "active_window", "reactive")
+        if mode not in valid:
+            raise ValueError(f"Unknown render mode: {mode}. Must be one of {valid}.")
+
+        # No need to do anything if the value is the same
+        if mode == getattr(self, "_render_trigger", None):
+            return
+
+        # Add/remove event handlers as necessary
+        if mode == "reactive":
+            self._set_stale_func = lambda event: setattr(self, "_render_stale", True)
+            self.renderer.add_event_handler(
+                self._set_stale_func,
+                "pointer_down",
+                "pointer_move",
+                "pointer_up",
+                "wheel",
+                # "before_render",
+            )
+        elif self._render_trigger == "reactive":
+            self.renderer.remove_event_handler(
+                self._set_stale_func,
+                "pointer_down",
+                "pointer_move",
+                "pointer_up",
+                "wheel",
+                # "before_render",
+            )
+
+        self._render_trigger = mode
 
     @property
     def controls(self):
@@ -369,42 +482,26 @@ class Viewer:
 
     @selected.setter
     def selected(self, val):
-        val = utils.make_iterable(val)
+        val = utils.make_iterable(val) if val is not None else []
 
         objects = self.objects  # grab once to speed things up
         logger.debug(f"{len(val)} objects selected ({len(self.selected)} previously)")
-        # First un-highlight neurons no more selected
+        # First un-highlight neurons which aren't selected anymore
         for s in [s for s in self._selected if s not in val]:
             for v in objects[s]:
-                if isinstance(v, gfx.Mesh):
-                    v.color = v._stored_color
-                else:
-                    v.set_data(color=v._stored_color)
+                v.material.color = v._stored_color
 
         # Highlight new additions
         for s in val:
             if s not in self._selected:
                 for v in objects[s]:
                     # Keep track of old colour
-                    v.unfreeze()
-                    v._stored_color = v.color
-                    v.freeze()
-                    if isinstance(v, gfx.Mesh):
-                        v.color = self.highlight_color
-                    else:
-                        v.set_data(color=self.highlight_color)
-
+                    v._stored_color = v.material.color
+                    v.material.color = gfx.Color(self.highlight_color)
         self._selected = list(val)
 
-        # Update legend
-        if self.show_legend:
-            self.update_legend()
-
-        # Update data text
-        # Currently only the development version of vispy supports escape
-        # character (e.g. \n)
-        t = "| ".join([f"{objects[s][0]._name} - #{s}" for s in self._selected])
-        self._data_text.text = t
+        # Update legend and set render stale (if applicable)
+        update_helper(self, legend=True, bounds=False)
 
     @property
     def size(self):
@@ -485,6 +582,36 @@ class Viewer:
         self.canvas._subwidget._max_fps = v
 
     @property
+    def moveable_object(self):
+        """Get/Set the object that can be moved via the transform gizmo."""
+        if self.transform_gizmo is None:
+            return None
+        return self.transform_gizmo._object_to_control
+
+    @moveable_object.setter
+    def moveable_object(self, obj):
+        if obj is None:
+            if self.transform_gizmo:
+                self.transform_gizmo._object_to_control = None
+            return
+
+        if isinstance(obj, str):
+            if obj not in self.objects:
+                raise ValueError(f"Object '{obj}' not found.")
+            elif len(self.objects[obj]) > 1:
+                raise ValueError(f"Object '{obj}' consists of multiple WorldObjects.")
+            obj = self.objects[obj][0]
+        elif not isinstance(obj, gfx.WorldObject):
+            raise TypeError(f"Expected pygfx object, got {type(obj)}")
+
+        if self.transform_gizmo is None:
+            # The transform gizmo is rendered independent of the scene (so it always stay on top)
+            self.transform_gizmo = gfx.TransformGizmo(obj)
+            self.transform_gizmo.add_default_event_handlers(self.renderer, self.camera)
+        else:
+            self.transform_gizmo._object_to_control = obj
+
+    @property
     def _is_jupyter(self):
         """Check if Viewer is using Jupyter canvas."""
         return "JupyterWgpuCanvas" in str(type(self.canvas))
@@ -493,6 +620,14 @@ class Viewer:
     def _is_offscreen(self):
         """Check if Viewer is using offscreen canvas."""
         return isinstance(self.canvas, WgpuCanvasOffscreen)
+
+    @property
+    def _window_manager(self):
+        """Which window manager is being used."""
+        try:
+            return type(self.canvas).__module__.split(".")[-1]
+        except BaseException:
+            return "na"
 
     @property
     def _object_ids(self):
@@ -672,7 +807,7 @@ class Viewer:
 
         self._on_double_click = v
 
-    def add_animation(self, x, on_error="remove"):
+    def add_animation(self, x, on_error="remove", run_every=None, req_render=True):
         """Add animation function to the Viewer.
 
         Parameters
@@ -684,6 +819,13 @@ class Viewer:
                     the function will be removed from the animation loop. If
                     "ignore", the error will be ignored and the function will
                     continue to be called.
+        run_every : int, optional
+                    Use to run the function every n frames.
+        req_render : bool, optional
+                    Whether this animation requires a re-render of the scene.
+                    This is mainly a flag to help the viewer to decide
+                    whether/when to trigger a render. See also the `render_trigger`
+                    property.
 
         """
         if not callable(x):
@@ -691,7 +833,7 @@ class Viewer:
 
         assert on_error in ["remove", "ignore", "raise"]
 
-        self._animations[x] = on_error
+        self._animations[x] = (on_error, run_every, req_render)
 
     def remove_animation(self, x):
         """Remove animation function from the Viewer.
@@ -747,13 +889,13 @@ class Viewer:
         # Start the animation loop
         self.canvas.request_draw(self._animate)
 
-        # If this is an offscreen canvas, we don't need to do anything
+        # If this is an offscreen canvas, we don't need to do anything else
         if isinstance(self.canvas, WgpuCanvasOffscreen):
             return
 
         # In terminal we can just show the window
         if not self._is_jupyter:
-            # Not all backends have a show method
+            # Not all backends have a show method (e.g. GLFW does not)
             if hasattr(self.canvas, "show"):
                 self.canvas.show()
 
@@ -790,7 +932,6 @@ class Viewer:
 
             # This will display the viewer right here and there
             display(self.widget)
-
 
     def show_message(
         self, message, position="top-right", font_size=20, color=None, duration=None
@@ -836,9 +977,9 @@ class Viewer:
         if self._message_text not in self.overlay_scene.children:
             self.overlay_scene.add(self._message_text)
 
-        self._message_text.geometry.set_text(message)
-        self._message_text.geometry.font_size = font_size
-        self._message_text.geometry.anchor = position
+        self._message_text.set_text(message)
+        self._message_text.font_size = font_size
+        self._message_text.anchor = position
         if color is not None:
             self._message_text.material.color = cmap.Color(color).rgba
         self._message_text.material.opacity = 1
@@ -909,6 +1050,9 @@ class Viewer:
         # Remove everything but the lights and backgrounds
         self.scene.remove(*self.visuals)
 
+        # Rset the transform gizmo
+        self.transform_gizmo = None
+
     @update_viewer(legend=True, bounds=True)
     def remove_objects(self, to_remove):
         """Remove given neurons/visuals from canvas."""
@@ -931,6 +1075,18 @@ class Viewer:
     def show_bounds(self):
         """Set to ``True`` to show bounding box."""
         return self._show_bounds
+
+    @property
+    def show_fps(self):
+        """Show frames per second."""
+        return self._show_fps
+
+    @show_fps.setter
+    def show_fps(self, v):
+        if not isinstance(v, bool):
+            raise TypeError(f"Expected bool, got {type(v)}")
+        self._show_fps = v
+        self._render_stale = True
 
     def toggle_bounds(self):
         """Toggle bounding box."""
@@ -1103,6 +1259,11 @@ class Viewer:
                     If True, re-center camera to all objects on canvas.
 
         """
+        if isinstance(mesh, tm.Scene):
+            for _, ob in mesh.geometry.items():
+                self.add_mesh(ob, name=name, color=color, alpha=alpha, center=False)
+            return
+
         if not utils.is_mesh_like(mesh):
             raise TypeError(f"Expected mesh-like object, got {type(mesh)}")
         if color is None:
@@ -1652,7 +1813,7 @@ class Viewer:
 
     def _toggle_fps(self):
         """Switch FPS measurement on and off."""
-        self._show_fps = not self._show_fps
+        self.show_fps = not self.show_fps
 
     def screenshot(
         self, filename="screenshot.png", size=None, pixel_ratio=None, alpha=True
@@ -1737,18 +1898,30 @@ class Viewer:
         Parameters
         ----------
         view :      XY | XZ | YZ | dict
-                    View to set. If a dictionary, should describe the
-                    state of the camera. Typically, this is obtained
-                    by calling `viewer.get_view()`.
+                    View to set. Can be inverted to e.g. "-XY" to show view from back.
+                    If a dictionary, should describe the state of the camera. Typically,
+                    this is obtained by calling `viewer.get_view()`.
 
         """
         if view == "XY":
             self.camera.show_object(
                 self.scene, view_dir=(0.0, 0.0, 1.0), up=(0.0, -1.0, 0.0)
             )
+        elif view == "-XY":
+            self.camera.show_object(
+                self.scene, view_dir=(0.0, 0.0, -1.0), up=(0.0, -1.0, 0.0)
+            )
         elif view == "XZ":
             self.camera.show_object(
                 self.scene, scale=1, view_dir=(0.0, 1.0, 0.0), up=(0.0, 0.0, 1.0)
+            )
+        elif view == "-XZ":
+            self.camera.show_object(
+                self.scene, scale=1, view_dir=(0.0, -1.0, 0.0), up=(0.0, 0.0, 1.0)
+            )
+        elif view == "YZ":
+            self.camera.show_object(
+                self.scene, scale=1, view_dir=(1.0, 0.0, 0.0), up=(0.0, -1.0, 0.0)
             )
         elif view == "YZ":
             self.camera.show_object(
@@ -1790,10 +1963,10 @@ class Viewer:
             self._key_events[key] = func
         else:
             # We need to make `modifiers` is hashable
-            if isinstance(key, str):
-                key = (key,)
-            elif isinstance(key, (set, list)):
-                key = tuple(key)
+            if isinstance(modifiers, str):
+                modifiers = (modifiers,)
+            elif isinstance(modifiers, (set, list)):
+                modifiers = tuple(modifiers)
 
             if not isinstance(modifiers, tuple):
                 raise TypeError(
@@ -1834,3 +2007,26 @@ def handle_object_event(event, viewer, actions):
                 viewer.selected = np.append(viewer.selected, new_hover_id)
 
         logger.debug(f"Object: {new_hover_id}, Action: {actions}")
+
+
+def start_ipython_event_loop(gui):
+    ip = get_ipython()  # noqa
+    if not ip.active_eventloop:
+        try:
+            ip.enable_gui(gui)
+            logger.debug(
+                "Looks like you're running in an IPython environment but haven't "
+                "started a GUI event loop. We've started one for you using the "
+                f"{gui} backend."
+            )
+        except ModuleNotFoundError:
+            logger.warning(
+                "Looks like you're running an IPython environment but haven't "
+                "started a GUI event loop. We tried to start one for you using the "
+                f"{gui} backend (via %gui {gui}) but that failed. If you want a"
+                "non-blocking Octarine viewer, you may have to start the event loop "
+                "manually (see https://ipython.readthedocs.io/en/stable/config/eventloops.html)."
+                "Otherwise just call `Viewer.show()` to start a blocking viewer."
+            )
+            return False
+    return True

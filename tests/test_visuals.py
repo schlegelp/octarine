@@ -1,3 +1,4 @@
+import time
 import pytest
 import octarine as oc
 
@@ -48,4 +49,13 @@ def test_adding_generic_objects(mesh, line_single, line_stack, points, points_co
 def test_adding_mesh(mesh, color):
     v = oc.Viewer(offscreen=True)
     v.add_mesh(mesh, color=color)
+    v.close()
+
+
+def test_showing_messsage():
+    v = oc.Viewer(offscreen=True)
+    v.show_message("test", color="red")
+    v.show_message(None, color="red")
+    v.show_message("test", color="red", duration=1)
+    time.sleep(2)
     v.close()
