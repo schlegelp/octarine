@@ -31,7 +31,7 @@ class Controls(QtWidgets.QWidget):
     def __init__(self, viewer, width=300, height=400):
         super().__init__()
         self.viewer = viewer
-        self.setWindowTitle("Legend")
+        self.setWindowTitle("Controls")
         self.resize(width, height)
 
         self.tab_layout = QtWidgets.QVBoxLayout()
@@ -142,7 +142,7 @@ class Controls(QtWidgets.QWidget):
         self.on_dclick_dropdown.currentIndexChanged.connect(
             lambda x: setattr(
                 self.viewer,
-                "on_dclick",
+                "on_double_click",
                 self.on_dclick_dropdown.currentText().lower()
                 if self.on_dclick_dropdown.currentText() != "Nothing"
                 else None,
