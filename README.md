@@ -31,9 +31,6 @@ This will install the minimal requirements plus `PySide6` and `jupyter_rfb` as w
 and Jupyter, respectively. Check out the [**Install Instructions**](https://schlegelp.github.io/octarine/install/)
 for details.
 
-## Status :ballot_box_with_check:
-All basic components have been implemented but this is a very young project, which means that the API can still change with each version. We'd love for you to take it for a spin and let us know what you think though!
-
 ## Quickstart :fire:
 
 ```python
