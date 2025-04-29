@@ -132,7 +132,7 @@ class Viewer:
             from wgpu.gui.auto import WgpuCanvas
 
         # Check if we're running in an IPython environment
-        if utils._type_of_script() == "ipython":
+        if utils._type_of_script() == "ipython" and not offscreen:
             ip = get_ipython()  # noqa: F821
             if not ip.active_eventloop:
                 if AUTOSTART_EVENT_LOOP:
