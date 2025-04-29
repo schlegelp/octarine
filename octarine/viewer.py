@@ -143,7 +143,7 @@ class Viewer:
                             "started a GUI event loop. We've started one for you using the "
                             "Qt6 backend."
                         )
-                    except ModuleNotFoundError:
+                    except (ModuleNotFoundError, ImportError):
                         raise ValueError(
                             "Looks like you're running in an IPython environment but haven't "
                             "started a GUI event loop. We tried to start one for you using the "
