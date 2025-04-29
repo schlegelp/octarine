@@ -2019,7 +2019,7 @@ def start_ipython_event_loop(gui):
                 "started a GUI event loop. We've started one for you using the "
                 f"{gui} backend."
             )
-        except ModuleNotFoundError:
+        except (ModuleNotFoundError, ImportError):
             logger.warning(
                 "Looks like you're running an IPython environment but haven't "
                 "started a GUI event loop. We tried to start one for you using the "
