@@ -395,6 +395,12 @@ class Controls(QtWidgets.QWidget):
             else:
                 line_checkbox.setChecked(False)
 
+            line_text = item_widget.findChild(QtWidgets.QLabel)
+            if self.viewer.selected and item._id in self.viewer.selected:
+                line_text.setStyleSheet("color: yellow")
+            else:
+                line_text.setStyleSheet("color: white")
+
     def color_button_clicked(self):
         """Set the active object to be the buttons target."""
         sender = self.sender()

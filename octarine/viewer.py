@@ -1822,7 +1822,7 @@ class Viewer:
 
         Parameters
         ----------
-        filename :      str, optional
+        filename :      str | pathlib.Path, optional
                         Filename to save to. If ``None``, will return image array.
                         Note that this will always save a PNG file, no matter
                         the extension.
@@ -1839,11 +1839,12 @@ class Viewer:
         """
         im = self._screenshot(alpha=alpha, size=size, pixel_ratio=pixel_ratio)
         if filename:
-            if not filename.endswith(".png"):
-                filename += ".png"
+            filename = Path(filename)
+            if filename.suffix != ".png":
+                filename = filename.parent / f"{filename.name}.png"
             png.from_array(
                 im.reshape(im.shape[0], im.shape[1] * im.shape[2]), mode="RGBA"
-            ).save(filename)
+            ).save(str(filename.resolve()))
         else:
             return im
 
