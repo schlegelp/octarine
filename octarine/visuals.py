@@ -317,26 +317,32 @@ def volume2gfx(
 
 
 def to_colormap(x, hide_zero):
-    """Convert `x` to a gfx.Texture that can be used for Volumes."""
-    # If this is a texture
+    """Convert `x` to a gfx.TextureMap that can be used for Volumes."""
+    # If x is None, use the default colormap
     if x is None:
-        tex = gfx.cm.cividis
+        tm = gfx.cm.cividis
+    # If this is a texture
     elif isinstance(x, gfx.Texture):
         if x.dim != 1:
             raise ValueError("Expected 1D texture.")
-        tex = x
+        tm = gfx.TextureMap(x)
+    # If this is a texturemap
+    elif isinstance(x, gfx.TextureMap):
+        if x.texure.dim != 1:
+            raise ValueError("Expected 1D texture.")
+        tm = x
     elif isinstance(x, str) and hasattr(gfx.cm, x):
-        tex = getattr(gfx.cm, x)
+        tm = getattr(gfx.cm, x)
     elif isinstance(x, gfx.Color):
         # cmap needs a list of colors (even if len == 1)
-        tex = cmap.Colormap([x.rgba]).to_pygfx()
+        tm = cmap.Colormap([x.rgba]).to_pygfx()
     elif isinstance(x, cmap.Colormap):
-        tex = x.to_pygfx()
+        tm = x.to_pygfx()
     elif isinstance(x, (dict, list)):
         # cmap can interpret dict and list of colors
-        tex = cmap.Colormap(x).to_pygfx()
+        tm = cmap.Colormap(x).to_pygfx()
     elif isinstance(x, str):
-        tex = cmap.Colormap(x).to_pygfx()
+        tm = cmap.Colormap(x).to_pygfx()
     else:
         # Last ditch effort: see if cmap can handle it
         c = cmap.Colormap([x])
@@ -347,31 +353,32 @@ def to_colormap(x, hide_zero):
         if len(c.color_stops) == 2 and c.color_stops[0].color == "none":
             c = cmap.Colormap(["k", x])
 
-        tex = c.to_pygfx()
+        tm = c.to_pygfx()
 
     if hide_zero:
         # Add an alpha column if needed
-        if tex.data.shape[1] == 3:
-            np_ver = [int(i) for i in  np.__version__.split('.')]
+        if tm.texture.data.shape[1] == 3:
+            np_ver = [int(i) for i in np.__version__.split(".")]
             # Prior to version 1.24.0, numpy's hstack did not accept a `dtype`
             # parameter directly
             if np_ver[0] <= 1 and np_ver[1] < 24:
                 colors = np.hstack(
-                    (tex.data, np.ones((tex.data.shape[0], 1)))
-                ).astype(tex.data.dtype)
+                    (tm.texture.data, np.ones((tm.texture.data.shape[0], 1)))
+                ).astype(tm.texture.data.dtype)
             else:
                 colors = np.hstack(
-                    (tex.data, np.ones((tex.data.shape[0], 1))), dtype=tex.data.dtype
+                    (tm.texture.data, np.ones((tm.texture.data.shape[0], 1))),
+                    dtype=tm.texture.data.dtype,
                 )
-            tex = gfx.Texture(colors, dim=1)
+            tm = gfx.TextureMap(gfx.Texture(colors, dim=1))
         # Otherwise make a copy to avoid modifying the original data
         else:
-            tex = gfx.Texture(tex.data.copy(), dim=1)
+            tm = gfx.TextureMap(gfx.Texture(tm.texture.data.copy(), dim=1))
 
         # Set alpha channel for first color to 0
-        tex.data[0, 3] = 0
+        tm.texture.data[0, 3] = 0
 
-    return tex
+    return tm
 
 
 def points2gfx(points, color, size=2, marker=None, size_space="screen"):
