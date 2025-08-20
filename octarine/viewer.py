@@ -205,8 +205,8 @@ class Viewer:
         self.scene.children[-1].local.z = 1000000  # move light forward
 
         # Set up a default background
-        self._background = gfx.BackgroundMaterial((0, 0, 0))
-        self.scene.add(gfx.Background(None, self._background))
+        self._background = gfx.Background(None, gfx.BackgroundMaterial((0, 0, 0)))
+        self.scene.add(self._background)
 
         # Add camera
         if camera == "ortho":
@@ -1809,7 +1809,7 @@ class Viewer:
                 RGB(A) color to use for the background.
 
         """
-        self._background.set_colors(gfx.Color(c).rgba)
+        self._background.material.set_colors(gfx.Color(c).rgba)
 
     def _toggle_fps(self):
         """Switch FPS measurement on and off."""
@@ -1851,15 +1851,8 @@ class Viewer:
     def _screenshot(self, alpha=True, size=None, pixel_ratio=None):
         """Return image array for screenshot."""
         if alpha:
-            oc = [
-                self._background.color_bottom_left,
-                self._background.color_bottom_right,
-                self._background.color_top_left,
-                self._background.color_top_right,
-            ]
-            self._background.set_colors((0, 0, 0, 0))
-            op = self._background.opacity
-            self._background.opacity = 0
+            vis = self._background.visible
+            self._background.visible = False
         if size:
             os = self.size
             self.size = size
@@ -1884,8 +1877,7 @@ class Viewer:
             raise
         finally:
             if alpha:
-                self._background.set_colors(*oc)
-                self._background.opacity = op
+                self._background.visible = vis
             if size:
                 self.size = os
             if pixel_ratio:
