@@ -113,7 +113,7 @@ array([[0.38, 0.  , 0.  ],
 
 Note that the default blend mode for the renderer may cause objects
 behind or inside the volume to look funny. You can change the blend
-mode by setting e.g. `v.blend_mode='additive'`.
+mode by setting e.g. `v.set_alpha_mode('add')`.
 
 Alternatively, you can also add slices through the volume:
 

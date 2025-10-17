@@ -11,10 +11,11 @@ import numpy as np
 import pygfx as gfx
 import trimesh as tm
 
-from functools import wraps, lru_cache, partial
+from pathlib import Path
 from collections import OrderedDict
+from functools import wraps, lru_cache, partial
 
-from wgpu.gui.offscreen import WgpuCanvas as WgpuCanvasOffscreen
+from rendercanvas.offscreen import OffscreenRenderCanvas
 
 from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx
 from .conversion import get_converter
@@ -129,7 +130,7 @@ class Viewer:
         # We need to import WgpuCanvas before we (potentially) start the event loop
         # If we don't we get a segfault.
         if not offscreen:
-            from wgpu.gui.auto import WgpuCanvas
+            from rendercanvas.auto import RenderCanvas
 
         # Check if we're running in an IPython environment
         if utils._type_of_script() == "ipython" and not offscreen:
@@ -160,7 +161,9 @@ class Viewer:
         self._title = title
 
         # Update some defaults as necessary
-        defaults = {"title": title, "max_fps": max_fps, "size": size}
+        defaults = {"title": title, "max_fps": max_fps}
+        if size is not None:
+            defaults["size"] = size
         defaults.update(kwargs)
 
         # If we're running in headless mode (primarily for tests on CI) we will
@@ -170,9 +173,9 @@ class Viewer:
             return
 
         if not offscreen:
-            self.canvas = WgpuCanvas(**defaults)
+            self.canvas = RenderCanvas(**defaults)
         else:
-            self.canvas = WgpuCanvasOffscreen(**defaults)
+            self.canvas = OffscreenRenderCanvas(**defaults)
 
         # There is a bug in pygfx 0.1.18 that causes the renderer to crash
         # when using a Jupyter canvas without explicitly setting the pixel_ratio.
@@ -390,20 +393,14 @@ class Viewer:
 
     @property
     def blend_mode(self):
-        """Render blend mode.
+        """Deprecated! Render blend mode.
 
-        This is a simple shortcut, see `Viewer.renderer.blend_mode` for more information.
+        This property has been deprecated. Please use `Viewer.set_alpha_mode()` instead.
 
         """
-        return self.renderer.blend_mode
-
-    @blend_mode.setter
-    def blend_mode(self, mode):
-        if mode == "additive" and self.transform_gizmo is not None:
-            logger.warning(
-                "Setting blend mode to 'additive' may break interaction with the transform gizmo."
-            )
-        self.renderer.blend_mode = mode
+        raise DeprecationWarning(
+            "The 'blend_mode' property is deprecated. Please use 'Viewer.set_alpha_mode()' instead."
+        )
 
     @property
     def render_trigger(self):
@@ -619,7 +616,7 @@ class Viewer:
     @property
     def _is_offscreen(self):
         """Check if Viewer is using offscreen canvas."""
-        return isinstance(self.canvas, WgpuCanvasOffscreen)
+        return isinstance(self.canvas, OffscreenRenderCanvas)
 
     @property
     def _window_manager(self):
@@ -890,7 +887,7 @@ class Viewer:
         self.canvas.request_draw(self._animate)
 
         # If this is an offscreen canvas, we don't need to do anything else
-        if isinstance(self.canvas, WgpuCanvasOffscreen):
+        if isinstance(self.canvas, OffscreenRenderCanvas):
             return
 
         # In terminal we can just show the window
@@ -900,8 +897,9 @@ class Viewer:
                 self.canvas.show()
 
             if start_loop:
-                from wgpu.gui.auto import run
-                run()
+                from rendercanvas.auto import loop
+
+                loop.run()
             elif utils._type_of_script() in ("terminal", "script"):
                 logger.warning(
                     "Running in a (potentially) non-interactive terminal or script "
@@ -910,11 +908,11 @@ class Viewer:
                     "  >>> v = octarine.Viewer(show=False)\n"
                     "  >>> ...  # setup your viewer\n"
                     "  >>> v.show(start_loop=True)\n\n"
-                    "Alternatively, use WGPU's run() function:\n\n"
-                    "  >>> from wgpu.gui.auto import run\n"
+                    "Alternatively, use the loop.run() function:\n\n"
+                    "  >>> from rendercanvas.auto import loop\n"
                     "  >>> ...  # setup your viewer\n"
                     "  >>> v.show()\n"
-                    "  >>> run()\n\n"  # do not remove the \n\n here
+                    "  >>> loop.run()\n\n"  # do not remove the \n\n here
                 )
         else:
             # if not hasattr(self, 'widget'):
@@ -1734,16 +1732,50 @@ class Viewer:
             for v in objects[ob]:
                 v._pinned = False
 
+    @update_viewer(legend=False, bounds=False)
+    def set_alpha_mode(self, mode, objects=None):
+        """Defines how objects' colors are blended.
+
+        With version v0.13.0 pygfx replaced the single renderer.blend_mode property with
+        customizable per-material alpha modes. The Viewer.set_alpha_mode function provides
+        a high-level interface to these settings. If you need more fine-grained control,
+        see the material.alpha_mode property of individual objects.
+
+        Parameters
+        ----------
+        mode :      str
+                    The mode to set. Please see the pygfx documentation for details:
+                      >>> import pygfx
+                      >>> help(pygfx.Material.alpha_mode)
+        objects :   list, optional
+                    Objects to set the alpha mode for. If None, will set for all objects.
+
+        """
+        if objects is None:
+            objects = list(self.objects)
+
+        for n in objects:
+            for v in self.objects[n]:
+                if getattr(v, "_pinned", False):
+                    continue
+                if not hasattr(v, "material"):
+                    continue
+                v.material.alpha_mode = mode
+
     @update_viewer(legend=True, bounds=False)
-    def set_colors(self, c):
+    def set_colors(self, c, alpha_mode="auto"):
         """Set object color.
 
         Parameters
         ----------
-        c :      tuple | dict
-                 RGB color(s) to apply. Values must be 0-1. Accepted:
+        c :     tuple | dict
+                RGB color(s) to apply. Values must be 0-1. Accepted:
                    1. Tuple of single color. Applied to all visible objects.
                    2. Dictionary names/IDs to colors.
+        alpha_mode : str
+                If "auto" (default), will set the alpha mode to "add" if the
+                opacity is < 1, and "opaque" otherwise. Set `alpha_mode` to `None` to
+                skip this adjustment.
 
         """
         objects = self.objects  # grab once to speed things up
@@ -1768,6 +1800,22 @@ class Viewer:
                     else:
                         new_c = gfx.Color(cmap[n]).rgb
                     v.material.color = gfx.Color(new_c)
+
+                    # Determine if we consider this transparent
+                    if len(new_c) == 4 and new_c[3] < 1:
+                        is_transparent = True
+                    elif v.material.opacity < 1:
+                        is_transparent = True
+                    else:
+                        is_transparent = False
+
+                    if alpha_mode == "auto":
+                        if is_transparent:
+                            v.material.alpha_mode = "add"
+                        else:
+                            v.material.alpha_mode = "solid"
+                    elif alpha_mode:
+                        v.material.alpha_mode = alpha_mode
 
     def colorize(self, palette="seaborn:tab10", objects=None, randomize=True):
         """Colorize objects using a color palette.
@@ -1862,7 +1910,7 @@ class Viewer:
 
         # If this is an offscreen canvas, we need to manually trigger a draw first
         # Note: this has to happen _after_ adjust parameters!
-        if isinstance(self.canvas, WgpuCanvasOffscreen):
+        if isinstance(self.canvas, OffscreenRenderCanvas):
             self.canvas.draw()
         else:
             # This is a bit of a hack to make sure a new frame with the (potentially)

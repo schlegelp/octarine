@@ -36,7 +36,7 @@ def mesh2gfx(mesh, color, alpha=None):
     mat_color_kwargs, obj_color_kwargs = parse_mesh_color(mesh, color, alpha)
     # In theory we should be able to change pick_write on-the-fly since pygfx 0.3.0
     # But that doesn't seem to be the case.
-    mat_color_kwargs['pick_write'] = True
+    mat_color_kwargs["pick_write"] = True
 
     vis = gfx.Mesh(
         gfx.Geometry(
@@ -78,7 +78,7 @@ def geometry2gfx(geometry, color, alpha=None):
 
     # In theory we should be able to change pick_write on-the-fly since pygfx 0.3.0
     # But that doesn't seem to be the case.
-    mat_color_kwargs['pick_write'] = True
+    mat_color_kwargs["pick_write"] = True
 
     vis = gfx.Mesh(geometry, gfx.MeshPhongMaterial(**mat_color_kwargs))
 
@@ -93,6 +93,7 @@ def parse_mesh_color(mesh, color, alpha=None):
     """Parse color for mesh plotting."""
     mat_color_kwargs = dict()
     obj_color_kwargs = dict()
+    is_transparent = False
     if isinstance(color, np.ndarray) and color.ndim == 2:
         if alpha is not None:
             if color.shape[1] == 3:
@@ -100,6 +101,12 @@ def parse_mesh_color(mesh, color, alpha=None):
             elif color.shape[1] != 4:
                 raise ValueError("Expected colors to have 3 or 4 channels.")
             color[:, -1] = alpha
+
+            if alpha < 1:
+                is_transparent = True
+        elif color.shape[1] == 4:
+            if np.any(color[:, -1] < 1):
+                is_transparent = True
 
         # Make sure the color is what pygfx expects
         if color.dtype in (np.float64,):
@@ -120,7 +127,16 @@ def parse_mesh_color(mesh, color, alpha=None):
             color = gfx.Color(color).rgba
             color = (color[0], color[1], color[2], alpha)
 
+            if alpha < 1:
+                is_transparent = True
+        elif isinstance(color, (list, np.ndarray, tuple)) and (len(color) == 4):
+            is_transparent = color[3] < 1
+
         mat_color_kwargs["color"] = color
+
+    if is_transparent:
+        # The default blend mode is "auto" which will show transparency but is a bit ugly
+        mat_color_kwargs["alpha_mode"] = "add"
 
     return mat_color_kwargs, obj_color_kwargs
 
@@ -269,6 +285,7 @@ def volume2gfx(
                 clim=(cmin, cmax),
                 map=cmap,
                 interpolation=interpolation,
+                alpha_mode="add",
             ),
         )
         visuals.append(vis)
@@ -424,7 +441,7 @@ def points2gfx(points, color, size=2, marker=None, size_space="screen"):
     material_kwargs = {}
     # In theory we should be able to change pick_write on-the-fly since pygfx 0.3.0
     # But that doesn't seem to be the case.
-    material_kwargs['pick_write'] = True
+    material_kwargs["pick_write"] = True
 
     # Parse sizes
     if utils.is_iterable(size):
@@ -526,7 +543,7 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
     if dash_pattern is None:
         dash_pattern = ()  # pygfx expects an empty tuple for solid lines
     elif isinstance(dash_pattern, str):
-        if dash_pattern in ("solid", '-'):
+        if dash_pattern in ("solid", "-"):
             dash_pattern = ()
         elif dash_pattern in ("dashed", "--"):
             dash_pattern = (5, 2)
@@ -542,7 +559,7 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
 
     # In theory we should be able to change pick_write on-the-fly since pygfx 0.3.0
     # But that doesn't seem to be the case.
-    material_kwargs['pick_write'] = True
+    material_kwargs["pick_write"] = True
 
     # Parse color(s)
     if isinstance(color, np.ndarray) and color.ndim == 2:
@@ -608,7 +625,7 @@ def trimesh2gfx(mesh, color=None, alpha=None, use_material=True):
     )
     # trimesh needs scipy to compute normals
     if find_spec("scipy"):
-        kwargs['normals'] = np.ascontiguousarray(mesh.vertex_normals, dtype="f4")
+        kwargs["normals"] = np.ascontiguousarray(mesh.vertex_normals, dtype="f4")
 
     if mesh.visual.kind == "texture" and getattr(mesh.visual, "uv", None) is not None:
         # convert the uv coordinates from opengl to wgpu conventions.
@@ -659,7 +676,7 @@ def simple_material_from_trimesh(material):
     gfx_material = gfx.MeshPhongMaterial(
         color=material.ambient / 255,
         pick_write=True,  # we can't seem to change this on-the-fly
-        )
+    )
 
     gfx_material.shininess = material.glossiness
     gfx_material.specular = gfx.Color(*(material.specular / 255))
@@ -712,9 +729,9 @@ gfx.materials._compat.texture_from_pillow_image = texture_from_pillow_image
 
 def scene2gfx(scene):
     """Convert trimesh Scene to pygfx visuals."""
-    assert isinstance(
-        scene, tm.scene.scene.Scene
-    ), f"Expected trimesh scene, got {type(scene)}."
+    assert isinstance(scene, tm.scene.scene.Scene), (
+        f"Expected trimesh scene, got {type(scene)}."
+    )
 
     # Get all the geometry names
     gfx_geometries = {}
@@ -802,3 +819,75 @@ def visual_passthrough(x, *args, **kwargs):
             "Pygfx visuals are passed-through as is. Any additional arguments are ignored."
         )
     return x
+
+
+class CloudImage:
+    def __init__(self, volume, viewer, slice=None):
+        self.volume = volume
+        self.volume.bounded = False
+        self.volume.parallel = 10
+        self.viewer = viewer
+        self._slice = (
+            slice if slice is not None else volume.scales[volume.mip]["voxel_offset"][2]
+        )
+        self._mip = self.volume.mip
+
+        self.tex = gfx.Texture(np.zeros(self.shape, dtype=self.volume.dtype), dim=2)
+        self.image = gfx.Image(
+            gfx.Geometry(grid=self.tex),
+            gfx.ImageBasicMaterial(clim=(0, 255)),
+        )
+
+        self.update_image()  # this updates the content of the image
+        self.viewer.add(self.image)
+
+    @property
+    def mip(self):
+        return self._mip
+
+    @mip.setter
+    def mip(self, value):
+        if self._mip != value:
+            # Translate the old slice to the new mip level
+            self._slice = int(
+                self._slice
+                * self.volume.scales[self._mip]["resolution"][2]
+                / self.volume.scales[value]["resolution"][2]
+            )
+
+            # Update the mip levels
+            self._mip = value
+            self.volume.mip = value
+
+            # Update the texture
+            self.update_texture()
+            self.update_image()
+
+    @property
+    def shape(self):
+        return self.volume.shape[:2]
+
+    @property
+    def slice(self):
+        return self._slice
+
+    @slice.setter
+    def slice(self, value):
+        if self._slice != value:
+            self._slice = value
+            self.update_image()
+
+    @property
+    def resolution(self):
+        return self.volume.scales[self.volume.mip]["resolution"]
+
+    def update_image(self):
+        self.image.local.scale = self.resolution
+        self.image.local.z = self.resolution[2] * self.slice
+
+        self.tex.data[:] = self.volume[:, :, self.slice].reshape(self.shape)
+        self.tex.update_range((0, 0, 0), self.tex.size)
+
+    def update_texture(self):
+        self.tex = gfx.Texture(np.zeros(self.shape, dtype=self.volume.dtype), dim=2)
+        self.image.geometry.grid = self.tex

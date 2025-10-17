@@ -1,4 +1,4 @@
-pygfx>=0.9.0
+pygfx==0.14.0
 numpy
 pypng
 six
