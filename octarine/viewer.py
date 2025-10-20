@@ -14,6 +14,7 @@ import trimesh as tm
 from pathlib import Path
 from collections import OrderedDict
 from functools import wraps, lru_cache, partial
+from pygfx.renderers.wgpu.engine.edl import EDLPass
 
 from rendercanvas.offscreen import OffscreenRenderCanvas
 
@@ -30,6 +31,10 @@ logger = config.get_logger(__name__)
 viewers = []
 
 AUTOSTART_EVENT_LOOP = True
+
+EFFECT_CLASSES = {
+    "edl": EDLPass,
+}
 
 # TODO
 # - add styles for viewer (lights, background, etc.) - e.g. .set_style(dark)
@@ -850,6 +855,53 @@ class Viewer:
             )
         else:
             raise TypeError(f"Expected callable or index (int), got {type(x)}")
+
+    def add_effect(self, effect, **kwargs):
+        """Add post-processing effect to the renderer.
+
+        You can also use this method to adjust the parameters of an existing effect.
+
+        Parameters
+        ----------
+        effect :   str
+                    Name of the effect to add. Currently supported:
+                     - "edl" (Eye-Dome Lighting)
+                       This effect enhances depth perception for complex
+                       geometries by darkening edges based on depth differences.
+
+        **kwargs
+                    Keyword arguments passed to the effect constructor:
+                    - edl:
+                      - strength (default 5): EDL strength; ypical range ~ [0.5, 10.0].
+                      - radius (default 1.5): sampling radius in pixels
+                      - depth_edge_threshold (default 0.0)
+
+        """
+        effect = EFFECT_CLASSES.get(effect, None)
+        if effect is None:
+            raise ValueError(f"Unknown effect: {effect}")
+
+        # Check if we already have this effect
+        p = None
+        for e in self.renderer.effect_passes:
+            if isinstance(e, effect):
+                p = e
+                break
+
+        if p is None:
+            # Overwrite the default of 1 (seems too weak in my hands)
+            if (effect is EDLPass) and "strength" not in kwargs:
+                kwargs["strength"] = 5.0
+
+            p = effect(**kwargs)
+            self.renderer.effect_passes = tuple(list(self.renderer.effect_passes) + [p])
+        else:
+            # Update parameters
+            for k, v in kwargs.items():
+                if hasattr(p, k):
+                    setattr(p, k, v)
+                else:
+                    raise ValueError(f"Effect '{effect}' has no parameter '{k}'")
 
     def show(self, use_sidecar=False, toolbar=False, start_loop=False):
         """Show viewer.
