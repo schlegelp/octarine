@@ -1512,7 +1512,7 @@ class Viewer:
             del config.PRIMARY_VIEWER
 
         # Close if not already closed
-        if not self.canvas.is_closed():
+        if not self.canvas.get_closed():
             self.canvas.close()
 
         if hasattr(self, "_controls"):
