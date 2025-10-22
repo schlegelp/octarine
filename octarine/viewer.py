@@ -1969,7 +1969,7 @@ class Viewer:
             # updated size, pixel ratio, etc. is drawn before taking the screenshot.
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                self.canvas.draw_frame()
+                self.canvas._subwidget._draw_frame_and_present()
 
         try:
             im = self.renderer.snapshot()
