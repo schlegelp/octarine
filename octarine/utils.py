@@ -99,7 +99,11 @@ def make_iterable(x, force_type = None):
     array(['a'], dtype='<U1')
 
     """
-    if not isinstance(x, Iterable) or isinstance(x, six.string_types):
+    if (
+        not isinstance(x, Iterable)
+        or isinstance(x, six.string_types)
+        or isinstance(x, gfx.Geometry)
+    ):
         x = [x]
 
     if isinstance(x, (dict, set)):
@@ -122,7 +126,12 @@ def is_iterable(x) -> bool:
     True
 
     """
-    if isinstance(x, Iterable) and not isinstance(x, six.string_types) and not _is_pandas_dataframe(x):
+    if (
+        isinstance(x, Iterable)
+        and not isinstance(x, six.string_types)
+        and not _is_pandas_dataframe(x)
+        and not isinstance(x, gfx.Geometry)
+    ):
         return True
     else:
         return False
