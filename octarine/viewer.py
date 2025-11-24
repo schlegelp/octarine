@@ -1233,14 +1233,17 @@ class Viewer:
         if clear:
             self.clear()
 
-        if utils.is_iterable(x) and not isinstance(x, np.ndarray):
+        converter = get_converter(x, raise_missing=False)
+        if (
+            utils.is_iterable(x)
+            and not converter
+        ):
             for xx in x:
                 self.add(xx, center=False, clear=False, name=name, **kwargs)
             if center:
                 self.center_camera()
             return
 
-        converter = get_converter(x, raise_missing=False)
         if converter is None:
             raise NotImplementedError(f"No converter found for {x} ({type(x)})")
 
