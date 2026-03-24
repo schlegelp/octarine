@@ -617,7 +617,7 @@ class Viewer:
     @property
     def _is_jupyter(self):
         """Check if Viewer is using Jupyter canvas."""
-        return "JupyterWgpuCanvas" in str(type(self.canvas))
+        return "Jupyter" in str(type(self.canvas))
 
     @property
     def _is_offscreen(self):
