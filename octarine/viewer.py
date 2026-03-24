@@ -1,3 +1,4 @@
+import os
 import png
 import sys
 import time
@@ -952,7 +953,9 @@ class Viewer:
                 from rendercanvas.auto import loop
 
                 loop.run()
-            elif utils._type_of_script() in ("terminal", "script"):
+            elif utils._type_of_script() in ("terminal", "script") and os.environ.get(
+                "OCTARINE_CHECK_LOOP", "1"
+            ) in ("1", "true", "True"):
                 logger.warning(
                     "Running in a (potentially) non-interactive terminal or script "
                     "environment. You may have to manually start the event loop "
@@ -1234,10 +1237,7 @@ class Viewer:
             self.clear()
 
         converter = get_converter(x, raise_missing=False)
-        if (
-            utils.is_iterable(x)
-            and not converter
-        ):
+        if utils.is_iterable(x) and not converter:
             for xx in x:
                 self.add(xx, center=False, clear=False, name=name, **kwargs)
             if center:
