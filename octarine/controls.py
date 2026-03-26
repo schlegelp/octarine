@@ -198,6 +198,7 @@ class Controls(QtWidgets.QWidget):
             for vis in self.viewer.scene.children:
                 if isinstance(vis, gfx.AmbientLight):
                     vis.visible = self.ambient_light_checkbox.isChecked()
+                    self.viewer._render_stale = True
 
         self.ambient_light_checkbox.toggled.connect(toggle_ambient_light)
         self.tab2_layout.addWidget(self.ambient_light_checkbox)
@@ -299,8 +300,14 @@ class Controls(QtWidgets.QWidget):
         item._id = name  # this helps to identify the item
 
         # Generate the label
-        line_text = QtWidgets.QLabel(f"{name}")
+        line_text = QtWidgets.QPushButton(f"{name}", flat=True)
         line_text.setToolTip("Click to select")
+        line_text.setProperty("legend_role", "label")
+        # Allow long names to shrink first so toggle + color controls stay visible.
+        line_text.setSizePolicy(
+            QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred
+        )
+        line_text.setMinimumWidth(0)
 
         # Generate the checkbox
         line_checkbox = QtWidgets.QCheckBox()
@@ -313,6 +320,7 @@ class Controls(QtWidgets.QWidget):
             for vis in self.viewer.objects.get(name, []):
                 # Navigate to the correct property
                 vis.visible = line_checkbox.isChecked()
+                self.viewer._render_stale = True
 
         line_checkbox.toggled.connect(set_property)
 
@@ -321,6 +329,7 @@ class Controls(QtWidgets.QWidget):
             line_push_button = self.create_volume_btn(name, callback=None)
         else:
             line_push_button = self.create_color_btn(name, color=color, callback=None)
+        line_push_button.setProperty("legend_role", "control")
 
         # Generate item layout
         item_layout = QtWidgets.QHBoxLayout()
@@ -330,7 +339,9 @@ class Controls(QtWidgets.QWidget):
         # Add text and button to layout
         item_layout.addWidget(line_text)
         item_layout.addWidget(line_checkbox)
+        item_layout.addSpacing(15)
         item_layout.addWidget(line_push_button)
+        item_layout.setStretch(0, 1)
 
         # Set layout
         item_widget.setLayout(item_layout)
@@ -362,9 +373,16 @@ class Controls(QtWidgets.QWidget):
                 color = objects[item._id][0].material.color
             except BaseException:
                 color = gfx.Color("k")
-            # Find the button in this widget
+            # Find the color/volume button in this widget
             item_widget = self.legend.itemWidget(item)
-            line_push_button = item_widget.findChild(QtWidgets.QPushButton)
+            line_push_button = next(
+                (
+                    button
+                    for button in item_widget.findChildren(QtWidgets.QPushButton)
+                    if button.property("legend_role") == "control"
+                ),
+                None,
+            )
             # Update color
             if line_push_button:
                 line_push_button.setStyleSheet(f"background-color: {color.css}")
@@ -384,7 +402,7 @@ class Controls(QtWidgets.QWidget):
                 self.legend.addItem(item)
                 self.legend.setItemWidget(item, item_widget)
 
-        # # Now check if the visibility of the objects has changed
+        # Check visibility and selected status of objects
         visible = self.viewer.visible
         for i in range(self.legend.count()):
             item = self.legend.item(i)
@@ -395,11 +413,18 @@ class Controls(QtWidgets.QWidget):
             else:
                 line_checkbox.setChecked(False)
 
-            line_text = item_widget.findChild(QtWidgets.QLabel)
+            line_text = next(
+                (
+                    button
+                    for button in item_widget.findChildren(QtWidgets.QPushButton)
+                    if button.property("legend_role") == "label"
+                ),
+                None,
+            )
             if self.viewer.selected and item._id in self.viewer.selected:
-                line_text.setStyleSheet("color: yellow")
+                line_text.setStyleSheet("color: yellow; text-align: left;")
             else:
-                line_text.setStyleSheet("color: white")
+                line_text.setStyleSheet("color: white; text-align: left;")
 
     def color_button_clicked(self):
         """Set the active object to be the buttons target."""
