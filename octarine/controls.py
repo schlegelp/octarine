@@ -1,6 +1,8 @@
 import numpy as np
 import pygfx as gfx
 
+from functools import wraps
+
 try:
     from PySide6 import QtWidgets, QtCore
 except ImportError:
@@ -17,9 +19,27 @@ except ImportError:
 # - make legend tabbed (QTabWidget)
 
 
+def connect_color_picker(func):
+    """Decorator to mark this controls as the active color picker target.
+
+    On some backends (notably macOS) Qt uses a shared native color dialog.
+    We therefore route color events through a class-level dispatcher and
+    update the active controls instance whenever a color action is triggered.
+    """
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        """Wrapper to activate this controls for subsequent color events."""
+        Controls._active_color_controls = self
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
 def set_viewer_stale(func):
     """Decorator to set the viewer stale after a function call."""
 
+    @wraps(func)
     def wrapper(self, *args, **kwargs):
         self.viewer._render_stale = True
         return func(self, *args, **kwargs)
@@ -28,6 +48,9 @@ def set_viewer_stale(func):
 
 
 class Controls(QtWidgets.QWidget):
+    _shared_color_picker = None
+    _active_color_controls = None
+
     def __init__(self, viewer, width=300, height=400):
         super().__init__()
         self.viewer = viewer
@@ -71,10 +94,32 @@ class Controls(QtWidgets.QWidget):
         self.active_objects = None
         self.active_volume = None
 
-        self.color_picker = QtWidgets.QColorDialog(parent=self)
-        self.color_picker.setOption(QtWidgets.QColorDialog.ShowAlphaChannel, on=True)
-        self.color_picker.currentColorChanged.connect(self.set_color)
-        self.color_picker.colorSelected.connect(self.reset_active_objects)
+        self.color_picker = self._get_shared_color_picker()
+
+    @classmethod
+    def _get_shared_color_picker(cls):
+        """Return the shared QColorDialog instance used by all controls."""
+        if cls._shared_color_picker is None:
+            picker = QtWidgets.QColorDialog()
+            picker.setOption(QtWidgets.QColorDialog.ShowAlphaChannel, on=True)
+            picker.currentColorChanged.connect(cls._dispatch_color_changed)
+            picker.colorSelected.connect(cls._dispatch_color_selected)
+            cls._shared_color_picker = picker
+        return cls._shared_color_picker
+
+    @classmethod
+    def _dispatch_color_changed(cls, color):
+        """Forward color changes to the currently active controls instance."""
+        active_controls = cls._active_color_controls
+        if active_controls is not None:
+            active_controls.set_color(color)
+
+    @classmethod
+    def _dispatch_color_selected(cls, *args):
+        """Reset active selection for the currently active controls instance."""
+        active_controls = cls._active_color_controls
+        if active_controls is not None:
+            active_controls.reset_active_objects()
 
     def build_legend_gui(self):
         """Build the legend GUI."""
@@ -426,6 +471,7 @@ class Controls(QtWidgets.QWidget):
             else:
                 line_text.setStyleSheet("color: white; text-align: left;")
 
+    @connect_color_picker
     def color_button_clicked(self):
         """Set the active object to be the buttons target."""
         sender = self.sender()
@@ -449,8 +495,10 @@ class Controls(QtWidgets.QWidget):
             return
         elif self.active_objects == "selected":
             targets = self.get_selected()
-        elif not isinstance(self.active_objects, list):
+        elif not isinstance(self.active_objects, (list, tuple)):
             targets = [self.active_objects]
+        else:
+            targets = list(self.active_objects)
 
         # Convert QColor to [0-1] RGB
         color = np.array(color.toTuple()) / 255
@@ -481,6 +529,7 @@ class Controls(QtWidgets.QWidget):
             sel.append(item._id)
         return sel
 
+    @connect_color_picker
     def color_selected(self):
         """Set the active object to be the selected objects."""
         self.active_objects = "selected"
@@ -532,7 +581,7 @@ class Controls(QtWidgets.QWidget):
 
     def reset_active_objects(self):
         """Reset active objects."""
-        self.color_target = None
+        self.active_objects = None
 
     def create_color_btn(self, name, color=None, callback=None):
         """Generate a colorize button ."""
@@ -668,8 +717,10 @@ class Controls(QtWidgets.QWidget):
 
     def close(self):
         """Close the controls."""
-        # This makes sure to also close the color picker, not just the controls window
-        self.color_picker.close()
+        # Keep shared picker alive but hide it when this controls closes.
+        if Controls._active_color_controls is self:
+            Controls._active_color_controls = None
+        self.color_picker.hide()
         super().close()
 
 
