@@ -317,16 +317,21 @@ class Viewer:
             except BaseException as e:
                 if on_error == "raise":
                     raise e
+                elif on_error == "log":
+                    logger.error(f"Error in animation function '{func}': {e}")
                 elif on_error == "remove":
                     logger.error(
                         f"Removing animation function '{func}' because of error: {e}"
                     )
                     # Flag animation for removal
-                    self._animations_flagged_for_removal.append(i)
+                    self._animations_flagged_for_removal.append(func)
 
         # Check if any animations need to be removed
-        for f in self._animations_flagged_for_removal[::-1]:
-            self._animations.pop(f)
+        for f in self._animations_flagged_for_removal:
+            try:
+                _ = self._animations.pop(f)
+            except KeyError:
+                pass  # already removed (e.g. by index or by function)
         self._animations_flagged_for_removal = []
 
         # Now check if we need to render the scene
@@ -817,7 +822,7 @@ class Viewer:
         ----------
         x :         callable
                     Function to add to the animation loop.
-        on_error :  "remove" | "ignore" | "raise"
+        on_error :  "remove" | "ignore" | "raise" | "log"
                     What to do if the function throws an error. If "remove",
                     the function will be removed from the animation loop. If
                     "ignore", the error will be ignored and the function will
@@ -834,7 +839,7 @@ class Viewer:
         if not callable(x):
             raise TypeError(f"Expected callable, got {type(x)}")
 
-        assert on_error in ["remove", "ignore", "raise"]
+        assert on_error in ["remove", "ignore", "raise", "log"]
 
         self._animations[x] = (on_error, run_every, req_render)
 
