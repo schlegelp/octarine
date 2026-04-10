@@ -366,6 +366,7 @@ class Controls(QtWidgets.QWidget):
                 # Navigate to the correct property
                 vis.visible = line_checkbox.isChecked()
                 self.viewer._render_stale = True
+            self.update_legend()
 
         line_checkbox.toggled.connect(set_property)
 
@@ -394,10 +395,222 @@ class Controls(QtWidgets.QWidget):
 
         return item, item_widget
 
+    def make_grouped_legend_entry(self, names, group_name=None):
+        """Generate a collapsible legend entry for grouped objects.
+
+        Parameters
+        ----------
+        names : list[str] | tuple[str]
+                    Object names that belong to this group.
+        group_name : str | None
+                    Label shown in the collapsible header.
+
+        Returns
+        -------
+        item_widget : QtWidgets.QWidget
+                    Collapsible widget with one row per grouped member.
+        """
+        if not names:
+            raise ValueError("`names` must contain at least one object name.")
+
+        if group_name is None:
+            group_name = f"group ({len(names)})"
+
+        # Outer container that can be used as the list item widget.
+        item_widget = QtWidgets.QWidget()
+        item_widget.setObjectName(str(group_name))
+        item_layout = QtWidgets.QVBoxLayout(item_widget)
+        item_layout.setContentsMargins(0, 0, 0, 0)
+        item_layout.setSpacing(0)
+
+        # Header button to toggle child visibility.
+        header_row = QtWidgets.QWidget()
+        header_row_layout = QtWidgets.QHBoxLayout(header_row)
+        header_row_layout.setContentsMargins(0, 0, 0, 0)
+        header_row_layout.setSpacing(0)
+
+        header = QtWidgets.QToolButton()
+        # Prefix with a thin gap so text does not crowd the arrow indicator.
+        header.setText(f"  {group_name}")
+        header.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        header.setArrowType(QtCore.Qt.RightArrow)
+        header.setCheckable(True)
+        header.setChecked(False)
+        header.setStyleSheet(
+            "QToolButton {"
+            " text-align: left;"
+            " font-size: 13px;"
+            " background: transparent;"
+            " border: none;"
+            " padding: 0px;"
+            " }"
+            "QToolButton:checked { background: transparent; border: none; }"
+            "QToolButton:pressed { background: transparent; border: none; }"
+            "QToolButton:hover { background: transparent; border: none; }"
+            "QToolButton::menu-indicator { width: 8px; height: 8px; }"
+        )
+        header.setAutoRaise(True)
+        header.setIconSize(QtCore.QSize(8, 8))
+        header.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
+        header.setToolTip("Click to expand/collapse grouped legend entries")
+
+        group_checkbox = QtWidgets.QCheckBox()
+        group_checkbox.setProperty("legend_role", "group_visibility")
+        group_checkbox.setTristate(True)
+        group_checkbox.setMaximumWidth(40)
+        group_checkbox.setToolTip("Toggle visibility for all group members")
+
+        def toggle_group_visibility(*args):
+            is_visible = group_checkbox.isChecked()
+            for member_name in names:
+                for vis in self.viewer.objects.get(member_name, []):
+                    vis.visible = is_visible
+
+                # Mirror the group toggle on each member checkbox without
+                # retriggering each member's callback.
+                member_checkbox = item_widget.findChild(
+                    QtWidgets.QCheckBox, str(member_name)
+                )
+                if member_checkbox is not None:
+                    member_checkbox.blockSignals(True)
+                    member_checkbox.setChecked(is_visible)
+                    member_checkbox.blockSignals(False)
+            self.viewer._render_stale = True
+
+        def coerce_group_checkbox_click_state(*args):
+            # Partial is an indicator-only state; user clicks should skip it.
+            if group_checkbox.checkState() == QtCore.Qt.PartiallyChecked:
+                group_checkbox.blockSignals(True)
+                group_checkbox.setCheckState(QtCore.Qt.Checked)
+                group_checkbox.blockSignals(False)
+                toggle_group_visibility()
+
+        group_checkbox.toggled.connect(toggle_group_visibility)
+        group_checkbox.clicked.connect(coerce_group_checkbox_click_state)
+
+        group_color = None
+        first_name = names[0]
+        if first_name in self.viewer.objects and self.viewer.objects[first_name]:
+            try:
+                group_color = self.viewer.objects[first_name][0].material.color
+            except BaseException:
+                group_color = "k"
+
+        group_color_button = self.create_color_btn(
+            f"group::{group_name}", color=group_color, callback=None
+        )
+        group_color_button.setProperty("legend_role", "group_control")
+        group_color_button.setToolTip("Click to change color for entire group")
+        group_color_button._id = list(names)
+
+        header_row_layout.addWidget(header)
+        header_row_layout.addWidget(group_checkbox)
+        header_row_layout.addSpacing(15)
+        header_row_layout.addWidget(group_color_button)
+        header_row_layout.setStretch(0, 1)
+        item_layout.addWidget(header_row)
+
+        # Child container with one standard legend row per member.
+        content_widget = QtWidgets.QWidget()
+        content_layout = QtWidgets.QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(18, 0, 0, 0)
+        content_layout.setSpacing(0)
+        content_widget.setVisible(False)
+
+        for name in names:
+            color = None
+            vis_type = None
+            if name in self.viewer.objects and self.viewer.objects[name]:
+                try:
+                    color = self.viewer.objects[name][0].material.color
+                except BaseException:
+                    color = "k"
+                vis_type = type(self.viewer.objects[name][0])
+
+            _, child_widget = self.make_legend_entry(name, color=color, type=vis_type)
+            child_widget.setProperty("legend_role", "group_member")
+
+            child_layout = child_widget.layout()
+            if child_layout is not None:
+                child_layout.setContentsMargins(0, 0, 0, 0)
+                child_layout.setSpacing(0)
+
+            # Keep rows compact but let Qt compute a non-clipping height.
+            child_widget.setSizePolicy(
+                QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred
+            )
+
+            # Apply mild compression: reduce excess row padding without clipping text.
+            compact_height = max(20, child_widget.sizeHint().height() - 8)
+            child_widget.setMinimumHeight(compact_height)
+            child_widget.setMaximumHeight(compact_height)
+            content_layout.addWidget(child_widget)
+
+        item_layout.addWidget(content_widget)
+
+        def toggle_group(expanded):
+            header.setArrowType(QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow)
+            content_widget.setVisible(expanded)
+
+            # Keep parent QListWidgetItem height in sync with expanded/collapsed state.
+            if hasattr(self, "legend"):
+                for i in range(self.legend.count()):
+                    legend_item = self.legend.item(i)
+                    if self.legend.itemWidget(legend_item) is item_widget:
+                        legend_item.setSizeHint(item_widget.sizeHint())
+                        break
+
+        header.toggled.connect(toggle_group)
+
+        return item_widget
+
     def update_legend(self):
         """Update legend with objects in current scene."""
-        # Get objects in scene
-        objects = self.viewer.objects
+        # Get visuals in scene
+        visuals = self.viewer.visuals
+
+        # Collect ungrouped visuals by object id and grouped visuals by group name.
+        object_ids = {}
+        grouped_ids = {}
+        for vis in visuals:
+            if not hasattr(vis, "_object_id"):
+                continue
+
+            object_id = vis._object_id
+            object_group = getattr(vis, "_object_group", None)
+
+            if object_group is None:
+                object_ids[object_id] = object_ids.get(object_id, []) + [vis]
+                continue
+
+            grouped_ids[object_group] = grouped_ids.get(object_group, {})
+            grouped_ids[object_group][object_id] = (
+                grouped_ids[object_group].get(object_id, []) + [vis]
+            )
+
+        # Build a unified legend spec for add/update/remove bookkeeping.
+        legend_entries = {}
+        for object_id, obj_visuals in object_ids.items():
+            legend_entries[object_id] = dict(
+                kind="single",
+                members=[object_id],
+                visuals=obj_visuals,
+            )
+        for group_name, member_dict in grouped_ids.items():
+            group_key = f"group::{group_name}"
+            members = list(member_dict.keys())
+            flattened = []
+            for member in members:
+                flattened.extend(member_dict[member])
+            legend_entries[group_key] = dict(
+                kind="group",
+                members=members,
+                member_visuals=member_dict,
+                visuals=flattened,
+                group_name=group_name,
+            )
 
         # Go over existing items
         N_items = self.legend.count()
@@ -407,43 +620,119 @@ class Controls(QtWidgets.QWidget):
             item = self.legend.item(i)
 
             # Clear item if not present anymore
-            if item._id not in objects:
+            if item._id not in legend_entries:
                 self.legend.takeItem(i)
                 continue
             else:
                 present.append(item._id)
 
-            # Update color
-            try:
-                color = objects[item._id][0].material.color
-            except BaseException:
-                color = gfx.Color("k")
-            # Find the color/volume button in this widget
+            entry = legend_entries[item._id]
             item_widget = self.legend.itemWidget(item)
-            line_push_button = next(
-                (
-                    button
-                    for button in item_widget.findChildren(QtWidgets.QPushButton)
-                    if button.property("legend_role") == "control"
-                ),
-                None,
-            )
-            # Update color
-            if line_push_button:
-                line_push_button.setStyleSheet(f"background-color: {color.css}")
+
+            if entry["kind"] == "single":
+                try:
+                    color = entry["visuals"][0].material.color
+                except BaseException:
+                    color = gfx.Color("k")
+
+                line_push_button = next(
+                    (
+                        button
+                        for button in item_widget.findChildren(QtWidgets.QPushButton)
+                        if button.property("legend_role") == "control"
+                    ),
+                    None,
+                )
+                if line_push_button:
+                    line_push_button.setStyleSheet(f"background-color: {color.css}")
+            else:
+                expected_members = {str(member) for member in entry["members"]}
+                current_members = {
+                    w.objectName()
+                    for w in item_widget.findChildren(QtWidgets.QWidget)
+                    if w.property("legend_role") == "group_member"
+                }
+
+                # Keep grouped rows in sync when members are added/removed.
+                if current_members != expected_members:
+                    header = item_widget.findChild(QtWidgets.QToolButton)
+                    is_expanded = bool(header and header.isChecked())
+                    item_widget = self.make_grouped_legend_entry(
+                        entry["members"], group_name=entry["group_name"]
+                    )
+                    self.legend.setItemWidget(item, item_widget)
+                    item.setSizeHint(item_widget.sizeHint())
+
+                    if is_expanded:
+                        new_header = item_widget.findChild(QtWidgets.QToolButton)
+                        if new_header:
+                            new_header.setChecked(True)
+
+                for member_name in entry["members"]:
+                    try:
+                        color = entry["member_visuals"][member_name][0].material.color
+                    except BaseException:
+                        color = gfx.Color("k")
+
+                    member_widget = item_widget.findChild(
+                        QtWidgets.QWidget, str(member_name)
+                    )
+                    if not member_widget:
+                        continue
+                    line_push_button = next(
+                        (
+                            button
+                            for button in member_widget.findChildren(QtWidgets.QPushButton)
+                            if button.property("legend_role") == "control"
+                        ),
+                        None,
+                    )
+                    if line_push_button:
+                        line_push_button.setStyleSheet(
+                            f"background-color: {color.css}"
+                        )
+
+                group_color_btn = next(
+                    (
+                        button
+                        for button in item_widget.findChildren(QtWidgets.QPushButton)
+                        if button.property("legend_role") == "group_control"
+                    ),
+                    None,
+                )
+                if group_color_btn:
+                    try:
+                        group_color = entry["visuals"][0].material.color
+                    except BaseException:
+                        group_color = gfx.Color("k")
+                    group_color_btn.setStyleSheet(
+                        f"background-color: {group_color.css}"
+                    )
 
         # Add new items
-        for obj in objects:
-            if obj not in present:
+        for entry_id, entry in legend_entries.items():
+            if entry_id not in present:
                 try:
-                    color = objects[obj][0].material.color
+                    color = entry["visuals"][0].material.color
                 except BaseException:
                     # Note to self: need to make sure we also cater for color arrays
                     # which are in the geometry object
                     color = "k"
-                item, item_widget = self.make_legend_entry(
-                    obj, color=color, type=type(objects[obj][0])
-                )
+
+                if entry["kind"] == "group":
+                    item = QtWidgets.QListWidgetItem()
+                    item._id = entry_id
+                    item_widget = self.make_grouped_legend_entry(
+                        entry["members"], group_name=entry["group_name"]
+                    )
+                    item.setSizeHint(item_widget.sizeHint())
+                else:
+                    item, item_widget = self.make_legend_entry(
+                        entry_id,
+                        color=color,
+                        type=type(entry["visuals"][0]),
+                    )
+
                 self.legend.addItem(item)
                 self.legend.setItemWidget(item, item_widget)
 
@@ -452,24 +741,70 @@ class Controls(QtWidgets.QWidget):
         for i in range(self.legend.count()):
             item = self.legend.item(i)
             item_widget = self.legend.itemWidget(item)
-            line_checkbox = item_widget.findChild(QtWidgets.QCheckBox)
-            if item._id in visible:
-                line_checkbox.setChecked(True)
-            else:
-                line_checkbox.setChecked(False)
+            entry = legend_entries.get(item._id)
 
-            line_text = next(
-                (
-                    button
-                    for button in item_widget.findChildren(QtWidgets.QPushButton)
-                    if button.property("legend_role") == "label"
-                ),
-                None,
-            )
-            if self.viewer.selected and item._id in self.viewer.selected:
-                line_text.setStyleSheet("color: yellow; text-align: left;")
+            if entry is None:
+                continue
+
+            if entry["kind"] == "group":
+                member_ids = entry["members"]
+
+                group_checkbox = next(
+                    (
+                        checkbox
+                        for checkbox in item_widget.findChildren(QtWidgets.QCheckBox)
+                        if checkbox.property("legend_role") == "group_visibility"
+                    ),
+                    None,
+                )
+                if group_checkbox is not None:
+                    visible_count = sum(member_id in visible for member_id in member_ids)
+                    is_mixed = 0 < visible_count < len(member_ids)
+
+                    group_checkbox.blockSignals(True)
+                    if is_mixed:
+                        group_checkbox.setCheckState(QtCore.Qt.PartiallyChecked)
+                    elif visible_count > 0:
+                        group_checkbox.setCheckState(QtCore.Qt.Checked)
+                    else:
+                        group_checkbox.setCheckState(QtCore.Qt.Unchecked)
+
+                    if is_mixed:
+                        group_checkbox.setToolTip(
+                            "Some objects in this group are hidden"
+                        )
+                    else:
+                        group_checkbox.setToolTip(
+                            "Toggle visibility for all group members"
+                        )
+                    group_checkbox.blockSignals(False)
             else:
-                line_text.setStyleSheet("color: white; text-align: left;")
+                member_ids = [item._id]
+
+            for member_id in member_ids:
+                line_checkbox = item_widget.findChild(QtWidgets.QCheckBox, str(member_id))
+                if line_checkbox:
+                    line_checkbox.setChecked(member_id in visible)
+
+                member_widget = item_widget.findChild(QtWidgets.QWidget, str(member_id))
+                if member_widget is None:
+                    member_widget = item_widget
+
+                line_text = next(
+                    (
+                        button
+                        for button in member_widget.findChildren(QtWidgets.QPushButton)
+                        if button.property("legend_role") == "label"
+                    ),
+                    None,
+                )
+                if not line_text:
+                    continue
+
+                if self.viewer.selected and member_id in self.viewer.selected:
+                    line_text.setStyleSheet("color: yellow; text-align: left;")
+                else:
+                    line_text.setStyleSheet("color: white; text-align: left;")
 
     @connect_color_picker
     def color_button_clicked(self):

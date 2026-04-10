@@ -1210,7 +1210,7 @@ class Viewer:
             )
 
     @update_viewer(legend=True, bounds=True)
-    def add(self, x, name=None, center=True, clear=False, **kwargs):
+    def add(self, x, name=None, group=None, center=True, clear=False, **kwargs):
         """Add object to canvas.
 
         This function is a general entry point for adding objects to the canvas.
@@ -1225,6 +1225,8 @@ class Viewer:
                     Object(s) to add to the canvas.
         name :      str, optional
                     Name for the visual(s).
+        group :     str, optional
+                    Group for the visual(s).
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
         clear :     bool, optional
@@ -1272,6 +1274,8 @@ class Viewer:
                 elif not isinstance(v._object_id, str):
                     v._object_id = str(v._object_id)
 
+            v._object_group = group
+
             self.scene.add(v)
 
         if center:
@@ -1295,7 +1299,9 @@ class Viewer:
         if center:
             self.center_camera()
 
-    def add_mesh(self, mesh, name=None, color=None, alpha=None, center=True):
+    def add_mesh(
+        self, mesh, name=None, group=None, color=None, alpha=None, center=True
+    ):
         """Add mesh to canvas.
 
         Parameters
@@ -1306,6 +1312,8 @@ class Viewer:
                     `alpha`, etc. will be ignored).
         name :      str, optional
                     Name for the visual.
+        group :     str, optional
+                    Group for the visual.
         color :     str | tuple, optional
                     Color to use for plotting. If multiple colors,
                     must be a list of colors with the same length as
@@ -1337,6 +1345,7 @@ class Viewer:
             visual = mesh
 
         visual._object_id = name if name else uuid.uuid4()
+        visual._object_group = group
 
         self._add_to_scene(visual, center)
 
@@ -1344,6 +1353,7 @@ class Viewer:
         self,
         points,
         name=None,
+        group=None,
         color=None,
         marker=None,
         size=2,
@@ -1358,6 +1368,8 @@ class Viewer:
                     Points to plot.
         name :      str, optional
                     Name for the visual.
+        group :     str, optional
+                    Group for the visual.
         color :     str | tuple, optional
                     Color to use for plotting. Can be the name of
                     a colormap or a single color.
@@ -1396,13 +1408,14 @@ class Viewer:
             points, color=color, size=size, size_space=size_space, marker=marker
         )
         visual._object_id = name if name else uuid.uuid4()
-
+        visual._object_group = group
         self._add_to_scene(visual, center)
 
     def add_lines(
         self,
         lines,
         name=None,
+        group=None,
         color=None,
         linewidth=1,
         linewidth_space="screen",
@@ -1420,6 +1433,8 @@ class Viewer:
                     introduce breaks in the line by inserting NaNs.
         name :      str, optional
                     Name for the visual.
+        group :     str, optional
+                    Group for the visual.
         color :     str | tuple, optional
                     Color to use for plotting. Can be a single color
                     or one for every point in the line(s).
@@ -1464,6 +1479,7 @@ class Viewer:
             dash_pattern=linestyle,
         )
         visual._object_id = name if name else uuid.uuid4()
+        visual._object_group = group
         self._add_to_scene(visual, center)
 
     def add_volume(
@@ -1471,6 +1487,7 @@ class Viewer:
         volume,
         spacing=(1, 1, 1),
         name=None,
+        group=None,
         color=None,
         opacity=1.0,
         offset=(0, 0, 0),
@@ -1494,6 +1511,8 @@ class Viewer:
                     Spacing between voxels.
         name :      str, optional
                     Name for the visual.
+        group :     str, optional
+                    Group for the visual.
         color :     color | list of colors | pygfx.Texture, optional
                     Colormap to render the volume. This can be:
                       - name of a colormap (e.g. "viridis" or "magma")
@@ -1556,6 +1575,7 @@ class Viewer:
         name = name if name else uuid.uuid4()
         for vis in visuals:
             vis._object_id = name if name else uuid.uuid4()
+            vis._object_group = group
             self._add_to_scene(vis, center)
 
     def close(self):
