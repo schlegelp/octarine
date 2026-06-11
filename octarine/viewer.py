@@ -1659,7 +1659,7 @@ class Viewer:
                 if not v.visible:
                     v.visible = True
 
-    def highlight_objects(self, obj, color=0.2):
+    def highlight_objects(self, obj, color=0.3):
         """Highlight given object(s) by increasing their brightness.
 
         Parameters
@@ -1709,7 +1709,7 @@ class Viewer:
                     # Work in HSL space
                     h, s, l = o.material.color.to_hsl()
                     # If the value is not maxed yet, increase it
-                    if l < 1:
+                    if l <= (1 - color):
                         l = min(l + color, 1)
                     else:
                         l = max(l - color, 0)
