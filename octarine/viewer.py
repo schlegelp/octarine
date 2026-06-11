@@ -664,6 +664,18 @@ class Viewer:
         return objects
 
     @property
+    def objects_grouped(self):
+        """Ordered dictionary {group_name: [object_ids]} of all groups. Ungrouped objects are omitted."""
+        groups = OrderedDict()
+        for obj_id, visuals in self.objects.items():
+            group_name = getattr(visuals[0], "_object_group", None)
+            if group_name is not None:
+                if group_name not in groups:
+                    groups[group_name] = []
+                groups[group_name].append(obj_id)
+        return groups
+
+    @property
     def objects_pickable(self):
         return self._objects_pickable
 
