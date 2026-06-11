@@ -792,6 +792,9 @@ class Viewer:
          - "hide": hide object
          - "remove": remove object
          - "select": select object
+         - callable: a custom function that takes as input `event` and `viewer`
+
+        See `octarine.viewer.handle_object_event` for an example of how to write a custom function for this.
 
         """
         return self._on_double_click
@@ -799,7 +802,7 @@ class Viewer:
     @on_double_click.setter
     def on_double_click(self, v):
         valid = (None, "hide", "remove", "select")
-        if v not in valid:
+        if v not in valid and not callable(v):
             raise ValueError(
                 f"Unknown value for on_double_click: {v}. Must be one of {valid}."
             )
@@ -821,9 +824,14 @@ class Viewer:
             self.objects_pickable = True
 
             # Now add the new event handler
-            func = partial(handle_object_event, viewer=self, actions=(v,))
+            if not callable(v):
+                func = partial(handle_object_event, viewer=self, actions=(v,))
+            else:
+                func = partial(v, viewer=self)
             self.scene.add_event_handler(func, "double_click")
-            self.__on_double_click_func = func
+            self._on_double_click_func = func
+        else:
+            self._on_double_click_func = None
 
         self._on_double_click = v
 
@@ -2110,7 +2118,11 @@ class Viewer:
 
 
 def handle_object_event(event, viewer, actions):
-    """Handle object events."""
+    """Handle object events.
+
+    Note that `actions` is only used here and will not be passed to
+    custom on-doubleclick / on-hover functions!
+    """
     # Parse the object (this will be e.g. a Mesh visual)
     obj = event.pick_info["world_object"]
 
