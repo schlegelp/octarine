@@ -4,7 +4,7 @@ import pygfx as gfx
 from functools import wraps
 
 try:
-    from PySide6 import QtWidgets, QtCore
+    from PySide6 import QtWidgets, QtCore, QtGui
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "Showing controls requires PySide6. Please install it via:\n `pip install PySide6`."
@@ -312,6 +312,9 @@ class Controls(QtWidgets.QWidget):
         layout.addWidget(QtWidgets.QLabel("Legend"))
         list_widget = QtWidgets.QListWidget()
         list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        # Long names elide rather than scroll, so the row never needs to scroll
+        # sideways; keep the horizontal scrollbar off as a safeguard.
+        list_widget.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         layout.addWidget(list_widget)
         list_widget.setSpacing(spacing)
 
@@ -357,15 +360,11 @@ class Controls(QtWidgets.QWidget):
         item = QtWidgets.QListWidgetItem()
         item._id = name  # this helps to identify the item
 
-        # Generate the label
-        line_text = QtWidgets.QPushButton(f"{name}", flat=True)
-        line_text.setToolTip("Click to select")
+        # Generate the label. ElidedLabel truncates long names with an ellipsis so
+        # the visibility toggle + color control are never pushed out of view; the
+        # full name is available via the tooltip.
+        line_text = ElidedLabel(f"{name}")
         line_text.setProperty("legend_role", "label")
-        # Allow long names to shrink first so toggle + color controls stay visible.
-        line_text.setSizePolicy(
-            QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred
-        )
-        line_text.setMinimumWidth(0)
 
         # Generate the checkbox
         line_checkbox = QtWidgets.QCheckBox()
@@ -477,17 +476,14 @@ class Controls(QtWidgets.QWidget):
             # Seed selection highlight on the label.
             label = next(
                 (
-                    button
-                    for button in row.findChildren(QtWidgets.QPushButton)
-                    if button.property("legend_role") == "label"
+                    widget
+                    for widget in row.findChildren(ElidedLabel)
+                    if widget.property("legend_role") == "label"
                 ),
                 None,
             )
             if label is not None:
-                if selected and member_name in selected:
-                    label.setStyleSheet("color: yellow; text-align: left;")
-                else:
-                    label.setStyleSheet("color: white; text-align: left;")
+                label.setSelected(bool(selected and member_name in selected))
 
         item_widget._materialized = True
 
@@ -589,18 +585,14 @@ class Controls(QtWidgets.QWidget):
         header_row_layout.setContentsMargins(0, 0, 0, 0)
         header_row_layout.setSpacing(0)
 
+        # Arrow-only toggle button. The group name lives in a separate ElidedLabel
+        # so a long name truncates instead of pushing the controls out of view.
         header = QtWidgets.QToolButton()
-        # Prefix with a thin gap so text does not crowd the arrow indicator. The
-        # trailing count reflects the number of group members.
-        header.setText(f"  {group_name} ({len(names)})")
-        header.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         header.setArrowType(QtCore.Qt.RightArrow)
         header.setCheckable(True)
         header.setChecked(False)
         header.setStyleSheet(
             "QToolButton {"
-            " text-align: left;"
-            " font-size: 13px;"
             " background: transparent;"
             " border: none;"
             " padding: 0px;"
@@ -612,10 +604,14 @@ class Controls(QtWidgets.QWidget):
         )
         header.setAutoRaise(True)
         header.setIconSize(QtCore.QSize(8, 8))
-        header.setSizePolicy(
-            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
-        )
+        header.setFixedWidth(16)
         header.setToolTip("Click to expand/collapse grouped legend entries")
+
+        # Group name + member count. Clicking it toggles the group, mirroring the
+        # arrow button.
+        header_label = ElidedLabel(f"{group_name} ({len(names)})")
+        header_label.setProperty("legend_role", "group_label")
+        header_label.clicked.connect(header.toggle)
 
         group_checkbox = QtWidgets.QCheckBox()
         group_checkbox.setProperty("legend_role", "group_visibility")
@@ -669,10 +665,11 @@ class Controls(QtWidgets.QWidget):
         group_color_button._id = item_widget._member_names
 
         header_row_layout.addWidget(header)
+        header_row_layout.addWidget(header_label)
         header_row_layout.addWidget(group_checkbox)
         header_row_layout.addSpacing(15)
         header_row_layout.addWidget(group_color_button)
-        header_row_layout.setStretch(0, 1)
+        header_row_layout.setStretch(1, 1)
         item_layout.addWidget(header_row)
 
         # Hovering the group header highlights all members. Pass the live member
@@ -802,10 +799,17 @@ class Controls(QtWidgets.QWidget):
 
     def _update_group_header_text(self, item_widget):
         """Refresh a group header's label, including its member count."""
-        header = item_widget.findChild(QtWidgets.QToolButton)
-        if header is not None:
+        label = next(
+            (
+                widget
+                for widget in item_widget.findChildren(ElidedLabel)
+                if widget.property("legend_role") == "group_label"
+            ),
+            None,
+        )
+        if label is not None:
             count = len(item_widget._member_names)
-            header.setText(f"  {item_widget._group_name} ({count})")
+            label.setText(f"{item_widget._group_name} ({count})")
 
     def update_legend(self):
         """Update legend with objects in current scene."""
@@ -1062,19 +1066,18 @@ class Controls(QtWidgets.QWidget):
 
                 line_text = next(
                     (
-                        button
-                        for button in member_widget.findChildren(QtWidgets.QPushButton)
-                        if button.property("legend_role") == "label"
+                        widget
+                        for widget in member_widget.findChildren(ElidedLabel)
+                        if widget.property("legend_role") == "label"
                     ),
                     None,
                 )
                 if not line_text:
                     continue
 
-                if self.viewer.selected and member_id in self.viewer.selected:
-                    line_text.setStyleSheet("color: yellow; text-align: left;")
-                else:
-                    line_text.setStyleSheet("color: white; text-align: left;")
+                line_text.setSelected(
+                    bool(self.viewer.selected and member_id in self.viewer.selected)
+                )
 
         # Re-apply an active filter so rows added/removed above stay consistent
         # with the current search text.
@@ -1332,6 +1335,78 @@ class Controls(QtWidgets.QWidget):
             Controls._active_color_controls = None
         self.color_picker.hide()
         super().close()
+
+
+class ElidedLabel(QtWidgets.QLabel):
+    """A QLabel that elides its text with an ellipsis instead of growing the row.
+
+    Used for legend names so the visibility checkbox and color button always stay
+    visible: the label's width hint is zeroed, and the (full) text is painted
+    elided to the right at render time so it adapts to resizes without any
+    size-hint recomputation. The full text is shown in the tooltip.
+    """
+
+    clicked = QtCore.Signal()
+
+    def __init__(self, text="", parent=None):
+        super().__init__(parent)
+        self._full_text = ""
+        self._selected = False
+        # Width hint is ignored so a long name never pushes the controls out.
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred
+        )
+        self.setMinimumWidth(0)
+        self.setText(text)
+
+    def setText(self, text):
+        self._full_text = "" if text is None else str(text)
+        self.setToolTip(self._full_text)
+        super().setText(self._full_text)
+        self.update()
+
+    def text(self):
+        return self._full_text
+
+    def setSelected(self, selected):
+        """Toggle the selection highlight (yellow vs. white text)."""
+        if selected != self._selected:
+            self._selected = selected
+            self.update()
+
+    def sizeHint(self):
+        return QtCore.QSize(0, self.fontMetrics().height())
+
+    def minimumSizeHint(self):
+        return QtCore.QSize(0, self.fontMetrics().height())
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        rect = self.contentsRect()
+        elided = self.fontMetrics().elidedText(
+            self._full_text, QtCore.Qt.ElideRight, rect.width()
+        )
+        painter.setPen(
+            QtGui.QColor("yellow") if self._selected else QtGui.QColor("white")
+        )
+        painter.drawText(
+            rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, elided
+        )
+
+    def mousePressEvent(self, event):
+        # Accept the press so the matching release (and our `clicked` signal) is
+        # delivered here rather than propagating to the list item.
+        if event.button() == QtCore.Qt.LeftButton:
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton and self.rect().contains(
+            event.pos()
+        ):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 
 class QHLine(QtWidgets.QFrame):
