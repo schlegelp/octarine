@@ -36,20 +36,24 @@ def parse_objects(x, include_geometries=True):
         x = y
 
     # Collect visuals
-    visuals = [ob for ob in x if 'pygfx.objects' in str(type(ob))]
+    visuals = [ob for ob in x if "pygfx.objects" in str(type(ob))]
 
     if include_geometries:
-        visuals += [ob for ob in x if 'pygfx.geometries' in str(type(ob))]
+        visuals += [ob for ob in x if "pygfx.geometries" in str(type(ob))]
 
     # Collect scatter points
-    scatter = [ob for ob in x if isinstance(ob, np.ndarray) and (ob.ndim == 2) and (ob.shape[1] == 3)]
+    scatter = [
+        ob
+        for ob in x
+        if isinstance(ob, np.ndarray) and (ob.ndim == 2) and (ob.shape[1] == 3)
+    ]
 
     # Collect dataframes with X/Y/Z coordinates
     dataframes = [ob for ob in x if _is_pandas_dataframe(ob)]
-    if [d for d in dataframes if False in np.isin(['x', 'y', 'z'], d.columns)]:
-        logger.warning('DataFrames must have x, y and z columns.')
-    dataframes = [d for d in dataframes if all(np.isin(['x', 'y', 'z'], d.columns))]
-    scatter += [d[['x', 'y', 'z']].values for d in dataframes]
+    if [d for d in dataframes if False in np.isin(["x", "y", "z"], d.columns)]:
+        logger.warning("DataFrames must have x, y and z columns.")
+    dataframes = [d for d in dataframes if all(np.isin(["x", "y", "z"], d.columns))]
+    scatter += [d[["x", "y", "z"]].values for d in dataframes]
 
     # Collect volumes
     volumes = [ob for ob in x if isinstance(ob, np.ndarray) and (ob.ndim == 3)]
@@ -61,8 +65,9 @@ def parse_objects(x, include_geometries=True):
     arrays = [ob.copy() for ob in x if isinstance(ob, np.ndarray)]
     # Remove arrays with wrong dimensions
     if [ob for ob in arrays if ob.shape[1] != 3 and ob.shape[0] != 2]:
-        logger.warning('Arrays need to be of shape (N, 3) for scatter or (2, N)'
-                       ' for line plots.')
+        logger.warning(
+            "Arrays need to be of shape (N, 3) for scatter or (2, N)" " for line plots."
+        )
     arrays = [ob for ob in arrays if any(np.isin(ob.shape, [2, 3]))]
 
     points = dataframes + arrays
@@ -83,7 +88,7 @@ def _is_pandas_dataframe(x):
     return False
 
 
-def make_iterable(x, force_type = None):
+def make_iterable(x, force_type=None):
     """Force input into a numpy array.
 
     For dicts, keys will be turned into array.
@@ -148,7 +153,7 @@ def is_hashable(x) -> bool:
 
 def is_mesh_like(x):
     """Check if object is mesh (i.e. contains vertices and faces)."""
-    if hasattr(x, 'vertices') and hasattr(x, 'faces'):
+    if hasattr(x, "vertices") and hasattr(x, "faces"):
         return True
 
     return False
@@ -178,6 +183,41 @@ def is_volume(x):
     return False
 
 
+class VoxelCloud:
+    """Container for sparse volumetric data.
+
+    Wrapping voxel coordinates in this class tells `Viewer.add` to render
+    them as a (sparse) volume instead of as points.
+
+    Parameters
+    ----------
+    coords :    (N, 3) array
+                Voxel coordinates (xyz). Floats are floored to integers.
+    values :    (N,) array, optional
+                Per-voxel scalar values.
+
+    """
+
+    def __init__(self, coords, values=None):
+        coords = np.asarray(coords)
+        if coords.ndim != 2 or coords.shape[1] != 3:
+            raise ValueError(f"Expected (N, 3) array, got {coords.shape}")
+        if values is not None:
+            values = np.asarray(values).ravel()
+            if len(values) != len(coords):
+                raise ValueError(
+                    f"Got {len(values)} values for {len(coords)} voxels."
+                )
+        self.coords = coords
+        self.values = values
+
+    def __len__(self):
+        return len(self.coords)
+
+    def __repr__(self):
+        return f"<VoxelCloud with {len(self):,} voxels>"
+
+
 def is_pygfx_visual(x):
     """Check if object is a pygfx visual."""
     if isinstance(x, gfx.WorldObject):
@@ -196,20 +236,20 @@ def _type_of_script() -> str:
     """Return context (terminal, jupyter, colab, iPython) in which navis is run."""
     try:
         ipy_str = str(type(get_ipython()))  # noqa: F821
-        if 'zmqshell' in ipy_str:
-            return 'jupyter'
-        elif 'colab' in ipy_str:
-            return 'colab'
+        if "zmqshell" in ipy_str:
+            return "jupyter"
+        elif "colab" in ipy_str:
+            return "colab"
         else:  # if 'terminal' in ipy_str:
-            return 'ipython'
+            return "ipython"
     except BaseException:
         try:
             # This is not perfect but should work in most cases
             if hasattr(__main__.__file__):  # noqa: F821
-                return 'script'
+                return "script"
         except BaseException:
             pass
-        return 'terminal'
+        return "terminal"
 
 
 def is_jupyter() -> bool:
@@ -225,4 +265,4 @@ def is_jupyter() -> bool:
     False
 
     """
-    return _type_of_script() in ('jupyter', 'colab')
+    return _type_of_script() in ("jupyter", "colab")

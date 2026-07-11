@@ -1,0 +1,1 @@
+recursive-include octarine/shaders/wgsl *.wgsl

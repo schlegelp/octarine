@@ -19,7 +19,7 @@ from pygfx.renderers.wgpu.engine.edl import EDLPass
 
 from rendercanvas.offscreen import OffscreenRenderCanvas
 
-from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx
+from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx, sparsevolume2gfx
 from .conversion import get_converter
 from . import utils, config
 
@@ -1598,6 +1598,108 @@ class Viewer:
             vis._object_group = group
             self._add_to_scene(vis, center)
 
+    def add_sparse_volume(
+        self,
+        voxels,
+        values=None,
+        name=None,
+        group=None,
+        color=None,
+        opacity=1.0,
+        spacing=(1, 1, 1),
+        offset=(0, 0, 0),
+        clim=None,
+        mode="mip",
+        step_size=0.5,
+        brick_size=16,
+        interpolation=None,
+        hide_zero=True,
+        method="auto",
+        center=True,
+    ):
+        """Add sparse volumetric data to canvas.
+
+        In contrast to `add_volume`, this accepts an (N, 3) array of voxel
+        coordinates instead of a dense 3D grid. The data is rendered with a
+        custom raycasting shader whose memory footprint scales with the
+        number of occupied 16^3 bricks rather than with the bounding box -
+        tens of millions of voxels are feasible.
+
+        Parameters
+        ----------
+        voxels :    (N, 3) array | VoxelCloud
+                    Voxel coordinates (xyz). Floats are floored to integers.
+        values :    (N,) array, optional
+                    Per-voxel scalar values to map onto the colormap. If not
+                    provided, the volume is rendered as binary occupancy.
+        name :      str, optional
+                    Name for the visual.
+        group :     str, optional
+                    Group for the visual.
+        color :     color | list of colors | pygfx.Texture, optional
+                    Colormap to render the volume (see `add_volume`).
+        opacity :   float
+                    Opacity of the volume. In "density" mode this scales
+                    the extinction per voxel.
+        spacing :   tuple | float
+                    (x, y, z) side lengths of a single voxel.
+        offset :    tuple
+                    (x, y, z) world offset for the volume.
+        clim :      (min, max) tuple, optional
+                    Range used to scale `values`; defaults to their min/max.
+        mode :      "mip" | "density"
+                    Render as maximum-intensity projection or with
+                    front-to-back emission/absorption (cloud-like).
+        step_size : float
+                    Ray-march step (in voxels) inside occupied bricks.
+                    Smaller values miss fewer small structures but render
+                    slower.
+        brick_size : int
+                    Edge length (in voxels) of the bricks used to pack the
+                    data. Must be a power of two.
+        interpolation : "linear" | "nearest", optional
+                    Interpolation used when sampling the volume. Defaults
+                    to "nearest" for binary occupancy (no `values`) and
+                    "linear" when `values` are given.
+        hide_zero : bool
+                    Whether to hide empty space / the lowest value.
+        method :    "auto" | "shader" | "dense"
+                    "shader" uses the custom sparse-volume shader, "dense"
+                    bins the points into a (downsampled) dense grid rendered
+                    through the regular volume pipeline. "auto" uses the
+                    shader and falls back to "dense" if the data occupies
+                    too many bricks.
+        center :    bool, optional
+                    If True, re-center camera to all objects on canvas.
+
+        """
+        if name is None:
+            name = self._next_label("SparseVolume")
+        elif not isinstance(name, str):
+            name = str(name)
+
+        visuals = utils.make_iterable(
+            sparsevolume2gfx(
+                voxels,
+                values=values,
+                color=color,
+                opacity=opacity,
+                spacing=spacing,
+                offset=offset,
+                clim=clim,
+                mode=mode,
+                step_size=step_size,
+                brick_size=brick_size,
+                interpolation=interpolation,
+                hide_zero=hide_zero,
+                method=method,
+            )
+        )
+        for vis in visuals:
+            vis._object_id = name if name else uuid.uuid4()
+            vis._object_group = group
+            self._add_to_scene(vis, center)
+
     def close(self):
         """Close the viewer."""
         # Skip if this is headless mode
@@ -1861,6 +1963,85 @@ class Viewer:
                 if not hasattr(v, "material"):
                     continue
                 v.material.alpha_mode = mode
+
+    @update_viewer(legend=False, bounds=False)
+    def set_silhouette(self, silhouette, objects=None):
+        """Set Neuroglancer-style silhouette rendering for meshes.
+
+        Fragments are multiplied by `pow(1 - |dot(normal, view_dir)|, silhouette)`:
+        face-on regions become transparent while edges/creases are emphasized,
+        giving an x-ray-like view of the mesh's outline.
+
+        Parameters
+        ----------
+        silhouette : float
+                    The silhouette exponent: 0 disables the effect, typical
+                    values are 1-8 (same semantics as Neuroglancer's
+                    "silhouette" property).
+        objects :   list, optional
+                    Objects to set the silhouette for. If None, will set for
+                    all (mesh) objects. Non-mesh objects are silently skipped.
+
+        """
+        silhouette = float(silhouette)
+        if silhouette < 0:
+            raise ValueError(f"silhouette must be >= 0, got {silhouette}")
+
+        # This import registers the shader with pygfx
+        from .shaders import SilhouetteMeshMaterial
+
+        if objects is None:
+            objects = list(self.objects)
+        else:
+            objects = utils.make_iterable(objects)
+
+        for n in objects:
+            for v in self.objects[n]:
+                if getattr(v, "_pinned", False):
+                    continue
+                if not isinstance(v, gfx.Mesh):
+                    continue
+                mat = v.material
+                if isinstance(mat, SilhouetteMeshMaterial):
+                    mat.silhouette = silhouette
+                    if silhouette > 0:
+                        if not hasattr(mat, "_pre_silhouette_alpha_mode"):
+                            mat._pre_silhouette_alpha_mode = mat.alpha_mode
+                        mat.alpha_mode = "weighted_blend"
+                    elif hasattr(mat, "_pre_silhouette_alpha_mode"):
+                        mat.alpha_mode = mat._pre_silhouette_alpha_mode
+                        del mat._pre_silhouette_alpha_mode
+                elif isinstance(mat, gfx.MeshPhongMaterial):
+                    if silhouette == 0:
+                        continue
+                    # Swap in a silhouette material, carrying over the
+                    # relevant properties of the old one
+                    props = {
+                        p: getattr(mat, p)
+                        for p in (
+                            "color",
+                            "color_mode",
+                            "map",
+                            "opacity",
+                            "pick_write",
+                            "side",
+                            "flat_shading",
+                            "shininess",
+                            "specular",
+                            "emissive",
+                            "alpha_test",
+                        )
+                        if getattr(mat, p, None) is not None
+                    }
+                    new_mat = SilhouetteMeshMaterial(silhouette=silhouette, **props)
+                    new_mat._pre_silhouette_alpha_mode = mat.alpha_mode
+                    new_mat.alpha_mode = "weighted_blend"
+                    v.material = new_mat
+                elif silhouette > 0:
+                    logger.warning(
+                        f'Skipped mesh "{n}": silhouette rendering requires a '
+                        f"Phong-based material, got {type(mat).__name__}."
+                    )
 
     @update_viewer(legend=True, bounds=False)
     def set_colors(self, c, alpha_mode="auto"):

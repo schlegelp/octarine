@@ -1,5 +1,6 @@
 import uuid
 import cmap
+import warnings
 
 import pygfx as gfx
 import numpy as np
@@ -327,10 +328,187 @@ def volume2gfx(
         vis._object_id = uuid.uuid4()
 
         # Note: to trigger an update of the colormap data later:
-        # vis.material.data[:, 1] = 0
-        # vis.material.map.update_range((0, 0, 0), vis.material.map.size)
+        # vis.material.map.texture.data[:, 1] = 0
+        # vis.material.map.texture.update_range((0, 0, 0), vis.material.map.texture.size)
 
     return visuals
+
+
+def sparsevolume2gfx(
+    voxels,
+    color=None,
+    values=None,
+    clim=None,
+    opacity=1.0,
+    spacing=(1, 1, 1),
+    offset=(0, 0, 0),
+    brick_size=16,
+    mode="mip",
+    step_size=0.5,
+    interpolation=None,
+    hide_zero=True,
+    method="auto",
+    max_dense_dim=512,
+):
+    """Convert sparse (N, 3) voxel coordinates to a pygfx visual.
+
+    Uses a custom brick-map raycasting shader: memory scales with the number
+    of occupied 16^3 bricks rather than the bounding box, which makes tens of
+    millions of scattered voxels feasible.
+
+    Parameters
+    ----------
+    voxels :    (N, 3) array | VoxelCloud
+                Voxel coordinates (xyz). Floats are floored to integers.
+    color :     str | tuple | list | cmap.Colormap, optional
+                Colormap (or single color) to render the volume.
+    values :    (N,) array, optional
+                Per-voxel scalar values. If not provided, the volume is
+                rendered as binary occupancy.
+    clim :      (min, max) tuple, optional
+                Range used to scale `values`. Defaults to the data min/max.
+    opacity :   float
+                Opacity of the volume. In "density" mode this scales the
+                extinction per voxel.
+    spacing :   tuple | float
+                (x, y, z) side lengths of a single voxel.
+    offset :    tuple
+                (x, y, z) world offset for the volume.
+    brick_size : int
+                Edge length (in voxels) of the bricks used to pack the data.
+                Must be a power of two.
+    mode :      "mip" | "density"
+                Render as maximum-intensity projection or with front-to-back
+                emission/absorption (cloud-like).
+    step_size : float
+                Ray-march step (in voxels) inside occupied bricks. Smaller
+                values miss fewer small structures but render slower.
+    interpolation : "linear" | "nearest", optional
+                Interpolation used when sampling the volume. Defaults to
+                "nearest" for binary occupancy (no `values`), which renders
+                flat and artifact-free, and "linear" when `values` are
+                given, which shades smoothly.
+    hide_zero : bool
+                Whether to hide empty space / the lowest value.
+    method :    "auto" | "shader" | "dense"
+                "shader" uses the custom sparse-volume shader, "dense" bins
+                the points into a (downsampled) dense grid rendered through
+                the regular volume pipeline. "auto" uses the shader and falls
+                back to "dense" if the data occupies too many bricks.
+    max_dense_dim : int
+                Maximum grid side length for the "dense" fallback.
+
+    Returns
+    -------
+    vis :       gfx.WorldObject
+                Pygfx visual representing the sparse volume.
+
+    """
+    from .utils import VoxelCloud
+
+    if isinstance(voxels, VoxelCloud):
+        if values is None:
+            values = voxels.values
+        voxels = voxels.coords
+
+    voxels = np.asarray(voxels)
+    assert voxels.ndim == 2 and voxels.shape[1] == 3, "Expected (N, 3) array."
+    assert method in ("auto", "shader", "dense")
+    assert mode in ("mip", "density")
+    if isinstance(spacing, (int, float)):
+        spacing = [spacing] * 3
+    assert len(spacing) == 3, "Expected spacing as tuple of length 3."
+
+    if interpolation is None:
+        interpolation = "nearest" if values is None else "linear"
+
+    if method in ("auto", "shader"):
+        # Deliberately a lazy import: this registers the custom shader with
+        # pygfx and depends on pygfx's semi-public shader API
+        from .shaders import (
+            pack_sparse_voxels,
+            AtlasCapacityError,
+            SparseVolume,
+            SparseVolumeMaterial,
+        )
+
+        try:
+            packed = pack_sparse_voxels(
+                voxels, values=values, clim=clim, brick_size=brick_size
+            )
+        except AtlasCapacityError:
+            if method == "shader":
+                raise
+            warnings.warn(
+                "Data occupies too many bricks for the sparse-volume shader; "
+                "falling back to a downsampled dense volume."
+            )
+            packed = None
+
+        if packed is not None:
+            material = SparseVolumeMaterial(
+                render_mode=mode,
+                step_size=step_size,
+                # The atlas holds values quantized into 1-255 (0 = empty)
+                clim=(1, 255),
+                map=to_colormap(color, hide_zero=hide_zero),
+                interpolation=interpolation,
+                opacity=opacity,
+            )
+            if mode == "mip":
+                material.alpha_mode = "add"
+
+            vis = SparseVolume(packed, material)
+
+            (
+                vis.local.scale_x,
+                vis.local.scale_y,
+                vis.local.scale_z,
+            ) = spacing
+            (vis.local.x, vis.local.y, vis.local.z) = (
+                np.asarray(offset, dtype=float) + packed.origin * np.asarray(spacing)
+            )
+
+            # Add custom attributes
+            vis._object_type = "sparsevolume"
+            vis._object_id = uuid.uuid4()
+
+            return vis
+
+    # Dense fallback: bin points into a (downsampled) grid and render it
+    # through the regular volume pipeline
+    ijk = np.floor(voxels).astype(np.int64)
+    origin = ijk.min(axis=0)
+    ijk -= origin
+    extent = ijk.max(axis=0) + 1
+    factor = max(1, int(-(-extent.max() // max_dense_dim)))
+    ijk //= factor
+    dims = tuple(int(-(-e // factor)) for e in extent)
+
+    grid = np.zeros(dims, dtype=np.float32)
+    if values is None:
+        # Count points per (downsampled) voxel
+        np.add.at(grid, (ijk[:, 0], ijk[:, 1], ijk[:, 2]), 1.0)
+    else:
+        np.maximum.at(
+            grid,
+            (ijk[:, 0], ijk[:, 1], ijk[:, 2]),
+            np.asarray(values, dtype=np.float32).ravel(),
+        )
+
+    spacing = np.asarray(spacing, dtype=float)
+    # Offset by the data origin plus half a bin so that voxel centers line up
+    offset = np.asarray(offset, dtype=float) + (origin + (factor - 1) / 2) * spacing
+    return volume2gfx(
+        grid,
+        color=color,
+        opacity=opacity,
+        spacing=tuple(spacing * factor),
+        offset=tuple(offset),
+        clim=clim if (clim is not None and values is not None) else "data",
+        interpolation=interpolation,
+        hide_zero=hide_zero,
+    )
 
 
 def to_colormap(x, hide_zero):
