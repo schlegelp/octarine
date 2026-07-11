@@ -144,11 +144,11 @@ class Viewer:
             if not ip.active_eventloop:
                 if AUTOSTART_EVENT_LOOP:
                     try:
-                        ip.enable_gui("qt6")
+                        ip.enable_gui("qt")
                         logger.debug(
                             "Looks like you're running in an IPython environment but haven't "
                             "started a GUI event loop. We've started one for you using the "
-                            "Qt6 backend."
+                            "Qt backend."
                         )
                     except (ModuleNotFoundError, ImportError):
                         raise ValueError(
