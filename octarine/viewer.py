@@ -134,7 +134,7 @@ class Viewer:
         **kwargs,
     ):
         # We need to import WgpuCanvas before we (potentially) start the event loop
-        # If we don't we get a segfault.
+        # If we don't, we get a segfault.
         if not offscreen:
             from rendercanvas.auto import RenderCanvas
 

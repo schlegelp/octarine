@@ -2,6 +2,7 @@ import numpy as np
 import pygfx as gfx
 
 from functools import wraps
+from pathlib import Path
 
 try:
     from PySide6 import QtWidgets, QtCore, QtGui
@@ -50,6 +51,12 @@ class Controls(QtWidgets.QWidget):
     _shared_color_picker = None
     _active_color_controls = None
 
+    # Point-size slider range for scatter visuals. The slider is integer-valued,
+    # so size = tick * _SIZE_STEP.
+    _SIZE_MIN = 0.5
+    _SIZE_MAX = 50.0
+    _SIZE_STEP = 0.5
+
     def __init__(self, viewer, width=300, height=400):
         super().__init__()
         self.viewer = viewer
@@ -68,13 +75,17 @@ class Controls(QtWidgets.QWidget):
 
         self.tab1 = QtWidgets.QWidget()
         self.tab2 = QtWidgets.QWidget()
+        self.tab3 = QtWidgets.QWidget()
         self.tab1_layout = QtWidgets.QVBoxLayout()
         self.tab2_layout = QtWidgets.QVBoxLayout()
+        self.tab3_layout = QtWidgets.QVBoxLayout()
         self.tab1.setLayout(self.tab1_layout)
         self.tab2.setLayout(self.tab2_layout)
+        self.tab3.setLayout(self.tab3_layout)
 
         self.tabs.addTab(self.tab1, "Legend")
         self.tabs.addTab(self.tab2, "Controls")
+        self.tabs.addTab(self.tab3, "Screenshot")
 
         # self.btn_layout = QtWidgets.QVBoxLayout()
         # self.setLayout(self.btn_layout)
@@ -85,6 +96,7 @@ class Controls(QtWidgets.QWidget):
         # Build gui
         self.build_legend_gui()
         self.build_controls_gui()
+        self.build_screenshot_gui()
 
         # Populate legend
         self.update_legend()
@@ -305,6 +317,194 @@ class Controls(QtWidgets.QWidget):
         # This would make it so the legend does not stretch when
         # we resize the window vertically
         self.tab2_layout.addStretch(1)
+
+    def build_screenshot_gui(self):
+        """Build the GUI for the screenshot tab."""
+        # Checkbox for transparent background
+        self.screenshot_alpha_checkbox = QtWidgets.QCheckBox("Transparent")
+        self.screenshot_alpha_checkbox.setChecked(True)
+        self.screenshot_alpha_checkbox.setToolTip(
+            "Hide the background to export a transparent PNG."
+        )
+        self.tab3_layout.addWidget(self.screenshot_alpha_checkbox)
+
+        # Horizontal divider
+        self.tab3_layout.addWidget(QHLine())
+
+        # Show the current (physical) canvas size, i.e. what the screenshot
+        # size will be unless a custom size is set below
+        self.screenshot_current_size_label = QtWidgets.QLabel("")
+        # Allow wrapping so the label does not add to the tab's minimum width
+        self.screenshot_current_size_label.setWordWrap(True)
+        self.screenshot_current_size_label.setToolTip(
+            "Size of the screenshot unless a custom size is set below. This is "
+            "the canvas size times the render pixel ratio."
+        )
+        self.tab3_layout.addWidget(self.screenshot_current_size_label)
+        self._update_screenshot_size_label()
+
+        # The canvas emits no resize signal we could hook into, so poll
+        # (cheap; skipped entirely while the tab is not visible)
+        self._screenshot_size_timer = QtCore.QTimer(self)
+        self._screenshot_size_timer.setInterval(500)
+        self._screenshot_size_timer.timeout.connect(self._update_screenshot_size_label)
+        self._screenshot_size_timer.start()
+
+        # Checkbox + spinboxes for a custom screenshot size
+        self.screenshot_size_checkbox = QtWidgets.QCheckBox("Custom size")
+        self.screenshot_size_checkbox.setChecked(False)
+        self.screenshot_size_checkbox.setToolTip(
+            "Render the screenshot at a custom size. The canvas is temporarily "
+            "resized during the capture."
+        )
+        self.tab3_layout.addWidget(self.screenshot_size_checkbox)
+
+        self.screenshot_width_spinbox = QtWidgets.QSpinBox()
+        self.screenshot_width_spinbox.setToolTip("Width in pixels.")
+        self.screenshot_height_spinbox = QtWidgets.QSpinBox()
+        self.screenshot_height_spinbox.setToolTip("Height in pixels.")
+        for spinbox, value in zip(
+            (self.screenshot_width_spinbox, self.screenshot_height_spinbox),
+            self.viewer.size,
+        ):
+            spinbox.setRange(1, 8192)
+            spinbox.setValue(int(round(value)))
+            spinbox.setEnabled(False)
+
+        # One row per dimension - side by side they would dictate a fairly
+        # large minimum width for the whole controls window
+        size_layout = QtWidgets.QGridLayout()
+        size_layout.addWidget(QtWidgets.QLabel("Width:"), 0, 0)
+        size_layout.addWidget(self.screenshot_width_spinbox, 0, 1)
+        size_layout.addWidget(QtWidgets.QLabel("Height:"), 1, 0)
+        size_layout.addWidget(self.screenshot_height_spinbox, 1, 1)
+        self.tab3_layout.addLayout(size_layout)
+
+        def toggle_custom_size(checked):
+            self.screenshot_width_spinbox.setEnabled(checked)
+            self.screenshot_height_spinbox.setEnabled(checked)
+            # Grey out the current-size label while it is overridden
+            self.screenshot_current_size_label.setEnabled(not checked)
+
+        self.screenshot_size_checkbox.toggled.connect(toggle_custom_size)
+
+        # Horizontal divider
+        self.tab3_layout.addWidget(QHLine())
+
+        # Filename + browse button
+        self.tab3_layout.addWidget(QtWidgets.QLabel("File:"))
+        self.screenshot_filename_edit = QtWidgets.QLineEdit("screenshot.png")
+        self.screenshot_browse_button = QtWidgets.QPushButton("Browse...")
+        self.screenshot_browse_button.clicked.connect(self._screenshot_browse)
+
+        filename_layout = QtWidgets.QHBoxLayout()
+        filename_layout.addWidget(self.screenshot_filename_edit)
+        filename_layout.addWidget(self.screenshot_browse_button)
+        self.tab3_layout.addLayout(filename_layout)
+
+        # Save + copy-to-clipboard buttons; stacked vertically to keep
+        # the tab's minimum width small
+        self.screenshot_save_button = QtWidgets.QPushButton("Save screenshot")
+        self.screenshot_save_button.clicked.connect(self._save_screenshot)
+        self.tab3_layout.addWidget(self.screenshot_save_button)
+        self.screenshot_clipboard_button = QtWidgets.QPushButton("Copy to clipboard")
+        self.screenshot_clipboard_button.clicked.connect(self._screenshot_to_clipboard)
+        self.tab3_layout.addWidget(self.screenshot_clipboard_button)
+
+        # Label for transient status messages (e.g. "Saved ...")
+        self.screenshot_status_label = QtWidgets.QLabel("")
+        self.screenshot_status_label.setWordWrap(True)
+        self.tab3_layout.addWidget(self.screenshot_status_label)
+
+        # This would make it so the widgets do not stretch when
+        # we resize the window vertically
+        self.tab3_layout.addStretch(1)
+
+    def _update_screenshot_size_label(self):
+        """Refresh the label showing the current canvas (=screenshot) size."""
+        # `isVisible` also covers the controls window itself being hidden
+        if self.screenshot_current_size_label.text() and not self.tab3.isVisible():
+            return
+        try:
+            # The renderer snapshot comes out at logical size x pixel ratio
+            w, h = self.viewer.size
+            ratio = self.viewer.renderer.pixel_ratio
+        except Exception:
+            return
+        w, h = int(round(w * ratio)), int(round(h * ratio))
+        self.screenshot_current_size_label.setText(f"Current size: {w} x {h} px")
+
+    def _screenshot_kwargs(self):
+        """Collect screenshot options from the GUI."""
+        kwargs = dict(alpha=self.screenshot_alpha_checkbox.isChecked())
+        if self.screenshot_size_checkbox.isChecked():
+            kwargs["size"] = (
+                self.screenshot_width_spinbox.value(),
+                self.screenshot_height_spinbox.value(),
+            )
+            # Without this, the image dimensions would be the requested size
+            # times the renderer's pixel ratio (e.g. 2 on HiDPI screens)
+            kwargs["pixel_ratio"] = 1
+        return kwargs
+
+    def _screenshot_browse(self):
+        """Open a file dialog to pick the screenshot filename."""
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save screenshot",
+            self.screenshot_filename_edit.text() or "screenshot.png",
+            "PNG image (*.png)",
+        )
+        if filename:
+            self.screenshot_filename_edit.setText(filename)
+
+    def _save_screenshot(self):
+        """Save a screenshot with the current GUI settings."""
+        filename = self.screenshot_filename_edit.text().strip()
+        if not filename:
+            self._set_screenshot_status("Please choose a filename.")
+            return
+
+        try:
+            self.viewer.screenshot(filename=filename, **self._screenshot_kwargs())
+        except Exception as e:
+            self._set_screenshot_status(f"Error: {e}")
+            return
+
+        # Viewer.screenshot always writes PNG files - report the actual path
+        path = Path(filename)
+        if path.suffix != ".png":
+            path = path.parent / f"{path.name}.png"
+        self._set_screenshot_status(f"Saved {path.resolve()}")
+
+    def _screenshot_to_clipboard(self):
+        """Copy a screenshot to the system clipboard."""
+        try:
+            im = self.viewer.screenshot(filename=None, **self._screenshot_kwargs())
+        except Exception as e:
+            self._set_screenshot_status(f"Error: {e}")
+            return
+
+        im = np.ascontiguousarray(im)
+        h, w = im.shape[:2]
+        qimg = QtGui.QImage(im.data, w, h, w * 4, QtGui.QImage.Format_RGBA8888)
+        # The QImage merely wraps the numpy buffer - copy so the clipboard
+        # owns the data even after `im` is garbage-collected
+        QtWidgets.QApplication.clipboard().setImage(qimg.copy())
+        self._set_screenshot_status(f"Copied {w}x{h} image to clipboard.")
+
+    def _set_screenshot_status(self, text, timeout=5000):
+        """Show a transient status message in the screenshot tab."""
+        self.screenshot_status_label.setText(text)
+        self.screenshot_status_label.setToolTip(text)
+
+        def clear():
+            # Only clear if no newer message has replaced this one
+            if self.screenshot_status_label.text() == text:
+                self.screenshot_status_label.setText("")
+                self.screenshot_status_label.setToolTip("")
+
+        QtCore.QTimer.singleShot(timeout, clear)
 
     def create_legend(self, spacing=0, index=None):
         """Generate the legend widget."""
@@ -1091,6 +1291,7 @@ class Controls(QtWidgets.QWidget):
         push_button = self.findChild(QtWidgets.QPushButton, sender.objectName())
         # print(f'click: {push_button.objectName()}')
         self.active_objects = push_button._id
+        self._sync_and_show_size_popup(anchor=push_button)
         self.color_picker.show()
 
     def volume_button_clicked(self):
@@ -1104,19 +1305,98 @@ class Controls(QtWidgets.QWidget):
     @set_viewer_stale
     def set_color(self, color):
         """Color current active object(s). This is the callback for the color picker."""
-        if self.active_objects is None:
+        targets = self._resolve_targets()
+        if not targets:
             return
-        elif self.active_objects == "selected":
-            targets = self.get_selected()
-        elif not isinstance(self.active_objects, (list, tuple)):
-            targets = [self.active_objects]
-        else:
-            targets = list(self.active_objects)
 
         # Convert QColor to [0-1] RGB
         color = np.array(color.toTuple()) / 255
 
         self.viewer.set_colors({name: color for name in targets})
+
+    def _resolve_targets(self):
+        """Flatten self.active_objects into a list of object names."""
+        if self.active_objects is None:
+            return []
+        if self.active_objects == "selected":
+            return self.get_selected()
+        if not isinstance(self.active_objects, (list, tuple)):
+            return [self.active_objects]
+        return list(self.active_objects)  # copy: group _id is a live list
+
+    def _iter_points_visuals(self):
+        """Yield active gfx.Points visuals whose size can be set (skip per-vertex)."""
+        for name in self._resolve_targets():
+            for vis in self.viewer.objects.get(name, []):
+                if not isinstance(vis, gfx.Points):
+                    continue
+                # Per-vertex sizing ignores material.size; don't pretend to set it.
+                if getattr(vis.material, "size_mode", None) == "vertex":
+                    continue
+                yield vis
+
+    @set_viewer_stale
+    def set_point_size(self, size):
+        """Set material.size on all active Points visuals (size-slider callback)."""
+        for vis in self._iter_points_visuals():
+            vis.material.size = float(size)
+
+    def _ensure_point_size_popup(self):
+        """Lazily build the per-instance point-size popup and return it."""
+        if getattr(self, "_point_size_popup", None) is not None:
+            return self._point_size_popup
+
+        # Qt.Tool: floats beside the (native) color dialog without stealing focus
+        # or auto-closing on outside clicks.
+        popup = QtWidgets.QWidget(self, QtCore.Qt.Tool)
+        popup.setWindowTitle("Point size")
+        layout = QtWidgets.QHBoxLayout(popup)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.addWidget(QtWidgets.QLabel("Point size"))
+
+        slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        slider.setMinimum(int(round(self._SIZE_MIN / self._SIZE_STEP)))
+        slider.setMaximum(int(round(self._SIZE_MAX / self._SIZE_STEP)))
+        label = QtWidgets.QLabel(f"{self._SIZE_MIN:3.2f}")
+        label.setMinimumWidth(40)
+
+        def on_change(tick):
+            size = tick * self._SIZE_STEP
+            label.setText(f"{size:3.2f}")
+            self.set_point_size(size)
+
+        slider.valueChanged.connect(on_change)
+        layout.addWidget(slider, stretch=1)
+        layout.addWidget(label)
+
+        self._point_size_popup = popup
+        self._point_size_slider = slider
+        self._point_size_label = label
+        return popup
+
+    def _sync_and_show_size_popup(self, anchor=None):
+        """Show the size popup near `anchor` if any active target is a Points visual."""
+        first = next(self._iter_points_visuals(), None)
+        if first is None:
+            if getattr(self, "_point_size_popup", None) is not None:
+                self._point_size_popup.hide()
+            return
+
+        popup = self._ensure_point_size_popup()
+        size = float(getattr(first.material, "size", self._SIZE_MIN))
+        size = max(self._SIZE_MIN, min(self._SIZE_MAX, size))
+        tick = int(round(size / self._SIZE_STEP))
+
+        # Block signals so the pre-fill doesn't re-quantize the stored size.
+        self._point_size_slider.blockSignals(True)
+        self._point_size_slider.setValue(tick)
+        self._point_size_slider.blockSignals(False)
+        self._point_size_label.setText(f"{tick * self._SIZE_STEP:3.2f}")
+
+        if anchor is not None:
+            popup.move(anchor.mapToGlobal(QtCore.QPoint(0, anchor.height())))
+        popup.show()
+        popup.raise_()
 
     def select_all(self):
         """Select all objects."""
@@ -1146,6 +1426,7 @@ class Controls(QtWidgets.QWidget):
     def color_selected(self):
         """Set the active object to be the selected objects."""
         self.active_objects = "selected"
+        self._sync_and_show_size_popup(anchor=self)
         self.color_picker.show()
 
     @set_viewer_stale
@@ -1334,6 +1615,8 @@ class Controls(QtWidgets.QWidget):
         if Controls._active_color_controls is self:
             Controls._active_color_controls = None
         self.color_picker.hide()
+        if getattr(self, "_point_size_popup", None) is not None:
+            self._point_size_popup.hide()
         super().close()
 
 
