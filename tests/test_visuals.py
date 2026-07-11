@@ -52,6 +52,62 @@ def test_adding_mesh(mesh, color):
     v.close()
 
 
+def test_mesh_silhouette_render(mesh):
+    """Silhouette must make face-on regions transparent but keep the rim bright."""
+
+    def render(silhouette):
+        v = oc.Viewer(offscreen=True, size=(300, 300))
+        v.add_mesh(mesh, color="red", silhouette=silhouette)
+        img = np.asarray(v.screenshot(filename=None, size=(300, 300)))
+        v.close()
+        return img[..., :3].max(axis=-1).astype(float)
+
+    plain = render(None)
+    sil = render(2.0)
+
+    # The camera centers the object, so the image center is face-on
+    # (note: the screenshot may come back at 2x on hidpi displays)
+    h, w = plain.shape
+    c = np.s_[h // 2 - 10 : h // 2 + 10, w // 2 - 10 : w // 2 + 10]
+    assert plain[c].mean() > 50
+    assert sil[c].mean() < 0.2 * plain[c].mean()
+
+    # A ~4 px band just inside the sphere's outline must stay bright
+    mask = plain > 20
+    eroded = mask.copy()
+    for _ in range(4):
+        for shift, axis in ((1, 0), (-1, 0), (1, 1), (-1, 1)):
+            eroded &= np.roll(eroded, shift, axis=axis)
+    rim = mask & ~eroded
+    assert rim.any()
+    assert sil[rim].mean() > 5 * sil[c].mean()
+
+
+def test_set_silhouette_toggle(mesh):
+    from octarine.shaders import SilhouetteMeshMaterial
+
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.add_mesh(mesh, color="red")
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    color_before = tuple(obj.material.color)
+    mode_before = obj.material.alpha_mode
+
+    # Turning silhouette on swaps in the custom material (keeping the color)
+    v.set_silhouette(2.0)
+    assert isinstance(obj.material, SilhouetteMeshMaterial)
+    assert obj.material.silhouette == 2.0
+    assert obj.material.alpha_mode == "weighted_blend"
+    assert tuple(obj.material.color) == color_before
+    v.canvas.draw()
+
+    # Turning it off restores the previous alpha mode
+    v.set_silhouette(0)
+    assert obj.material.silhouette == 0
+    assert obj.material.alpha_mode == mode_before
+    v.canvas.draw()
+    v.close()
+
+
 def test_showing_messsage():
     v = oc.Viewer(offscreen=True)
     v.show_message("test", color="red")

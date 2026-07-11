@@ -13,7 +13,7 @@ from . import config, utils
 logger = config.get_logger(__name__)
 
 
-def mesh2gfx(mesh, color, alpha=None):
+def mesh2gfx(mesh, color, alpha=None, silhouette=None):
     """Convert generic mesh to pygfx visuals.
 
     Parameters
@@ -27,6 +27,11 @@ def mesh2gfx(mesh, color, alpha=None):
     alpha :         float, optional
                     Opacity value [0-1]. If provided, will override
                     the alpha channel of the color.
+    silhouette :    float, optional
+                    If provided (and > 0), render the mesh with a
+                    Neuroglancer-style silhouette effect: face-on regions
+                    become transparent, edges/creases are emphasized.
+                    Typical values are 1-8.
 
     """
     # Skip empty meshes
@@ -45,7 +50,7 @@ def mesh2gfx(mesh, color, alpha=None):
             positions=mesh.vertices.astype(np.float32, copy=False),
             **obj_color_kwargs,
         ),
-        gfx.MeshPhongMaterial(**mat_color_kwargs),
+        _make_mesh_material(mat_color_kwargs, silhouette),
     )
 
     # Add custom attributes
@@ -55,7 +60,21 @@ def mesh2gfx(mesh, color, alpha=None):
     return vis
 
 
-def geometry2gfx(geometry, color, alpha=None):
+def _make_mesh_material(mat_color_kwargs, silhouette=None):
+    """Create a Phong material, optionally with a silhouette effect."""
+    if not silhouette:
+        return gfx.MeshPhongMaterial(**mat_color_kwargs)
+
+    # This import registers the shader with pygfx
+    from .shaders import SilhouetteMeshMaterial
+
+    # Weighted (order-independent) blending composites the mostly-transparent
+    # silhouette sensibly even for many overlapping meshes
+    mat_color_kwargs = dict(mat_color_kwargs, alpha_mode="weighted_blend")
+    return SilhouetteMeshMaterial(silhouette=float(silhouette), **mat_color_kwargs)
+
+
+def geometry2gfx(geometry, color, alpha=None, silhouette=None):
     """Convert a pygfx.Geometry to a pygfx.Mesh.
 
     Parameters
@@ -69,6 +88,11 @@ def geometry2gfx(geometry, color, alpha=None):
     alpha :         float, optional
                     Opacity value [0-1]. If provided, will override
                     the alpha channel of the color.
+    silhouette :    float, optional
+                    If provided (and > 0), render the mesh with a
+                    Neuroglancer-style silhouette effect: face-on regions
+                    become transparent, edges/creases are emphasized.
+                    Typical values are 1-8.
 
     """
     # Parse color
@@ -81,7 +105,7 @@ def geometry2gfx(geometry, color, alpha=None):
     # But that doesn't seem to be the case.
     mat_color_kwargs["pick_write"] = True
 
-    vis = gfx.Mesh(geometry, gfx.MeshPhongMaterial(**mat_color_kwargs))
+    vis = gfx.Mesh(geometry, _make_mesh_material(mat_color_kwargs, silhouette))
 
     # Add custom attributes
     vis._object_type = "mesh"

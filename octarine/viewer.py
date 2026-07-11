@@ -1320,7 +1320,14 @@ class Viewer:
             self.center_camera()
 
     def add_mesh(
-        self, mesh, name=None, group=None, color=None, alpha=None, center=True
+        self,
+        mesh,
+        name=None,
+        group=None,
+        color=None,
+        alpha=None,
+        silhouette=None,
+        center=True,
     ):
         """Add mesh to canvas.
 
@@ -1341,13 +1348,27 @@ class Viewer:
         alpha :     float, optional
                     Opacity value [0-1]. If provided, will override
                     the alpha channel of the color.
+        silhouette : float, optional
+                    If provided (and > 0), render the mesh with a
+                    Neuroglancer-style silhouette effect: face-on regions
+                    become transparent while edges/creases are emphasized.
+                    Typical values are 1-8 (same exponent semantics as
+                    Neuroglancer). Use `Viewer.set_silhouette` to toggle
+                    the effect on existing meshes.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
         """
         if isinstance(mesh, tm.Scene):
             for _, ob in mesh.geometry.items():
-                self.add_mesh(ob, name=name, color=color, alpha=alpha, center=False)
+                self.add_mesh(
+                    ob,
+                    name=name,
+                    color=color,
+                    alpha=alpha,
+                    silhouette=silhouette,
+                    center=False,
+                )
             return
 
         if not utils.is_mesh_like(mesh):
@@ -1360,7 +1381,7 @@ class Viewer:
             name = str(name)
 
         if not isinstance(mesh, gfx.Mesh):
-            visual = mesh2gfx(mesh, color=color, alpha=alpha)
+            visual = mesh2gfx(mesh, color=color, alpha=alpha, silhouette=silhouette)
         else:
             visual = mesh
 
