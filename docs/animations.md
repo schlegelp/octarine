@@ -49,6 +49,40 @@ cube rotate faster:
 You could decouple the rotation from the frame rate by incrementing the rotation
 depending on how much time has passed since the last call.
 
+A few useful options of [`octarine.Viewer.add_animation`][]`()`:
+
+- `on_error` determines what happens when your function raises an exception:
+  `"remove"` (default) drops it from the animation loop, `"log"` logs the
+  error and keeps going, `"ignore"` silently continues and `"raise"` lets
+  the exception bubble up
+- `run_every=N` calls the function only every `N` frames
+- `req_render=False` tells the viewer that the function does not change the
+  scene - relevant when using a `"reactive"` [render trigger](triggers.md)
+
+Use [`octarine.Viewer.remove_animation`][]`()` to remove a function from the
+animation loop again.
+
+## Recording videos
+
+The `octarine.video_helpers` module contains functions to record the viewer
+to a video file. Currently there is just one:
+[octarine.video_helpers.make_rotation_video][], which rotates the camera
+once around the scene:
+
+```python
+>>> from octarine.video_helpers import make_rotation_video
+
+>>> # Record a 100-frame rotation around the z-axis
+>>> make_rotation_video(v, "rotation.mp4", n_frames=100, fps=30, axis="z")
+```
+
+With `video_path=None` the frames are returned as a list of numpy arrays
+instead of being written to file.
+
+!!! note
+
+    This requires `scipy` and `tqdm`, plus `imageio` if you want to write
+    the video to file (`pip install imageio scipy tqdm`).
 
 ## What next?
 

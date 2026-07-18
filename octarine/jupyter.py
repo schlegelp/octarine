@@ -53,6 +53,7 @@ class JupyterOutput(HBox):
                 "the page after installation."
             )
 
+        # TODO: spread toolbar horizontally when sidecar is used
         self.toolbar = JupyterToolbar(viewer)
         self.output = (
             viewer.canvas,

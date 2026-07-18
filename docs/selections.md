@@ -30,10 +30,16 @@ v.on_double_click = "select"
 ```
 
 <video controls>
-<source src="../_static/picking_example1.mov" type="video/mp4">
+<source src="../_static/picking_example1.mp4" type="video/mp4">
 </video>
 
-See the help for `v.on_double_click` for other presets.
+[`Viewer.on_double_click`][octarine.Viewer] accepts the following values:
+
+- `None`: do nothing (default)
+- `"select"`: select/deselect the object
+- `"hide"`: hide the object (use e.g. [`octarine.Viewer.unhide_objects`][] to bring it back)
+- `"remove"`: remove the object from the viewer
+- a custom function; see [below](#custom-callbacks)
 
 !!! tip "Selection color"
 
@@ -50,13 +56,44 @@ Alternatively, you can also adjust the behavior when hovering over objects:
 v.on_hover = "highlight"
 ```
 
-If you want a custom behaviour, have a look at the logic behind the
-`Viewer.on_double_click` setter - `pygfx` makes it ridiculously easy to
-hook into the event system. We're also happy to extend the current
-list of options - please open a [Github Issue](https://github.com/schlegelp/octarine/issues/new)
+!!! note "Pickability"
+
+    Setting `on_double_click` or `on_hover` automatically makes all objects
+    pickable (i.e. sets `material.pick_write = True` on their materials).
+    You can also toggle this manually via the `Viewer.objects_pickable`
+    property.
+
+The current selection is available through the `Viewer.selected` property;
+similarly, `Viewer.highlighted` tells you which objects are currently
+highlighted.
+
+### Custom callbacks
+
+`on_double_click` also accepts a custom function. It will be called with
+the `pygfx` event and the viewer whenever an object is double-clicked:
+
+```python
+def on_pick(event, viewer):
+    """Print the name of the object that was double-clicked."""
+    # The pygfx visual that was clicked on (None if empty space)
+    visual = event.pick_info["world_object"]
+
+    # Map the visual back to its object ID
+    for name, visuals in viewer.objects.items():
+        if visual in visuals:
+            print(f"You clicked on {name!r}")
+
+v.on_double_click = on_pick
+```
+
+Have a look at `octarine.viewer.handle_object_event` - the function behind
+the built-in presets - as a template for writing your own callbacks. `pygfx`
+makes it ridiculously easy to hook into the event system. We're also happy
+to extend the current list of options - please open a
+[Github Issue](https://github.com/schlegelp/octarine/issues/new)
 if you have suggestions!
 
-Last but not least, these setting can also be accessed through the control panel:
+Last but not least, these settings can also be accessed through the control panel:
 
 ![picking controls](_static/picking_controls.png)
 

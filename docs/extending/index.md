@@ -1,6 +1,6 @@
 # Extending `Octarine`
 
-In [Adding Objects](objects.md) you learned how to use the built-in
+In [Adding Objects](../objects.md) you learned how to use the built-in
 object types. But what if you have want to visualize something not currently supported by `Octarine`?
 
 You have effectively two options:

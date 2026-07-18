@@ -1008,21 +1008,16 @@ class Viewer:
 
         Parameters
         ----------
-
-        For Jupyter lab only:
-
         use_sidecar : bool
-                      If True, will use the Sidecar extension to display the
-                      viewer outside the notebooks. Will throw an error if
-                      Sidecar is not installed.
+                      Jupyter lab only: if True, will use the Sidecar extension
+                      to display the viewer outside the notebooks. Will throw
+                      an error if Sidecar is not installed.
         toolbar :     bool
-                      If True, will show a toolbar. You can always show/hide
-                      the toolbar with ``viewer.show_controls()`` and
-                      ``viewer.hide_controls()``, or the `c` hotkey.
-
-        For scripts & standard REPL:
-
+                      Jupyter lab only: if True, will show a toolbar. You can
+                      always show/hide the toolbar with ``viewer.show_controls()``
+                      and ``viewer.hide_controls()``, or the `c` hotkey.
         start_loop :  bool
+                      Scripts & standard REPL only:
                       If True, will start the blocking (!) event loop. This is
                       the recommended way to show the viewer when using it in a script.
                       From an interactive REPL such as IPython you should be able to

@@ -104,10 +104,31 @@ Need to communicate with the user? Try the [`octarine.Viewer.show_message`][]`()
 
 ## GUI Controls
 
+The control panel is organized into four tabs:
+
+![picking controls](_static/picking_controls.png)
+
+- **Legend**: one entry per object with a color button and a visibility
+  checkbox. Objects added with a `group` (see
+  [Managing Objects](manage.md#grouping-objects)) appear as collapsible
+  entries with member counts that can be toggled or colorized as one.
+  Use the filter field to search entries by name; hovering over an entry
+  highlights the corresponding object in the viewer.
+- **Controls**: viewer-wide settings - what happens on hover and
+  double-click (see [Selecting Objects](selections.md)), flat
+  shading/wireframe for meshes, an FPS counter, ambient light and the
+  [render trigger](triggers.md).
+- **Screenshot**: save a screenshot to file (with options for size and a
+  transparent background) or copy it straight to the clipboard.
+- **Effects**: toggle [silhouette rendering](effects.md#silhouette-rendering)
+  and [depth of field](effects.md#depth-of-field) - see
+  [Effects & Shading](effects.md).
+
 ### Shell/IPython
 `Octarine` GUI controls when run from the shell currently
 require [PySide6](https://pypi.org/project/PySide6/) to be installed and you
-may have to use `%gui qt6` when inside `IPython`.
+may have to use `%gui qt` when inside `IPython` (recent versions of `Octarine`
+will typically run this for you automatically).
 
 To activate them you can either press the `c` hotkey or:
 

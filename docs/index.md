@@ -79,4 +79,12 @@ v.add(meshes)
 
     [:octicons-arrow-right-24: Controls](controls.md)
 
+-   :material-auto-fix:{ .lg .middle } __Effects__
+
+    ---
+
+    Depth of field, silhouettes, bloom and other effects.
+
+    [:octicons-arrow-right-24: Effects & Shading](effects.md)
+
 </div>

@@ -161,3 +161,6 @@ cython_debug/
 
 
 .DS_store
+
+# Design source files (e.g. for the logo)
+*.afdesign

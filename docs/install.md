@@ -4,6 +4,12 @@
 `pip`, ideally by using a [virtual environment]. Open up a terminal and install
 `Octarine` with:
 
+!!! info "Requirements"
+
+    `Octarine` requires Python `3.10` or later. Its main dependency,
+    [`pygfx`](https://github.com/pygfx/pygfx) (`>=0.16`), is installed
+    automatically.
+
 === "Full Install"
 
     The full install should set you up for using `Octarine` in

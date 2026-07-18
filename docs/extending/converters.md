@@ -55,6 +55,11 @@ import octarine as oc
 oc.register_converter(Point3d, convert_point3d)
 ```
 
+!!! tip
+
+    You can use [octarine.get_converter][] to check which converter
+    `Octarine` will use for a given data type.
+
 With that we add a `Point3d` to any viewer:
 
 ```

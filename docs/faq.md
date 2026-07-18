@@ -26,10 +26,11 @@ likely) <code>PyQt6</code> installed in which case <code>IPython</code> latches 
 those instead of <code>PySide6</code>.
 
 Bottom line: make sure you only have <code>PySide6</code> installed as window
-manager and then run this %magic command at start-up:
+manager and then run this %magic command at start-up (recent versions of
+<code>Octarine</code> will typically do this for you automatically):
 
 ```python
-%gui qt6
+%gui qt
 ```
 
 </details>

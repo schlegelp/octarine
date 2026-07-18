@@ -425,9 +425,9 @@ class SelectionGizmo:
     viewer : Viewer
         The viewer to which the gizmo is attached.
     callback : callable, optional
-        A function to call when the selection is done. Must accept the selection as a dictionary (see
-        [`SelectionGizmo._find_selected_objects`][octarine.selection.SelectionGizmo._find_selected_objects]
-        for details). Can also be added post-hoc using `SelectionGizmo.add_callback().
+        A function to call when the selection is done. Must accept the selection as a dictionary
+        (see `SelectionGizmo._find_selected_objects` for details). Can also be added post-hoc
+        using `SelectionGizmo.add_callback()`.
     ignore_invisible :  bool
         Whether to ignore invisible objects. Default is True.
     **kwargs
