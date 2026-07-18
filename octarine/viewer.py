@@ -1887,7 +1887,7 @@ class Viewer:
     @update_viewer(legend=True, bounds=True)
     def hide_selected(self):
         """Hide currently selected object(s)."""
-        self.hide_neurons(self.selected)
+        self.hide_objects(self.selected)
 
     @update_viewer(legend=True, bounds=True)
     def unhide_objects(self, obj=None):
