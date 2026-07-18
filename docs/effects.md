@@ -59,6 +59,9 @@ creases are emphasized, giving an x-ray-like view of the mesh's outline.
 >>> v.set_silhouette(0)
 ```
 
+![silhouette off](_static/effects_silhouette_before.png){ width="49%" }
+![silhouette on](_static/effects_silhouette_after.png){ width="49%" }
+
 Under the hood, fragments are multiplied by
 `pow(1 - |dot(normal, view_dir)|, silhouette)` - i.e. the `silhouette`
 exponent has the same semantics as Neuroglancer's "silhouette" property.
@@ -106,6 +109,16 @@ Currently supported effects:
 See the [`octarine.Viewer.add_effect`][] reference for details on the
 individual parameters.
 
+Here is what these effects look like (click to enlarge; the bloom example
+uses `bloom_strength=0.5` to make the effect more obvious):
+
+![no effect](_static/effects_baseline.png){ width="49%" }
+![edl](_static/effects_edl.png){ width="49%" }
+![noise](_static/effects_noise.png){ width="49%" }
+![fog](_static/effects_fog.png){ width="49%" }
+![depth](_static/effects_depth.png){ width="49%" }
+![bloom](_static/effects_bloom.png){ width="49%" }
+
 ## Depth of field
 
 [`octarine.Viewer.set_depth_of_field`][] adds a photographic focal blur:
@@ -129,6 +142,9 @@ farther is progressively blurred.
 >>> # Disable again
 >>> v.set_depth_of_field(False)
 ```
+
+![no effect](_static/effects_baseline.png){ width="49%" }
+![depth of field](_static/effects_dof.png){ width="49%" }
 
 The most important parameters:
 
