@@ -600,7 +600,20 @@ def to_colormap(x, hide_zero):
     return tm
 
 
-def points2gfx(points, color, size=2, marker=None, size_space="screen"):
+def points2gfx(
+    points,
+    color,
+    size=2,
+    marker=None,
+    size_space="screen",
+    edge_size_space=None,
+    min_size=None,
+    max_size=None,
+    min_edge_width=None,
+    edge_width=None,
+    edge_color=None,
+    edge_mode=None,
+):
     """Convert points to pygfx visuals.
 
     Parameters
@@ -620,6 +633,29 @@ def points2gfx(points, color, size=2, marker=None, size_space="screen"):
                     will keep the line width constant on the screen, while
                     "world" and "model" will keep it constant in world and
                     model coordinates, respectively.
+    edge_size_space : "screen" | "world" | "model", optional
+                    Units to use for the marker's edge width. By default
+                    (None) the edge width uses `size_space`. E.g. combine
+                    ``size_space="world"`` with ``edge_size_space="screen"``
+                    for world-sized markers with a constant on-screen edge.
+    min_size :      float, optional
+                    Minimum on-screen marker size in (logical) pixels.
+                    Useful with ``size_space="world"`` to keep far-away
+                    points visible.
+    max_size :      float, optional
+                    Maximum on-screen marker size in (logical) pixels.
+    min_edge_width : float, optional
+                    Minimum on-screen edge width in (logical) pixels. Only
+                    applies when the edge is enabled (edge_width > 0).
+    edge_width :    float, optional
+                    Width of the marker's edge. Defaults to pygfx's default
+                    (currently 1). Only relevant for markers.
+    edge_color :    str | tuple, optional
+                    Color of the marker's edge. Defaults to pygfx's default
+                    (currently black). Only relevant for markers.
+    edge_mode :     "centered" | "inner" | "outer", optional
+                    How the edge is drawn relative to the marker's outline.
+                    Defaults to pygfx's default (currently "centered").
 
     Returns
     -------
@@ -672,7 +708,43 @@ def points2gfx(points, color, size=2, marker=None, size_space="screen"):
             color = color.astype(np.float32, copy=False)
         material_kwargs["color"] = color
 
-    if marker is None:
+    # The custom flex material is only needed for features the stock pygfx
+    # materials don't have; edge parameters require a marker material.
+    needs_flex = (
+        edge_size_space is not None
+        or min_size is not None
+        or max_size is not None
+        or min_edge_width is not None
+    )
+    needs_edge = edge_width is not None or edge_color is not None or edge_mode is not None
+
+    if needs_flex or needs_edge or marker is not None:
+        if edge_width is not None:
+            material_kwargs["edge_width"] = edge_width
+        if edge_color is not None:
+            material_kwargs["edge_color"] = edge_color
+        if edge_mode is not None:
+            material_kwargs["edge_mode"] = edge_mode
+        if marker is None:
+            # Plain points are drawn as circle markers; unless the user asked
+            # for an edge, make it invisible to match gfx.PointsMaterial.
+            marker = "circle"
+            material_kwargs.setdefault("edge_width", 0)
+            material_kwargs.setdefault("edge_color", (0, 0, 0, 0))
+
+    if needs_flex:
+        from .shaders import FlexPointsMaterial
+
+        material = FlexPointsMaterial(
+            marker=marker,
+            size_space=size_space,
+            edge_size_space=edge_size_space,
+            min_size=min_size,
+            max_size=max_size,
+            min_edge_width=min_edge_width,
+            **material_kwargs,
+        )
+    elif marker is None:
         material = gfx.PointsMaterial(size_space=size_space, **material_kwargs)
     else:
         material = gfx.PointsMarkerMaterial(

@@ -1463,6 +1463,13 @@ class Viewer:
         marker=None,
         size=2,
         size_space="screen",
+        edge_size_space=None,
+        min_size=None,
+        max_size=None,
+        min_edge_width=None,
+        edge_width=None,
+        edge_color=None,
+        edge_mode=None,
         center=True,
     ):
         """Add points plot to canvas.
@@ -1494,6 +1501,32 @@ class Viewer:
                     model coordinates, respectively. In the latter two cases,
                     `size` corresponds to the diameter (not radius) of the
                     marker!
+        edge_size_space : "screen" | "world" | "model", optional
+                    Units to use for the marker's edge width. By default
+                    (None) the edge width uses `size_space`. E.g. combine
+                    ``size_space="world"`` with ``edge_size_space="screen"``
+                    for world-sized markers with a constant on-screen edge.
+        min_size :  float, optional
+                    Minimum on-screen marker size in (logical) pixels.
+                    Useful with ``size_space="world"`` to keep far-away
+                    points visible: "100 world units but at least 10 pixels".
+        max_size :  float, optional
+                    Maximum on-screen marker size in (logical) pixels.
+        min_edge_width : float, optional
+                    Minimum on-screen edge width in (logical) pixels. Useful
+                    with ``edge_size_space="world"`` to keep the edge visible
+                    when zoomed out. Only applies when the edge is enabled
+                    (edge_width > 0).
+        edge_width : float, optional
+                    Width of the marker's edge (in `edge_size_space` units).
+                    Defaults to pygfx's default (currently 1).
+        edge_color : str | tuple, optional
+                    Color of the marker's edge. Defaults to pygfx's default
+                    (currently black).
+        edge_mode : "centered" | "inner" | "outer", optional
+                    How the edge is drawn relative to the marker's outline:
+                    straddling it, inside it, or outside it. Defaults to
+                    pygfx's default (currently "centered").
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -1510,7 +1543,18 @@ class Viewer:
             name = str(name)
 
         visual = points2gfx(
-            points, color=color, size=size, size_space=size_space, marker=marker
+            points,
+            color=color,
+            size=size,
+            size_space=size_space,
+            marker=marker,
+            edge_size_space=edge_size_space,
+            min_size=min_size,
+            max_size=max_size,
+            min_edge_width=min_edge_width,
+            edge_width=edge_width,
+            edge_color=edge_color,
+            edge_mode=edge_mode,
         )
         visual._object_id = name if name else uuid.uuid4()
         visual._object_group = group
