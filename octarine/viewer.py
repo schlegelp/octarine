@@ -16,6 +16,8 @@ from pathlib import Path
 from collections import OrderedDict
 from functools import wraps, lru_cache, partial
 from pygfx.renderers.wgpu.engine.edl import EDLPass
+from pygfx.renderers.wgpu.engine.effectpasses import NoisePass, FogPass, NormalPass
+from pygfx.renderers.wgpu.engine.bloom import PhysicalBasedBloomPass
 
 from rendercanvas.offscreen import OffscreenRenderCanvas
 
@@ -35,6 +37,13 @@ AUTOSTART_EVENT_LOOP = True
 
 EFFECT_CLASSES = {
     "edl": EDLPass,
+    "noise": NoisePass,
+    "fog": FogPass,
+    # `None` = resolved lazily inside `add_effect` (octarine's own
+    # NormalizedDepthPass; avoids importing .shaders at module load)
+    "depth": None,
+    "normal": NormalPass,
+    "bloom": PhysicalBasedBloomPass,
 }
 
 # TODO
@@ -882,10 +891,11 @@ class Viewer:
         else:
             raise TypeError(f"Expected callable or index (int), got {type(x)}")
 
-    def add_effect(self, effect, **kwargs):
+    def add_effect(self, effect, disable=False, **kwargs):
         """Add post-processing effect to the renderer.
 
-        You can also use this method to adjust the parameters of an existing effect.
+        You can also use this method to adjust the parameters of an existing
+        effect or to remove an effect (see the `disable` parameter).
 
         Parameters
         ----------
@@ -894,32 +904,86 @@ class Viewer:
                      - "edl" (Eye-Dome Lighting)
                        This effect enhances depth perception for complex
                        geometries by darkening edges based on depth differences.
+                     - "noise"
+                       Adds noise to the full image.
+                     - "fog"
+                       Adds fog to the full image, using the depth buffer.
+                     - "depth"
+                       Renders scene depth as shades of grey (near = dark,
+                       far = light), normalized to the depth range of the
+                       visible geometry; the background stays white. With
+                       `overlay=True` the objects' own colors are kept and
+                       darkened with distance instead (depth cueing).
+                     - "normal"
+                       Renders normals reconstructed from the depth buffer.
+                     - "bloom"
+                       Physically-based bloom effect; makes bright regions
+                       glow. Best suited for HDR rendering pipelines.
+
+        disable :   bool
+                    If True, the effect is removed from the renderer instead
+                    of added. Any `**kwargs` are ignored in that case.
 
         **kwargs
                     Keyword arguments passed to the effect constructor:
                     - edl:
-                      - strength (default 5): EDL strength; ypical range ~ [0.5, 10.0].
+                      - strength (default 5): EDL strength; typical range ~ [0.5, 10.0].
                       - radius (default 1.5): sampling radius in pixels
                       - depth_edge_threshold (default 0.0)
+                    - noise:
+                      - noise (default 0.1): amount of noise to add
+                    - fog:
+                      - color (default "#fff"): fog color
+                      - power (default 1.0): how quickly fog thickens with depth
+                    - depth:
+                      - camera (default: the viewer's camera): used to
+                        linearize depth values
+                      - overlay (default False): darken the objects' own
+                        colors by depth instead of rendering greyscale
+                      - strength (default 0.9): how dark the farthest
+                        geometry gets, from 0 (not at all) to 1 (black /
+                        fully darkened)
+                    - normal: no parameters
+                    - bloom:
+                      - bloom_strength (default 0.04): strength of the bloom
+                      - max_mip_levels (default 6): number of mip levels used
+                      - filter_radius (default 0.005): upsampling filter radius
+                      - use_karis_average (default False): reduces fireflies
+
 
         """
-        effect = EFFECT_CLASSES.get(effect, None)
-        if effect is None:
+        if effect not in EFFECT_CLASSES:
             raise ValueError(f"Unknown effect: {effect}")
+
+        effect_cls = EFFECT_CLASSES[effect]
+        if effect == "depth":
+            # Our own normalized-depth shader; imported lazily because
+            # custom shaders require pygfx>=0.16
+            from .shaders import NormalizedDepthPass
+
+            effect_cls = NormalizedDepthPass
+            kwargs.setdefault("camera", self.camera)
 
         # Check if we already have this effect
         p = None
         for e in self.renderer.effect_passes:
-            if isinstance(e, effect):
+            if isinstance(e, effect_cls):
                 p = e
                 break
 
+        if disable:
+            if p is not None:
+                self.renderer.effect_passes = tuple(
+                    e for e in self.renderer.effect_passes if e is not p
+                )
+            return
+
         if p is None:
             # Overwrite the default of 1 (seems too weak in my hands)
-            if (effect is EDLPass) and "strength" not in kwargs:
+            if (effect_cls is EDLPass) and "strength" not in kwargs:
                 kwargs["strength"] = 5.0
 
-            p = effect(**kwargs)
+            p = effect_cls(**kwargs)
             self.renderer.effect_passes = tuple(list(self.renderer.effect_passes) + [p])
         else:
             # Update parameters
@@ -2063,6 +2127,95 @@ class Viewer:
                         f'Skipped mesh "{n}": silhouette rendering requires a '
                         f"Phong-based material, got {type(mat).__name__}."
                     )
+
+    @update_viewer(legend=False, bounds=False)
+    def set_depth_of_field(
+        self, enabled=True, *, focus=None, aperture=100.0, max_radius=16.0,
+        smooth=False, snap_radius=0,
+    ):
+        """Set a depth-of-field (focal blur) effect for the viewer.
+
+        Objects near a focal plane are rendered sharp while everything
+        closer or farther is progressively blurred, similar to a
+        photographic lens.
+
+        Note that this is a screen-space post-processing effect: it applies
+        to the entire rendered image (including overlay elements such as
+        messages), and objects that do not write depth (e.g. meshes with a
+        transparent alpha mode) are blurred by whatever is behind them.
+
+        Parameters
+        ----------
+        enabled :   bool
+                    Use `viewer.set_depth_of_field(False)` to turn the
+                    effect off again.
+        focus :     float, optional
+                    Distance of the focal plane from the camera in world
+                    units (note that for orthographic cameras this can be
+                    negative because pygfx places the camera in the middle
+                    of the scene). If None (default), continuously
+                    auto-focuses on whatever is at the center of the view
+                    (if that is empty space, the image is left sharp).
+        aperture :  float
+                    Blur strength: the blur radius in physical pixels of a
+                    point at 100% relative defocus - relative to the focus
+                    distance for perspective cameras, and to the visible
+                    height of the view for orthographic ones. Typical
+                    values are 50-300.
+        max_radius : float
+                    Upper limit for the blur radius in physical pixels.
+        smooth :    bool | float
+                    Only relevant for autofocus (`focus=None`): if truthy,
+                    changes in focus are eased over approximately this many
+                    seconds (True = 0.2s) instead of snapping instantly.
+                    While the center of the view is over empty space, the
+                    last focus is held.
+        snap_radius : float
+                    Only relevant for autofocus (`focus=None`): search
+                    radius in physical pixels around the view center. The
+                    autofocus targets the object closest to the view center
+                    within that radius, instead of only what is exactly
+                    under the center pixel. 0 (default) disables snapping.
+
+        """
+        if not enabled:
+            if getattr(self, "_dof_pass", None) is not None:
+                self._dof_pass.enabled = False
+                self.remove_animation(self._dof_smooth_tick)
+            return
+
+        from .shaders import DepthOfFieldPass
+
+        if getattr(self, "_dof_pass", None) is None:
+            self._dof_pass = DepthOfFieldPass(
+                self.camera,
+                focus=focus,
+                aperture=aperture,
+                max_radius=max_radius,
+                smooth=smooth,
+                snap_radius=snap_radius,
+            )
+            # Run before other effect passes (e.g. anti-aliasing)
+            self.renderer.effect_passes = [
+                self._dof_pass,
+                *self.renderer.effect_passes,
+            ]
+        else:
+            self._dof_pass.focus = focus
+            self._dof_pass.aperture = aperture
+            self._dof_pass.max_radius = max_radius
+            self._dof_pass.smooth = smooth
+            self._dof_pass.snap_radius = snap_radius
+        self._dof_pass.enabled = True
+        # This keeps re-rendering (in "reactive" mode) while a smooth
+        # re-focus transition is still settling
+        self.add_animation(self._dof_smooth_tick, on_error="log", req_render=False)
+
+    def _dof_smooth_tick(self):
+        """Animation hook: re-render while a smooth re-focus is settling."""
+        dof_pass = getattr(self, "_dof_pass", None)
+        if dof_pass is not None and dof_pass.enabled and not dof_pass._smooth_settled:
+            self._render_stale = True
 
     @update_viewer(legend=True, bounds=False)
     def set_colors(self, c, alpha_mode="auto"):

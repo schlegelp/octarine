@@ -76,16 +76,20 @@ class Controls(QtWidgets.QWidget):
         self.tab1 = QtWidgets.QWidget()
         self.tab2 = QtWidgets.QWidget()
         self.tab3 = QtWidgets.QWidget()
+        self.tab4 = QtWidgets.QWidget()
         self.tab1_layout = QtWidgets.QVBoxLayout()
         self.tab2_layout = QtWidgets.QVBoxLayout()
         self.tab3_layout = QtWidgets.QVBoxLayout()
+        self.tab4_layout = QtWidgets.QVBoxLayout()
         self.tab1.setLayout(self.tab1_layout)
         self.tab2.setLayout(self.tab2_layout)
         self.tab3.setLayout(self.tab3_layout)
+        self.tab4.setLayout(self.tab4_layout)
 
         self.tabs.addTab(self.tab1, "Legend")
         self.tabs.addTab(self.tab2, "Controls")
         self.tabs.addTab(self.tab3, "Screenshot")
+        self.tabs.addTab(self.tab4, "Effects")
 
         # self.btn_layout = QtWidgets.QVBoxLayout()
         # self.setLayout(self.btn_layout)
@@ -97,6 +101,7 @@ class Controls(QtWidgets.QWidget):
         self.build_legend_gui()
         self.build_controls_gui()
         self.build_screenshot_gui()
+        self.build_effects_gui()
 
         # Populate legend
         self.update_legend()
@@ -505,6 +510,409 @@ class Controls(QtWidgets.QWidget):
                 self.screenshot_status_label.setToolTip("")
 
         QtCore.QTimer.singleShot(timeout, clear)
+
+    def build_effects_gui(self):
+        """Build the GUI for the effects tab."""
+        # Both effects require octarine's custom shaders (pygfx >= 0.16); if
+        # those are unavailable we show the controls greyed-out.
+        try:
+            from . import shaders  # noqa: F401
+
+            shaders_available = True
+        except ImportError:
+            shaders_available = False
+
+        # --- Silhouette ---
+        # If silhouette was already enabled via the API, reflect that here
+        sil_power = 0.0
+        if shaders_available:
+            from .shaders import SilhouetteMeshMaterial
+
+            for vis in self.viewer.scene.children:
+                if isinstance(vis, gfx.Mesh) and isinstance(
+                    vis.material, SilhouetteMeshMaterial
+                ):
+                    sil_power = max(sil_power, vis.material.silhouette)
+
+        self.silhouette_checkbox = QtWidgets.QCheckBox("Silhouette")
+        self.silhouette_checkbox.setToolTip(
+            "Emphasize the edges/creases of meshes and make face-on regions "
+            "transparent, giving an x-ray-like view of their outlines "
+            "(same effect as Neuroglancer's 'silhouette' setting)."
+        )
+        self.silhouette_checkbox.setChecked(sil_power > 0)
+        self.tab4_layout.addWidget(self.silhouette_checkbox)
+
+        self.silhouette_slider = self.create_effect_slider(
+            "Power",
+            min=0.5,
+            max=8.0,
+            step=0.1,
+            value=sil_power if sil_power > 0 else 2.0,
+            parent_layout=self.tab4_layout,
+            callback=lambda v: self.silhouette_checkbox.isChecked()
+            and self.viewer.set_silhouette(v),
+        )
+        self.silhouette_slider.setEnabled(sil_power > 0)
+
+        def toggle_silhouette(checked):
+            slider = self.silhouette_slider
+            self.viewer.set_silhouette(
+                slider.value() * slider._step if checked else 0
+            )
+            slider.setEnabled(checked)
+
+        self.silhouette_checkbox.toggled.connect(toggle_silhouette)
+
+        # Horizontal divider
+        self.tab4_layout.addWidget(QHLine())
+
+        # --- Depth of field ---
+        # If depth of field was already enabled via the API, reflect that here
+        dof_pass = getattr(self.viewer, "_dof_pass", None)
+        dof_on = dof_pass is not None and dof_pass.enabled
+
+        self.dof_checkbox = QtWidgets.QCheckBox("Depth of Field")
+        self.dof_checkbox.setToolTip(
+            "Blur objects that are closer or farther than the focal plane, "
+            "similar to a photographic lens."
+        )
+        self.dof_checkbox.setChecked(dof_on)
+        self.tab4_layout.addWidget(self.dof_checkbox)
+
+        def update_dof_params(*args):
+            dof_pass = getattr(self.viewer, "_dof_pass", None)
+            if dof_pass is None or not self.dof_checkbox.isChecked():
+                return
+            strength = self.dof_strength_slider
+            radius = self.dof_radius_slider
+            dof_pass.aperture = strength.value() * strength._step
+            dof_pass.max_radius = radius.value() * radius._step
+            self.viewer._render_stale = True
+
+        self.dof_strength_slider = self.create_effect_slider(
+            "Strength",
+            min=0,
+            max=300,
+            step=1,
+            value=dof_pass.aperture if dof_pass else 100,
+            parent_layout=self.tab4_layout,
+            callback=update_dof_params,
+        )
+        self.dof_radius_slider = self.create_effect_slider(
+            "Max Blur",
+            min=1,
+            max=40,
+            step=1,
+            value=dof_pass.max_radius if dof_pass else 16,
+            parent_layout=self.tab4_layout,
+            callback=update_dof_params,
+        )
+        # Focus mode: autofocus or a fixed distance
+        self._updating_focus_range = False  # guards apply_fixed_focus
+        focus_layout = QtWidgets.QHBoxLayout()
+        focus_layout.addWidget(QtWidgets.QLabel("Focus:"))
+        self.dof_focus_dropdown = QtWidgets.QComboBox()
+        self.dof_focus_dropdown.addItems(["Auto", "Fix"])
+        self.dof_focus_dropdown.setToolTip("How to determine the focal distance.")
+        self.dof_focus_dropdown.setItemData(
+            0,
+            "Focus on whatever is at the center of the view.",
+            QtCore.Qt.ToolTipRole,
+        )
+        self.dof_focus_dropdown.setItemData(
+            1, "Focus at a fixed distance from the camera.", QtCore.Qt.ToolTipRole
+        )
+        focus_layout.addWidget(self.dof_focus_dropdown)
+        self.tab4_layout.addLayout(focus_layout)
+
+        # In "Fix" mode: a slider to set the focal distance
+        def apply_fixed_focus(value):
+            dof_pass = getattr(self.viewer, "_dof_pass", None)
+            if (
+                dof_pass is None
+                or self._updating_focus_range
+                or not self.dof_checkbox.isChecked()
+                or self.dof_focus_dropdown.currentText() != "Fix"
+            ):
+                return
+            dof_pass.focus = value
+            self.viewer._render_stale = True
+
+        # Wrapped in a QWidget so the whole row can be hidden in "Auto" mode
+        self.dof_focus_row = QtWidgets.QWidget()
+        focus_row_layout = QtWidgets.QVBoxLayout(self.dof_focus_row)
+        focus_row_layout.setContentsMargins(0, 0, 0, 0)
+        self.dof_focus_slider = self.create_effect_slider(
+            "Distance",
+            min=0.0,
+            max=100.0,
+            step=0.5,
+            value=50.0,
+            parent_layout=focus_row_layout,
+            callback=apply_fixed_focus,
+        )
+        self.tab4_layout.addWidget(self.dof_focus_row)
+
+        def update_focus_range():
+            """(Re-)fit the focus slider range to the scene and camera.
+
+            This only moves the slider (and its label) - it does not touch
+            the focus of the render pass itself.
+            """
+            cam = self.viewer.camera
+            sphere = self.viewer.scene.get_world_bounding_sphere()
+            if sphere is None:
+                center, radius = np.zeros(3), 1.0
+            else:
+                center = np.asarray(sphere[:3], dtype=float)
+                radius = max(float(sphere[3]), 1e-9)
+            # View-space distance of the scene center from the camera
+            p = cam.world.inverse_matrix @ np.append(center, 1.0)
+            dist = -p[2] / p[3]
+
+            dof_pass = getattr(self.viewer, "_dof_pass", None)
+            current = dof_pass.focus if dof_pass is not None else None
+            if current is None:
+                current = dist
+
+            # Make sure the range covers the current focus
+            lo = min(dist - radius, current)
+            hi = max(dist + radius, current)
+
+            slider = self.dof_focus_slider
+            self._updating_focus_range = True
+            try:
+                slider._step = (hi - lo) / 200
+                slider.setMinimum(round(lo / slider._step))
+                slider.setMaximum(round(hi / slider._step))
+                slider.setValue(round(current / slider._step))
+                # Force a label update even if the tick did not change
+                slider.valueChanged.emit(slider.value())
+            finally:
+                self._updating_focus_range = False
+
+        # In "Auto" mode: a slider for how far around the view center to
+        # look for a focus target...
+        def update_snap(value):
+            dof_pass = getattr(self.viewer, "_dof_pass", None)
+            if dof_pass is None or not self.dof_checkbox.isChecked():
+                return
+            dof_pass.snap_radius = value
+            self.viewer._render_stale = True
+
+        self.dof_snap_row = QtWidgets.QWidget()
+        snap_row_layout = QtWidgets.QVBoxLayout(self.dof_snap_row)
+        snap_row_layout.setContentsMargins(0, 0, 0, 0)
+        self.dof_snap_slider = self.create_effect_slider(
+            "Snap",
+            min=0,
+            max=100,
+            step=1,
+            value=int(dof_pass.snap_radius) if dof_pass else 0,
+            parent_layout=snap_row_layout,
+            callback=update_snap,
+        )
+        self.dof_snap_slider.setToolTip(
+            "Focus on the closest object within this many pixels of the "
+            "view center (0 = exact center only)."
+        )
+        self.tab4_layout.addWidget(self.dof_snap_row)
+
+        # ... a checkbox to ease re-focusing over time...
+        self.dof_smooth_checkbox = QtWidgets.QCheckBox("Smooth")
+        self.dof_smooth_checkbox.setToolTip(
+            "Re-focus gradually (over ~200 ms) instead of instantly."
+        )
+        self.tab4_layout.addWidget(self.dof_smooth_checkbox)
+
+        def toggle_smooth(checked):
+            if (
+                getattr(self.viewer, "_dof_pass", None) is None
+                or not self.dof_checkbox.isChecked()
+            ):
+                return  # picked up when depth of field is enabled
+            strength = self.dof_strength_slider
+            radius = self.dof_radius_slider
+            snap = self.dof_snap_slider
+            # Route through the API so the keep-alive animation is managed
+            self.viewer.set_depth_of_field(
+                focus=None,
+                aperture=strength.value() * strength._step,
+                max_radius=radius.value() * radius._step,
+                smooth=checked,
+                snap_radius=snap.value() * snap._step,
+            )
+
+        # ... and a checkbox to mark the current focal point
+        self.dof_focus_marker_checkbox = QtWidgets.QCheckBox("Show focus point")
+        self.dof_focus_marker_checkbox.setToolTip(
+            "Show a marker that tracks the point the camera is focused on."
+        )
+        self.tab4_layout.addWidget(self.dof_focus_marker_checkbox)
+
+        def switch_focus_mode(*args):
+            fix = self.dof_focus_dropdown.currentText() == "Fix"
+            self.dof_focus_row.setVisible(fix)
+            self.dof_snap_row.setVisible(not fix)
+            self.dof_smooth_checkbox.setVisible(not fix)
+            self.dof_focus_marker_checkbox.setVisible(not fix)
+            enabled = self.dof_checkbox.isChecked()
+            if fix:
+                self._set_dof_focus_marker(False)
+                update_focus_range()
+                slider = self.dof_focus_slider
+                apply_fixed_focus(slider.value() * slider._step)
+            else:
+                dof_pass = getattr(self.viewer, "_dof_pass", None)
+                if dof_pass is not None and enabled:
+                    dof_pass.focus = None
+                    self.viewer._render_stale = True
+                self._set_dof_focus_marker(
+                    enabled and self.dof_focus_marker_checkbox.isChecked()
+                )
+
+        # Initialize the focus widgets (before connecting any signals)
+        dof_fix = dof_pass is not None and dof_pass.focus is not None
+        self.dof_focus_dropdown.setCurrentIndex(1 if dof_fix else 0)
+        self.dof_focus_row.setVisible(dof_fix)
+        self.dof_snap_row.setVisible(not dof_fix)
+        self.dof_smooth_checkbox.setChecked(dof_pass is not None and dof_pass.smooth > 0)
+        self.dof_smooth_checkbox.setVisible(not dof_fix)
+        self.dof_focus_marker_checkbox.setVisible(not dof_fix)
+        if dof_fix:
+            update_focus_range()
+
+        self.dof_focus_dropdown.currentIndexChanged.connect(switch_focus_mode)
+        self.dof_smooth_checkbox.toggled.connect(toggle_smooth)
+        self.dof_focus_marker_checkbox.toggled.connect(
+            lambda checked: self._set_dof_focus_marker(
+                checked and self.dof_checkbox.isChecked()
+            )
+        )
+
+        dof_widgets = (
+            self.dof_strength_slider,
+            self.dof_radius_slider,
+            self.dof_focus_dropdown,
+            self.dof_focus_slider,
+            self.dof_snap_slider,
+            self.dof_smooth_checkbox,
+            self.dof_focus_marker_checkbox,
+        )
+        for widget in dof_widgets:
+            widget.setEnabled(dof_on)
+
+        def toggle_dof(checked):
+            if checked:
+                fix = self.dof_focus_dropdown.currentText() == "Fix"
+                if fix:
+                    update_focus_range()
+                strength = self.dof_strength_slider
+                radius = self.dof_radius_slider
+                focus = self.dof_focus_slider
+                snap = self.dof_snap_slider
+                # focus=None -> auto-focus on whatever is at the view center
+                self.viewer.set_depth_of_field(
+                    focus=focus.value() * focus._step if fix else None,
+                    aperture=strength.value() * strength._step,
+                    max_radius=radius.value() * radius._step,
+                    smooth=self.dof_smooth_checkbox.isChecked(),
+                    snap_radius=snap.value() * snap._step,
+                )
+                self._set_dof_focus_marker(
+                    not fix and self.dof_focus_marker_checkbox.isChecked()
+                )
+            else:
+                self.viewer.set_depth_of_field(False)
+                self._set_dof_focus_marker(False)
+            for widget in dof_widgets:
+                widget.setEnabled(checked)
+
+        self.dof_checkbox.toggled.connect(toggle_dof)
+
+        if not shaders_available:
+            import pygfx
+
+            msg = (
+                "Effects require pygfx >= 0.16 "
+                f"(you have {pygfx.__version__}). Please update pygfx."
+            )
+            for widget in (self.silhouette_checkbox, self.silhouette_slider) + (
+                self.dof_checkbox,
+            ) + dof_widgets:
+                widget.setEnabled(False)
+                widget.setToolTip(msg)
+
+        self.tab4_layout.addStretch(1)
+
+    def _set_dof_focus_marker(self, visible):
+        """Show/hide a marker tracking the depth-of-field focal point."""
+        # The animation hook checks this flag: `remove_animation` is
+        # deferred, so the hook runs one more time after being removed and
+        # would otherwise re-show the marker we just hid.
+        self._dof_focus_marker_active = visible
+        marker = getattr(self, "_dof_focus_marker", None)
+        if not visible:
+            if marker is not None:
+                self.viewer.remove_animation(self._track_dof_focus)
+                if marker.visible:
+                    marker.visible = False
+                    self.viewer._render_stale = True
+            return
+
+        if marker is None:
+            marker = gfx.Points(
+                gfx.Geometry(positions=np.zeros((1, 3), dtype=np.float32)),
+                gfx.PointsMarkerMaterial(
+                    marker="ring",
+                    size=15,
+                    color="#ff00ff",
+                    edge_color="#ffffff",
+                    edge_width=1.5,
+                ),
+            )
+            # The marker must neither occlude anything nor write to the
+            # depth buffer (which would confuse the autofocus itself)
+            marker.material.depth_write = False
+            marker.material.depth_test = False
+            marker.visible = False
+            self._dof_focus_marker = marker
+            # N.B. we add the marker directly to the scene (not via
+            # viewer.add) so it does not show up in the legend
+            self.viewer.scene.add(marker)
+
+        # The animation runs every frame and moves the marker to wherever
+        # the focus currently is
+        self.viewer.add_animation(
+            self._track_dof_focus, on_error="log", req_render=False
+        )
+
+    def _track_dof_focus(self):
+        """Animation hook: move the focus marker to the current focal point."""
+        marker = self._dof_focus_marker
+        dof_pass = getattr(self.viewer, "_dof_pass", None)
+        pos = None
+        if (
+            getattr(self, "_dof_focus_marker_active", False)
+            and dof_pass is not None
+            and dof_pass.enabled
+        ):
+            pos = dof_pass.get_focus_position(self.viewer.renderer)
+
+        if pos is None:
+            if marker.visible:
+                marker.visible = False
+                self.viewer._render_stale = True
+            return
+
+        pos = pos.astype(np.float32)
+        if marker.visible and np.array_equal(marker.geometry.positions.data[0], pos):
+            return
+        marker.geometry.positions.data[0] = pos
+        marker.geometry.positions.update_full()
+        marker.visible = True
+        self.viewer._render_stale = True
 
     def create_legend(self, spacing=0, index=None):
         """Generate the legend widget."""
@@ -1609,11 +2017,55 @@ class Controls(QtWidgets.QWidget):
         parent_layout.addLayout(layout)
         return slide
 
+    def create_effect_slider(
+        self, name, min, max, step, value, parent_layout, callback
+    ):
+        """Generate a slider for a viewer-level (effect) property.
+
+        Unlike `create_slider` this does not target scene objects but simply
+        reports values to a callback; the initial value is passed explicitly.
+        Note that the underlying QSlider is integer-valued: `slider.value()`
+        returns ticks which need to be multiplied by `step`.
+        """
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(QtWidgets.QLabel(name))
+
+        if isinstance(step, float):
+            val_label = QtWidgets.QLabel(f"{float(value):3.2f}")
+        else:
+            val_label = QtWidgets.QLabel(f"{int(value):03d}")
+        layout.addWidget(val_label)
+
+        slide = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        slide.setMinimum(round(min / step))
+        slide.setMaximum(round(max / step))
+        slide.setValue(round(value / step))
+        # For convenience: slider.value() * slider._step = actual value.
+        # `_step` may be re-assigned (together with new min/max ticks) to
+        # re-range the slider.
+        slide._step = step
+
+        def set_value(tick):
+            value = tick * slide._step
+            if isinstance(slide._step, float):
+                val_label.setText(f"{float(value):3.2f}")
+            else:
+                val_label.setText(f"{int(value):03d}")
+            callback(value)
+
+        slide.valueChanged.connect(set_value)
+        layout.addWidget(slide)
+
+        parent_layout.addLayout(layout)
+        return slide
+
     def close(self):
         """Close the controls."""
         # Keep shared picker alive but hide it when this controls closes.
         if Controls._active_color_controls is self:
             Controls._active_color_controls = None
+        # Stop tracking the depth-of-field focus point (if we were)
+        self._set_dof_focus_marker(False)
         self.color_picker.hide()
         if getattr(self, "_point_size_popup", None) is not None:
             self._point_size_popup.hide()

@@ -23,6 +23,8 @@ _check_pygfx_version()
 from .packing import pack_sparse_voxels, PackedBricks, AtlasCapacityError  # noqa: E402
 from .sparse_volume import SparseVolume, SparseVolumeMaterial  # noqa: E402
 from .silhouette import SilhouetteMeshMaterial  # noqa: E402
+from .dof import DepthOfFieldPass  # noqa: E402
+from .depth import NormalizedDepthPass  # noqa: E402
 
 __all__ = [
     "pack_sparse_voxels",
@@ -31,4 +33,6 @@ __all__ = [
     "SparseVolume",
     "SparseVolumeMaterial",
     "SilhouetteMeshMaterial",
+    "DepthOfFieldPass",
+    "NormalizedDepthPass",
 ]
