@@ -1,3 +1,6 @@
+import ctypes
+import sys
+
 import numpy as np
 import pygfx as gfx
 
@@ -34,6 +37,57 @@ def connect_color_picker(func):
         return func(self, *args, **kwargs)
 
     return wrapper
+
+
+def fix_native_color_picker(picker, qcolor):
+    """Re-set the native macOS color panel's color as a proper sRGB color.
+
+    Qt's Cocoa dialog helper hands QColors to the shared NSColorPanel via
+    ``colorWithCalibratedRed`` (Generic RGB, gamma 1.8), so sRGB values
+    display noticeably washed-out (e.g. #1F77B4 shows as #238BC1). After the
+    dialog is shown, overwrite the panel's color with the same components
+    tagged as sRGB. No-op off macOS, for non-native dialogs and on failure.
+    """
+    if sys.platform != "darwin" or qcolor is None:
+        return
+    if picker.testOption(QtWidgets.QColorDialog.DontUseNativeDialog):
+        return
+    try:
+        c_void_p, c_double = ctypes.c_void_p, ctypes.c_double
+        objc = ctypes.CDLL("/usr/lib/libobjc.dylib")
+        objc.objc_getClass.restype = c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+        def send(restype, receiver, sel, *args, argtypes=()):
+            fn = ctypes.cast(
+                objc.objc_msgSend,
+                ctypes.CFUNCTYPE(restype, c_void_p, c_void_p, *argtypes),
+            )
+            return fn(receiver, objc.sel_registerName(sel), *args)
+
+        # Messaging nil is a safe no-op, so a missing class/panel falls through.
+        panel = send(c_void_p, objc.objc_getClass(b"NSColorPanel"), b"sharedColorPanel")
+        color = send(
+            c_void_p,
+            objc.objc_getClass(b"NSColor"),
+            b"colorWithSRGBRed:green:blue:alpha:",
+            qcolor.redF(),
+            qcolor.greenF(),
+            qcolor.blueF(),
+            qcolor.alphaF(),
+            argtypes=[c_double] * 4,
+        )
+        if not panel or not color:
+            return
+        # The panel change echoes back into the dialog; keep it from
+        # dispatching a (no-op) set_color.
+        picker.blockSignals(True)
+        send(None, panel, b"setColor:", color, argtypes=[c_void_p])
+        picker.blockSignals(False)
+    except Exception:
+        pass
 
 
 def set_viewer_stale(func):
@@ -111,6 +165,16 @@ class Controls(QtWidgets.QWidget):
         self.active_volume = None
 
         self.color_picker = self._get_shared_color_picker()
+
+    def showEvent(self, event):
+        """Re-layout legend rows whenever the window is (re)shown.
+
+        Rows added while the window was hidden keep the pre-show viewport
+        width, clipping the visibility checkbox and color button off the right
+        edge until the view lays out its item widgets again (e.g. on resize).
+        """
+        super().showEvent(event)
+        QtCore.QTimer.singleShot(0, self.legend.doItemsLayout)
 
     @classmethod
     def _get_shared_color_picker(cls):
@@ -1700,7 +1764,7 @@ class Controls(QtWidgets.QWidget):
         # print(f'click: {push_button.objectName()}')
         self.active_objects = push_button._id
         self._sync_and_show_size_popup(anchor=push_button)
-        self.color_picker.show()
+        self._show_color_picker()
 
     def volume_button_clicked(self):
         """Set the active object to be the buttons target."""
@@ -1717,10 +1781,85 @@ class Controls(QtWidgets.QWidget):
         if not targets:
             return
 
-        # Convert QColor to [0-1] RGB
-        color = np.array(color.toTuple()) / 255
+        # Convert QColor to [0-1] RGBA
+        rgba = np.array(color.toTuple()) / 255
 
-        self.viewer.set_colors({name: color for name in targets})
+        # The picker is pre-filled fully opaque (see `_sync_color_picker`), so
+        # alpha = 1 means the slider was not touched: keep each object's
+        # current alpha instead of making it opaque. Lowering the slider
+        # (even to 99%) explicitly sets the alpha.
+        if rgba[3] < 1:
+            cmap = {name: tuple(rgba) for name in targets}
+        else:
+            cmap = {
+                name: tuple(rgba[:3]) + (self._current_alpha(name),)
+                for name in targets
+            }
+
+        self.viewer.set_colors(cmap)
+
+    def _current_alpha(self, name):
+        """Return the current alpha of the (first) visual of an object."""
+        color = self._object_color(name)
+        return tuple(color.rgba)[3] if color is not None else 1.0
+
+    def _sync_color_picker(self):
+        """Pre-set the picker to the current color of the (first) target object.
+
+        The color is pre-filled fully opaque: with the object's alpha baked in,
+        the dialog swatch blends towards its background and a translucent blue
+        object would show up as a washed-out white-blue. `set_color` preserves
+        the objects' alpha as long as the dialog's alpha slider stays at 100%.
+
+        Returns the pre-filled QColor, or None if no target color resolved.
+        """
+        for name in self._resolve_targets():
+            color = self._object_color(name)
+            if color is None:
+                continue
+            qcolor = QtGui.QColor.fromRgbF(
+                *(min(max(c, 0.0), 1.0) for c in color.rgb), 1.0
+            )
+            # Block signals so pre-filling doesn't fire set_color, which
+            # would flatten a mixed-color selection to this one color.
+            self.color_picker.blockSignals(True)
+            self.color_picker.setCurrentColor(qcolor)
+            self.color_picker.blockSignals(False)
+            return qcolor
+        return None
+
+    def _object_color(self, name):
+        """Return an object's true color, looking through any active highlight.
+
+        Both selection (yellow) and hover (brightened) highlights swap
+        `material.color` and stash the real color away. The legend entry is
+        typically still hovered when the color picker is opened, so reading
+        `material.color` directly would sync the highlight color instead.
+        """
+        selected = self.viewer.selected or []
+        for vis in self.viewer.objects.get(name, []):
+            try:
+                if name in selected and hasattr(vis, "_stored_color"):
+                    return gfx.Color(vis._stored_color)
+                if getattr(vis, "_highlighted", False):
+                    return gfx.Color(vis.material._original_color)
+                return gfx.Color(vis.material.color)
+            except BaseException:
+                # E.g. per-vertex colors; try the next visual.
+                continue
+        return None
+
+    def _show_color_picker(self):
+        """Pre-fill the picker with the active objects' color and show it."""
+        qcolor = self._sync_color_picker()
+        self.color_picker.show()
+        # Fix up the native panel's colorspace both right away and once the
+        # event loop has settled, in case Qt pushes its own (mis-converted)
+        # color to the panel asynchronously while showing.
+        fix_native_color_picker(self.color_picker, qcolor)
+        QtCore.QTimer.singleShot(
+            0, lambda: fix_native_color_picker(self.color_picker, qcolor)
+        )
 
     def _resolve_targets(self):
         """Flatten self.active_objects into a list of object names."""
@@ -1835,7 +1974,7 @@ class Controls(QtWidgets.QWidget):
         """Set the active object to be the selected objects."""
         self.active_objects = "selected"
         self._sync_and_show_size_popup(anchor=self)
-        self.color_picker.show()
+        self._show_color_picker()
 
     @set_viewer_stale
     def hide_all(self):

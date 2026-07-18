@@ -73,6 +73,16 @@ def update_viewer(legend=True, bounds=True):
     return outer
 
 
+def _brighten_color(color, amount=0.3):
+    """Lift a color's HSL lightness (or lower it if already bright)."""
+    h, s, lightness = gfx.Color(color).to_hsl()
+    if lightness <= (1 - amount):
+        lightness = min(lightness + amount, 1)
+    else:
+        lightness = max(lightness - amount, 0)
+    return gfx.Color.from_hsl(h, s, lightness)
+
+
 def update_helper(viewer, legend=True, bounds=True):
     """Helper function to update legend and other properties."""
     # Always clear the cached objects dictionary
@@ -1957,15 +1967,7 @@ class Viewer:
                     continue
 
                 if isinstance(color, (float, int)):
-                    # Work in HSL space
-                    h, s, l = o.material.color.to_hsl()
-                    # If the value is not maxed yet, increase it
-                    if l <= (1 - color):
-                        l = min(l + color, 1)
-                    else:
-                        l = max(l - color, 0)
-
-                    new_color = gfx.Color.from_hsl(h, s, l)
+                    new_color = _brighten_color(o.material.color, color)
                 else:
                     # See if pygfx can handle the color
                     new_color = gfx.Color(color)
@@ -1973,6 +1975,8 @@ class Viewer:
                 o.material._original_color = o.material.color
                 o.material.color = new_color
                 o._highlighted = True
+                # Remember the style so e.g. set_colors can re-apply it
+                o._highlight_style = color
 
     def unhighlight_objects(self, obj=None):
         """Unhighlight given object(s).
@@ -2025,6 +2029,8 @@ class Viewer:
                 o.material.color = o.material._original_color
                 del o.material._original_color
                 del o._highlighted
+                if hasattr(o, "_highlight_style"):
+                    del o._highlight_style
 
     def pin_objects(self, obj):
         """Pin given object(s).
@@ -2298,7 +2304,24 @@ class Viewer:
                         new_c = gfx.Color(cmap[n]).rgba
                     else:
                         new_c = gfx.Color(cmap[n]).rgb
-                    v.material.color = gfx.Color(new_c)
+
+                    if n in self._selected and hasattr(v, "_stored_color"):
+                        # Selected objects wear the selection highlight;
+                        # update the color they revert to on deselection
+                        # instead of overwriting the highlight.
+                        v._stored_color = gfx.Color(new_c)
+                    elif getattr(v, "_highlighted", False):
+                        # Hover-highlighted objects wear a brightened color;
+                        # update the underlying color and re-apply the
+                        # highlight so it survives un-highlighting.
+                        v.material._original_color = gfx.Color(new_c)
+                        style = getattr(v, "_highlight_style", 0.3)
+                        if isinstance(style, (float, int)):
+                            v.material.color = _brighten_color(new_c, style)
+                        else:
+                            v.material.color = gfx.Color(style)
+                    else:
+                        v.material.color = gfx.Color(new_c)
 
                     # Determine if we consider this transparent
                     if len(new_c) == 4 and new_c[3] < 1:
