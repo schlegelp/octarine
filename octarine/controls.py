@@ -577,8 +577,76 @@ class Controls(QtWidgets.QWidget):
 
     def build_effects_gui(self):
         """Build the GUI for the effects tab."""
-        # Both effects require octarine's custom shaders (pygfx >= 0.16); if
-        # those are unavailable we show the controls greyed-out.
+        # --- Eye-Dome Lighting ---
+        # This comes straight from pygfx, i.e. unlike the effects further
+        # down it does not require octarine's custom shaders.
+        # If EDL was already enabled via the API, reflect that here
+        from pygfx.renderers.wgpu.engine.edl import EDLPass
+
+        edl_pass = None
+        for e in self.viewer.renderer.effect_passes:
+            if isinstance(e, EDLPass):
+                edl_pass = e
+                break
+
+        self.edl_checkbox = QtWidgets.QCheckBox("Eye-Dome Lighting")
+        self.edl_checkbox.setToolTip(
+            "Enhance depth perception for complex geometries by darkening "
+            "edges based on depth differences between neighboring pixels."
+        )
+        self.edl_checkbox.setChecked(edl_pass is not None)
+        self.tab4_layout.addWidget(self.edl_checkbox)
+
+        def update_edl(*args):
+            if not self.edl_checkbox.isChecked():
+                return
+            strength = self.edl_strength_slider
+            radius = self.edl_radius_slider
+            self.viewer.add_effect(
+                "edl",
+                strength=strength.value() * strength._step,
+                radius=radius.value() * radius._step,
+            )
+            self.viewer._render_stale = True
+
+        self.edl_strength_slider = self.create_effect_slider(
+            "Strength",
+            min=0.0,
+            max=400.0,
+            step=0.1,
+            value=edl_pass.strength if edl_pass else 5.0,
+            parent_layout=self.tab4_layout,
+            callback=update_edl,
+        )
+        self.edl_radius_slider = self.create_effect_slider(
+            "Radius",
+            min=0.1,
+            max=10.0,
+            step=0.1,
+            value=edl_pass.radius if edl_pass else 1.5,
+            parent_layout=self.tab4_layout,
+            callback=update_edl,
+        )
+        self.edl_radius_slider.setToolTip("Sampling radius in pixels.")
+        for widget in (self.edl_strength_slider, self.edl_radius_slider):
+            widget.setEnabled(edl_pass is not None)
+
+        def toggle_edl(checked):
+            if checked:
+                update_edl()
+            else:
+                self.viewer.add_effect("edl", disable=True)
+                self.viewer._render_stale = True
+            self.edl_strength_slider.setEnabled(checked)
+            self.edl_radius_slider.setEnabled(checked)
+
+        self.edl_checkbox.toggled.connect(toggle_edl)
+
+        # Horizontal divider
+        self.tab4_layout.addWidget(QHLine())
+
+        # The effects below require octarine's custom shaders (pygfx >=
+        # 0.16); if those are unavailable we show the controls greyed-out.
         try:
             from . import shaders  # noqa: F401
 
