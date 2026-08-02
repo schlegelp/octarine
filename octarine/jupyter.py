@@ -179,6 +179,13 @@ class JupyterToolbar(VBox):
             readout_format=".1f",
             layout=Layout(width="auto"),
         )
+        self.headlight_toggle = Checkbox(
+            value=viewer.headlight,
+            description="Headlight",
+            disabled=False,
+            indent=False,
+            layout=Layout(width="auto"),
+        )
         self.bounds_toggle = Checkbox(
             value=False,
             description="Show Bounds",
@@ -197,6 +204,7 @@ class JupyterToolbar(VBox):
         self.wireframe_toggle.observe(self.set_wireframe, names="value")
         self.ambient_light_toggle.observe(self.toggle_ambient_light, names="value")
         self.ambient_light_slider.observe(self.set_ambient_light, names="value")
+        self.headlight_toggle.observe(self.toggle_headlight, names="value")
         self.bounds_toggle.observe(self.toggle_bounds, names="value")
 
         # Split into object and scene widgets
@@ -212,6 +220,7 @@ class JupyterToolbar(VBox):
             self.wireframe_toggle,
             self.ambient_light_toggle,
             self.ambient_light_slider,
+            self.headlight_toggle,
             self.bounds_toggle,
         ]
 
@@ -301,6 +310,10 @@ class JupyterToolbar(VBox):
         for ob in self.viewer.scene.children:
             if isinstance(ob, gfx.AmbientLight):
                 ob.visible = change["new"]
+
+    def toggle_headlight(self, change):
+        """Toggle the camera-linked headlight."""
+        self.viewer.headlight = change["new"]
 
     def toggle_bounds(self, change):
         """Toggle visibility of scene bounds."""

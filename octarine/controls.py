@@ -347,6 +347,18 @@ class Controls(QtWidgets.QWidget):
             parent_layout=self.tab2_layout,
         )
 
+        # Add checkbox to link the light to the camera
+        self.headlight_checkbox = QtWidgets.QCheckBox("Headlight")
+        self.headlight_checkbox.setToolTip(
+            "Link the light to the camera such that objects are always lit "
+            "from the front. If unchecked, the lights are fixed in space."
+        )
+        self.headlight_checkbox.setChecked(self.viewer.headlight)
+        self.headlight_checkbox.toggled.connect(
+            lambda x: setattr(self.viewer, "headlight", x)
+        )
+        self.tab2_layout.addWidget(self.headlight_checkbox)
+
         # Horizontal divider
         self.tab2_layout.addWidget(QHLine())
 

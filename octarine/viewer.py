@@ -140,6 +140,12 @@ class Viewer:
                 (0 = ortho, >0 = perspective).
     control :   "trackball" | "panzoom" | "fly" | "orbit"
                 Controller type to use. Defaults to "trackball".
+    headlight : bool
+                If True, objects are lit by a single light source that is linked
+                to the camera - i.e. they are always lit from the front. If False
+                (default), we use two fixed light sources which means the lighting
+                changes as you move the camera. Can also be changed at any time via
+                the `Viewer.headlight` property.
     show :      "auto" (default) | bool
                 Whether to immediately show the viewer. When set to "auto" (default),
                 will immmediately show the viewer if:
@@ -167,6 +173,7 @@ class Viewer:
         control="trackball",
         size=None,
         show=True,
+        headlight=False,
         **kwargs,
     ):
         # We need to import WgpuCanvas before we (potentially) start the event loop
@@ -241,18 +248,24 @@ class Viewer:
         self.scene.add(gfx.AmbientLight(intensity=0.5))
 
         # A strong point light form front/top/left
-        self.scene.add(gfx.PointLight(intensity=4))
-        self.scene.children[-1].shadow.bias = 0.0000005  # this helps with shadow acne
-        self.scene.children[-1].local.x = -1000000  # move to the left
-        self.scene.children[-1].local.y = -1000000  # move up
-        self.scene.children[-1].local.z = -1000000  # move light forward
+        key_light = gfx.PointLight(intensity=4)
+        key_light.shadow.bias = 0.0000005  # this helps with shadow acne
+        key_light.local.x = -1000000  # move to the left
+        key_light.local.y = -1000000  # move up
+        key_light.local.z = -1000000  # move light forward
 
         # A weaker point light from the back
-        self.scene.add(gfx.PointLight(intensity=1))
-        self.scene.children[-1].shadow.bias = 0.0000005  # this helps with shadow acne
-        self.scene.children[-1].local.x = 1000000  # move to the left
-        self.scene.children[-1].local.y = 1000000  # move up
-        self.scene.children[-1].local.z = 1000000  # move light forward
+        back_light = gfx.PointLight(intensity=1)
+        back_light.shadow.bias = 0.0000005  # this helps with shadow acne
+        back_light.local.x = 1000000  # move to the right
+        back_light.local.y = 1000000  # move down
+        back_light.local.z = 1000000  # move light backwards
+
+        # These two lights are fixed in world space, i.e. the lighting changes as
+        # the camera moves. They are switched off when the (camera-linked)
+        # headlight is switched on - see `Viewer.headlight`
+        self._static_lights = [key_light, back_light]
+        self.scene.add(key_light, back_light)
 
         # Set up a default background
         self._background = gfx.Background(None, gfx.BackgroundMaterial((0, 0, 0)))
@@ -265,6 +278,23 @@ class Viewer:
             self.camera = gfx.PerspectiveCamera()
         else:
             raise ValueError(f"Unknown camera type: {camera}")
+
+        # A light that is parented to the camera and hence always shines from
+        # wherever we are looking from (see `Viewer.headlight`). Note that pygfx
+        # collects lights by traversing the scene which means the camera itself
+        # has to be part of the scene graph for this light to be picked up.
+        self.scene.add(self.camera)
+        self._headlight = gfx.DirectionalLight(intensity=4)
+        self._headlight.shadow.bias = 0.0000005  # this helps with shadow acne
+        # Offsetting the light from the camera's axis (here: up and to the left)
+        # keeps some variation in the shading - a light shining exactly along the
+        # view direction makes objects look very flat
+        self._headlight.local.position = (-0.5, 0.5, 0)
+        self.camera.add(self._headlight)
+
+        # This also takes care of switching off the static lights (if required)
+        self._headlight_enabled = False
+        self.headlight = headlight
 
         # Add controller
         controller = {
@@ -564,6 +594,63 @@ class Viewer:
         self.canvas.set_logical_size(*size)
 
     @property
+    def lights(self):
+        """List of all light sources illuminating the scene.
+
+        This includes the headlight which - unlike the other lights - is not a
+        direct child of the scene but of the camera (see `Viewer.headlight`).
+
+        """
+        return list(self.scene.iter(lambda x: isinstance(x, gfx.Light)))
+
+    @property
+    def headlight(self):
+        """Whether the scene is lit by a light linked to the camera.
+
+        If True, a single light source is parented to the camera which means
+        objects are always lit from the front, no matter where you move the
+        camera. If False (default), we use two point lights that are fixed in
+        world space, i.e. the lighting changes as the camera moves. Providing
+        either a float or a tuple of 2 or 3 floats will switch the headlight on
+        and set the light's offset from the camera's axis. The default offset
+        is (-0.5, 0.5, 0).
+
+        Note that the ambient light is unaffected by this setting.
+
+        """
+        return self._headlight_enabled
+
+    @headlight.setter
+    def headlight(self, v):
+        offset = (-0.5, 0.5, 0)  # default offset
+        if isinstance(v, (int, float)):
+            offset = (float(v), -float(v), 0)
+            v = True
+        elif isinstance(v, (tuple, list)):
+            if len(v) == 2:
+                offset = (float(v[0]), float(v[1]), 0)
+            elif len(v) == 3:
+                offset = (float(v[0]), float(v[1]), float(v[2]))
+            else:
+                raise ValueError(f"Expected 2 or 3 values for headlight offset, got {len(v)}")
+            v = True
+
+        if not isinstance(v, bool):
+            raise TypeError(f"Expected bool, got {type(v)}")
+
+        self._headlight_enabled = v
+        self._headlight.visible = v
+        self._headlight.local.position = offset
+        for light in self._static_lights:
+            light.visible = not v
+
+        self._render_stale = True
+
+    def toggle_headlight(self):
+        """Toggle the camera-linked headlight."""
+        self.headlight = not self.headlight
+
+    @property
     def shadows(self):
         """Return shadow state."""
         return self._shadows
@@ -585,9 +672,13 @@ class Viewer:
             for vis in self.visuals:
                 set_shadow(vis, v)
 
-            for ch in self.scene.children:
-                if isinstance(ch, gfx.PointLight):
-                    ch.cast_shadow = v
+            # N.B. we have to iterate over all lights (not just the scene's
+            # children) because the headlight is parented to the camera
+            for light in self.lights:
+                if isinstance(
+                    light, (gfx.PointLight, gfx.DirectionalLight, gfx.SpotLight)
+                ):
+                    light.cast_shadow = v
 
             # self.scene.traverse(lambda x: set_shadow(x, v))
 

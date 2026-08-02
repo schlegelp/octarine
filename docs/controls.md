@@ -133,6 +133,44 @@ To remove it again:
     an error and an existing bar is hidden if you set `Viewer.camera.fov` to
     a non-zero value.
 
+## Lighting
+
+By default, the scene is lit by two point lights (plus a weak ambient light)
+that are fixed in space: a strong one from the front/top/left and a weaker one
+from the back. As a consequence, the lighting changes as you move the camera
+around - which side of an object is lit depends on where you're looking from.
+
+Set [`octarine.Viewer.headlight`][] to `True` to instead use a single light
+that is linked to the camera. Objects are then always lit from the front, no
+matter how you rotate the scene:
+
+```python
+>>> v = oc.Viewer()
+>>> v.headlight = True
+```
+
+You can also set this when initializing the viewer:
+
+```python
+>>> v = oc.Viewer(headlight=True)
+```
+
+!!! note
+
+    The headlight is not exactly head-on but offset slightly to the top-left
+    of the camera - a light shining exactly along the view direction makes
+    objects look rather flat. You can change that offset (in camera space) via
+    `Viewer._headlight.local.position` and its brightness via
+    `Viewer._headlight.intensity`.
+
+The ambient light is independent of this setting. Use `Viewer.lights` to get
+all light sources (including the headlight) if you want to fine-tune them:
+
+```python
+>>> [light.intensity for light in v.lights]
+[0.5, 4.0, 1.0, 4.0]
+```
+
 ## GUI Controls
 
 The control panel is organized into four tabs:
@@ -147,8 +185,8 @@ The control panel is organized into four tabs:
   highlights the corresponding object in the viewer.
 - **Controls**: viewer-wide settings - what happens on hover and
   double-click (see [Selecting Objects](selections.md)), flat
-  shading/wireframe for meshes, an FPS counter, ambient light and the
-  [render trigger](triggers.md).
+  shading/wireframe for meshes, an FPS counter, lighting (see
+  [Lighting](#lighting)) and the [render trigger](triggers.md).
 - **Screenshot**: save a screenshot to file (with options for size and a
   transparent background) or copy it straight to the clipboard.
 - **Effects**: toggle [silhouette rendering](effects.md#silhouette-rendering)

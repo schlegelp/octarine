@@ -604,6 +604,89 @@ def _scalebar_box(v, size=(400, 300)):
     return (w, h), best
 
 
+def test_lines2gfx_material_selection():
+    """Only per-point widths should switch to the custom line material."""
+    import pygfx as gfx
+    from octarine.visuals import lines2gfx
+    from octarine.shaders import FlexLineMaterial
+
+    line = np.zeros((4, 3), dtype=np.float32)
+
+    # Stock materials for a single width
+    assert type(lines2gfx(line, color="red", linewidth=2).material) is gfx.LineMaterial
+    assert (
+        type(lines2gfx(line, color="red", linewidth=0).material)
+        is gfx.LineThinMaterial
+    )
+
+    # An array of widths switches to the custom material. Its uniform
+    # thickness is the mean width - that's what dashes are scaled with.
+    mat = lines2gfx(line, color="red", linewidth=[1, 2, 3, 4]).material
+    assert isinstance(mat, FlexLineMaterial)
+    assert mat.thickness_mode == "vertex"
+    assert mat.thickness == 2.5
+
+    # Widths for a stack of lines are padded at the NaN breaks
+    lines = [np.zeros((3, 3), dtype=np.float32), np.zeros((2, 3), dtype=np.float32)]
+    vis = lines2gfx(lines, color="red", linewidth=[1, 2, 3, 4, 5])
+    assert vis.geometry.thicknesses.nitems == vis.geometry.positions.nitems == 6
+    assert list(vis.geometry.thicknesses.data) == [1, 2, 3, 0, 4, 5]
+
+    # ... but widths that already include the breaks are fine too
+    vis = lines2gfx(lines, color="red", linewidth=np.ones(6))
+    assert vis.geometry.thicknesses.nitems == 6
+
+    with pytest.raises(ValueError):
+        lines2gfx(lines, color="red", linewidth=[1, 2, 3])
+    with pytest.raises(ValueError):
+        lines2gfx(line, color="red", linewidth=[-1, 1, 1, 1])
+
+
+def test_lines_per_point_width_render():
+    """Per-point widths must taper the rendered line."""
+    from octarine.shaders import FlexLineMaterial
+
+    v = oc.Viewer(offscreen=True, size=(400, 400))
+    v.renderer.pixel_ratio = 1
+
+    # A horizontal line from x=-150 to x=150, tapering from 2 to 40 units
+    pts = np.zeros((21, 3), dtype=np.float32)
+    pts[:, 0] = np.linspace(-150, 150, 21)
+    v.add_lines(
+        pts,
+        color="red",
+        linewidth=np.linspace(2, 40, 21),
+        linewidth_space="world",
+        center=False,
+    )
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    assert isinstance(obj.material, FlexLineMaterial)
+
+    cam = v.camera
+    cam.width = cam.height = 400  # 1 px per world unit
+    cam.zoom = 1
+    cam.depth_range = (1, 1000)
+    cam.local.position = (0, 0, 50)
+    cam.look_at((0, 0, 0))
+
+    def heights(img):
+        """Number of red pixels per column."""
+        return _color_mask(img, 0).sum(axis=0)
+
+    h = heights(np.asarray(v.screenshot(filename=None, size=(400, 400))))
+    # The line spans columns 50-350; width at column c is 2 + 38 * (c - 50) / 300
+    for col in (60, 200, 340):
+        expected = 2 + 38 * (col - 50) / 300
+        assert abs(h[col] - expected) <= 2, f"{h[col]} px at column {col}"
+
+    # Switching back to a uniform width renders a constant-width line
+    obj.material.thickness_mode = "uniform"
+    h = heights(np.asarray(v.screenshot(filename=None, size=(400, 400))))
+    assert abs(h[60] - h[340]) <= 2
+    assert abs(h[200] - obj.material.thickness) <= 2
+    v.close()
+
+
 def test_scalebar(mesh):
     v = oc.Viewer(offscreen=True, size=(400, 300))
     v.add_mesh(mesh, color="red")
@@ -685,6 +768,63 @@ def test_scalebar_requires_orthographic_camera(mesh):
     assert v._scalebar.visible
 
     v.close()
+
+
+def test_headlight_toggle(mesh):
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh)
+
+    # By default the static lights are on and the headlight is off
+    assert v.headlight is False
+    assert v._headlight.visible is False
+    assert all(light.visible for light in v._static_lights)
+
+    # The headlight lives on the camera, so the camera must be part of the scene
+    assert v._headlight.parent is v.camera
+    assert v.camera in v.scene.children
+    assert v._headlight in v.lights
+
+    v.headlight = True
+    assert v._headlight.visible is True
+    assert not any(light.visible for light in v._static_lights)
+
+    # Shadows must reach the camera-parented light, too
+    v.shadows = True
+    assert v._headlight.cast_shadow is True
+    assert all(light.cast_shadow for light in v._static_lights)
+
+    v.toggle_headlight()
+    assert v.headlight is False
+
+    with pytest.raises(TypeError):
+        v.headlight = "yes"
+
+    v.close()
+
+
+def test_headlight_render(mesh):
+    """The headlight must light the object the same way from any angle."""
+
+    def render(headlight):
+        v = oc.Viewer(offscreen=True, size=(200, 200), headlight=headlight)
+        v.add_mesh(mesh, color="white")
+        brightness = []
+        for view in ("XY", "-XY"):
+            v.set_view(view)
+            img = np.asarray(v.screenshot(filename=None, size=(200, 200)))[..., :3]
+            img = img.astype(float)
+            # Mean over the object (the background is black)
+            brightness.append(img[img.max(axis=-1) > 5].mean())
+        v.close()
+        return brightness
+
+    # With fixed lights, the sphere is noticeably darker from the back
+    front, back = render(False)
+    assert back < 0.9 * front
+
+    # With the headlight, front and back view are lit identically
+    front, back = render(True)
+    assert abs(back - front) < 0.01 * front
 
 
 def test_showing_messsage():
