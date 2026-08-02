@@ -14,10 +14,18 @@ pip uninstall octarine3d -y
 pip install git+https://github.com/schlegelp/octarine.git
 ```
 
+## Version `0.7.0` { data-toc-label="0.7.0" }
+_Date: 02/08/26_
+
 #### Improvements
 - new [`Viewer.set_scalebar`][octarine.Viewer.set_scalebar] method: overlay a scale bar that
   either shows a fixed distance or dynamically adjusts to the zoom level (see
   [Scale bar](controls.md#scale-bar))
+- [`Viewer.add_mesh`][octarine.Viewer.add_mesh] now exposes pygfx's mesh shaders via the new `shader` parameter
+- [`Viewer.add_lines`][octarine.Viewer.add_lines] now accepts an array of line widths (one per point)
+
+#### Fixes
+- fixed issue in [`Viewer.hide_selected`][octarine.Viewer.hide_selected]
 
 ## Version `0.6.0` { data-toc-label="0.6.0" }
 _Date: 18/07/26_
