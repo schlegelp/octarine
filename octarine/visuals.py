@@ -1,3 +1,4 @@
+import re
 import uuid
 import cmap
 import warnings
@@ -13,7 +14,7 @@ from . import config, utils
 logger = config.get_logger(__name__)
 
 
-def mesh2gfx(mesh, color, alpha=None, silhouette=None):
+def mesh2gfx(mesh, color, alpha=None, silhouette=None, shader=None):
     """Convert generic mesh to pygfx visuals.
 
     Parameters
@@ -31,7 +32,14 @@ def mesh2gfx(mesh, color, alpha=None, silhouette=None):
                     If provided (and > 0), render the mesh with a
                     Neuroglancer-style silhouette effect: face-on regions
                     become transparent, edges/creases are emphasized.
-                    Typical values are 1-8.
+                    Typical values are 1-8. Only works with the default
+                    "phong" shader.
+    shader :        str | pygfx.Material subclass, optional
+                    The shader (i.e. material) to use for the mesh.
+                    Defaults to "phong". See `available_shaders()` for
+                    the full list of options - e.g. "basic", "standard",
+                    "physical" or "toon". Alternatively, pass a
+                    `pygfx.Material` subclass directly.
 
     """
     # Skip empty meshes
@@ -50,7 +58,7 @@ def mesh2gfx(mesh, color, alpha=None, silhouette=None):
             positions=mesh.vertices.astype(np.float32, copy=False),
             **obj_color_kwargs,
         ),
-        _make_mesh_material(mat_color_kwargs, silhouette),
+        _make_mesh_material(mat_color_kwargs, silhouette, shader),
     )
 
     # Add custom attributes
@@ -60,21 +68,59 @@ def mesh2gfx(mesh, color, alpha=None, silhouette=None):
     return vis
 
 
-def _make_mesh_material(mat_color_kwargs, silhouette=None):
-    """Create a Phong material, optionally with a silhouette effect."""
-    if not silhouette:
-        return gfx.MeshPhongMaterial(**mat_color_kwargs)
+def available_shaders():
+    """Return a dict mapping shader names to pygfx mesh material classes.
 
-    # This import registers the shader with pygfx
-    from .shaders import SilhouetteMeshMaterial
+    Shaders are discovered dynamically from the installed pygfx version:
+    every `pygfx.Mesh{Name}Material` is available as shader "{name}"
+    (snake_case) - e.g. "phong", "toon" or "normal_lines".
 
-    # Weighted (order-independent) blending composites the mostly-transparent
-    # silhouette sensibly even for many overlapping meshes
-    mat_color_kwargs = dict(mat_color_kwargs, alpha_mode="weighted_blend")
-    return SilhouetteMeshMaterial(silhouette=float(silhouette), **mat_color_kwargs)
+    """
+    shaders = {}
+    for name in dir(gfx):
+        match = re.fullmatch(r"Mesh([A-Za-z]+)Material", name)
+        if match and match.group(1) != "Abstract":
+            key = re.sub(r"(?<!^)(?=[A-Z])", "_", match.group(1)).lower()
+            shaders[key] = getattr(gfx, name)
+    return shaders
 
 
-def geometry2gfx(geometry, color, alpha=None, silhouette=None):
+def _make_mesh_material(mat_color_kwargs, silhouette=None, shader=None):
+    """Create a mesh material, optionally with a silhouette effect."""
+    if silhouette:
+        if shader is not None and str(shader).lower() != "phong":
+            raise ValueError(
+                "The silhouette effect only works with the default 'phong' "
+                f"shader, got shader={shader!r}."
+            )
+
+        # This import registers the shader with pygfx
+        from .shaders import SilhouetteMeshMaterial
+
+        # Weighted (order-independent) blending composites the mostly-transparent
+        # silhouette sensibly even for many overlapping meshes
+        mat_color_kwargs = dict(mat_color_kwargs, alpha_mode="weighted_blend")
+        return SilhouetteMeshMaterial(silhouette=float(silhouette), **mat_color_kwargs)
+
+    if shader is None:
+        shader = "phong"
+
+    if isinstance(shader, type) and issubclass(shader, gfx.Material):
+        return shader(**mat_color_kwargs)
+
+    shaders = available_shaders()
+    # Normalize so that e.g. "normal_lines", "NormalLines" and "normal lines" all work
+    key = re.sub(r"[\s_-]", "", str(shader).lower())
+    lookup = {k.replace("_", ""): v for k, v in shaders.items()}
+    if key not in lookup:
+        raise ValueError(
+            f"Unknown shader {shader!r}. Available shaders: "
+            f"{', '.join(sorted(shaders))}."
+        )
+    return lookup[key](**mat_color_kwargs)
+
+
+def geometry2gfx(geometry, color, alpha=None, silhouette=None, shader=None):
     """Convert a pygfx.Geometry to a pygfx.Mesh.
 
     Parameters
@@ -92,7 +138,14 @@ def geometry2gfx(geometry, color, alpha=None, silhouette=None):
                     If provided (and > 0), render the mesh with a
                     Neuroglancer-style silhouette effect: face-on regions
                     become transparent, edges/creases are emphasized.
-                    Typical values are 1-8.
+                    Typical values are 1-8. Only works with the default
+                    "phong" shader.
+    shader :        str | pygfx.Material subclass, optional
+                    The shader (i.e. material) to use for the mesh.
+                    Defaults to "phong". See `available_shaders()` for
+                    the full list of options - e.g. "basic", "standard",
+                    "physical" or "toon". Alternatively, pass a
+                    `pygfx.Material` subclass directly.
 
     """
     # Parse color
@@ -105,7 +158,7 @@ def geometry2gfx(geometry, color, alpha=None, silhouette=None):
     # But that doesn't seem to be the case.
     mat_color_kwargs["pick_write"] = True
 
-    vis = gfx.Mesh(geometry, _make_mesh_material(mat_color_kwargs, silhouette))
+    vis = gfx.Mesh(geometry, _make_mesh_material(mat_color_kwargs, silhouette, shader))
 
     # Add custom attributes
     vis._object_type = "mesh"

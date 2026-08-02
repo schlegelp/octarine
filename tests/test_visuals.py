@@ -52,6 +52,34 @@ def test_adding_mesh(mesh, color):
     v.close()
 
 
+def test_adding_mesh_shader(mesh):
+    from octarine.visuals import available_shaders
+
+    v = oc.Viewer(offscreen=True)
+    for name, material in available_shaders().items():
+        v.add_mesh(mesh, color="red", shader=name)
+        (obj,) = [o for objs in v.objects.values() for o in objs]
+        assert isinstance(obj.material, material)
+        v.canvas.draw()  # force the shader to actually compile/render
+        v.clear()
+
+    # Passing a material class directly must also work
+    import pygfx as gfx
+
+    v.add_mesh(mesh, color="red", shader=gfx.MeshToonMaterial)
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    assert isinstance(obj.material, gfx.MeshToonMaterial)
+
+    with pytest.raises(ValueError, match="Unknown shader"):
+        v.add_mesh(mesh, shader="does-not-exist")
+
+    # Silhouette requires the default phong shader
+    with pytest.raises(ValueError, match="silhouette"):
+        v.add_mesh(mesh, shader="toon", silhouette=2.0)
+
+    v.close()
+
+
 def test_mesh_silhouette_render(mesh):
     """Silhouette must make face-on regions transparent but keep the rim bright."""
 
@@ -107,6 +135,452 @@ def test_set_silhouette_toggle(mesh):
     v.canvas.draw()
     v.close()
 
+
+def _sharpness(img, mask):
+    """Mean gradient magnitude over a masked region - a proxy for sharpness."""
+    gy, gx = np.gradient(img.astype(float).mean(axis=-1))
+    return np.hypot(gy, gx)[mask].mean()
+
+
+def test_depth_of_field_render():
+    """DoF must blur out-of-focus spheres but keep the focal plane sharp."""
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    for x, z, color, name in [
+        (0, 0, "red", "near"),
+        (-4, -30, "cyan", "far1"),
+        (4, -30, "green", "far2"),
+    ]:
+        s = tm.creation.icosphere(subdivisions=3)
+        s.apply_translation((x, 0, z))
+        v.add_mesh(s, color=color, name=name)
+    v.camera.show_object(v.scene, view_dir=(0, 0, -1), up=(0, 1, 0))
+
+    def shot():
+        return np.asarray(v.screenshot(filename=None))[..., :3]
+
+    def dilate(mask, iters=3):
+        for _ in range(iters):
+            for shift, axis in ((1, 0), (-1, 0), (1, 1), (-1, 1)):
+                mask = mask | np.roll(mask, shift, axis=axis)
+        return mask
+
+    # Build a footprint mask for each sphere from the plain render (dilated
+    # a little so they include the spheres' edges)
+    plain = shot()
+    r, g, b = plain[..., 0], plain[..., 1], plain[..., 2]
+    near = dilate((r > 100) & (b < 80))  # red sphere
+    far1 = dilate((b > 100) & (r < 80))  # cyan sphere
+    far2 = dilate((g > 100) & (r < 80) & (b < 80))  # green sphere
+    assert near.any() and far1.any() and far2.any()
+
+    # Focus on the near sphere (at the origin). Note: for ortho cameras
+    # pygfx places the camera mid-scene, so the focus distance is signed.
+    p = v.camera.world.inverse_matrix @ np.array([0, 0, 0, 1.0])
+    focus = -p[2] / p[3]
+    # Ortho blur is normalized by the visible view height: aperture equal
+    # to that height gives 1 px of blur per world unit of defocus - the far
+    # spheres sit 30 units behind the focal plane, the near sphere spans <2.
+    aperture = v.camera.height / v.camera.zoom
+    v.set_depth_of_field(focus=focus, aperture=aperture, max_radius=20)
+    dof = shot()
+
+    assert _sharpness(dof, near) > 0.7 * _sharpness(plain, near)
+    assert _sharpness(dof, far1) < 0.5 * _sharpness(plain, far1)
+    assert _sharpness(dof, far2) < 0.5 * _sharpness(plain, far2)
+
+    # Autofocus (focus=None) targets the center of the view, i.e. the near
+    # sphere - so the result should be the same
+    v.set_depth_of_field(aperture=aperture, max_radius=20)
+    auto = shot()
+    assert _sharpness(auto, near) > 0.7 * _sharpness(plain, near)
+    assert _sharpness(auto, far1) < 0.5 * _sharpness(plain, far1)
+    assert _sharpness(auto, far2) < 0.5 * _sharpness(plain, far2)
+
+    # Disabling restores the original render
+    v.set_depth_of_field(False)
+    off = shot()
+    assert np.allclose(off, plain, atol=2)
+    v.close()
+
+
+def test_depth_of_field_toggle(mesh):
+    from octarine.shaders import DepthOfFieldPass
+
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh, color="red")
+
+    v.set_depth_of_field(focus=10, aperture=50, max_radius=8)
+    passes = [p for p in v.renderer.effect_passes if isinstance(p, DepthOfFieldPass)]
+    assert len(passes) == 1
+    dof = passes[0]
+    assert dof.enabled
+    assert dof.focus == 10
+    assert dof.aperture == 50
+    assert dof.max_radius == 8
+    v.canvas.draw()
+
+    # Re-enabling updates the existing pass instead of adding a second one
+    v.set_depth_of_field(aperture=25)
+    assert [
+        p for p in v.renderer.effect_passes if isinstance(p, DepthOfFieldPass)
+    ] == [dof]
+    assert dof.focus is None  # back to the autofocus default
+    assert dof.aperture == 25
+
+    # Disabling keeps the pass around but turns it off
+    v.set_depth_of_field(False)
+    assert not dof.enabled
+    v.canvas.draw()
+
+    with pytest.raises(ValueError):
+        v.set_depth_of_field(aperture=-1)
+    v.close()
+
+
+def test_depth_of_field_focus_position():
+    """get_focus_position must return the point the camera is focused on."""
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    s = tm.creation.icosphere(subdivisions=3)
+    s.apply_translation((0, 0, -5))
+    v.add_mesh(s, color="red")
+    v.camera.show_object(v.scene, view_dir=(0, 0, -1), up=(0, 1, 0))
+
+    # Autofocus: the focal point is the surface under the view center,
+    # i.e. the front pole of the sphere at (0, 0, -4)
+    v.set_depth_of_field()
+    v.canvas.draw()  # the depth buffer only exists after a draw
+    pos = v._dof_pass.get_focus_position(v.renderer)
+    assert pos is not None
+    assert np.allclose(pos, [0, 0, -4], atol=0.05)
+
+    # Fixed focus: the focal point lies on the view axis at that distance
+    p = v.camera.world.inverse_matrix @ np.array([0, 0, -4, 1.0])
+    v.set_depth_of_field(focus=-p[2] / p[3])
+    pos = v._dof_pass.get_focus_position(v.renderer)
+    assert np.allclose(pos, [0, 0, -4], atol=1e-4)
+    v.close()
+
+
+def test_depth_of_field_smooth():
+    """Smooth autofocus must ease towards a new target instead of snapping."""
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    s = tm.creation.icosphere(subdivisions=3)
+    s.apply_translation((0, 0, -5))
+    v.add_mesh(s, color="red")
+    v.camera.show_object(v.scene, view_dir=(0, 0, -1), up=(0, 1, 0))
+
+    v.set_depth_of_field(smooth=True)
+    dof = v._dof_pass
+    assert dof.smooth == 0.2
+    assert dof.focus is None  # still reports autofocus
+
+    # First frame: snaps straight to the initial target
+    v.canvas.draw()
+    start = dof._smooth_value
+    assert start is not None and dof._smooth_settled
+    assert dof._uniform_data["autofocus"] == 0.0
+
+    # Move the sphere 10 units back -> the autofocus target jumps by 10;
+    # after a single frame the focus must be strictly in between
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    obj.local.z -= 10
+    v.canvas.draw()
+    assert not dof._smooth_settled
+    assert start < dof._smooth_value < start + 9.9
+
+    # ... and settle on the new target if we keep rendering
+    for _ in range(500):
+        v.canvas.draw()
+        if dof._smooth_settled:
+            break
+    assert dof._smooth_settled
+    assert abs(dof._smooth_value - (start + 10)) < 0.1
+
+    # Turning smoothing off reverts to per-fragment shader autofocus
+    v.set_depth_of_field(smooth=False)
+    v.canvas.draw()
+    assert dof._uniform_data["autofocus"] == 1.0
+    v.close()
+
+
+def test_depth_of_field_snap():
+    """Snapping autofocus must lock onto the closest object near the center."""
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.renderer.pixel_ratio = 1  # physical == logical pixels
+    s = tm.creation.icosphere(subdivisions=3)
+    v.add_mesh(s, color="red")
+    v.camera.show_object(v.scene, view_dir=(0, 0, -1), up=(0, 1, 0))
+
+    # Shift the sphere so its edge sits ~30 px right of the view center
+    wpp = (v.camera.height / v.camera.zoom) / 200  # world units per pixel
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    shift = 1 + 30 * wpp
+    obj.local.x = shift
+
+    # Plain autofocus: nothing under the exact center -> stays sharp
+    v.set_depth_of_field()
+    v.canvas.draw()
+    assert v._dof_pass._uniform_data["autofocus"] == 1.0
+    assert v._dof_pass.get_focus_position(v.renderer) is None
+
+    # Snapping: the closest point of the sphere is within reach ...
+    v.set_depth_of_field(snap_radius=50)
+    v.canvas.draw()
+    dof = v._dof_pass
+    assert dof._uniform_data["autofocus"] == 0.0
+    pos = dof.get_focus_position(v.renderer)
+    assert pos is not None
+    # ... namely the sphere's rim nearest to the view center
+    assert abs(pos[0] - (shift - 1)) < 5 * wpp
+    assert abs(pos[1]) < 5 * wpp
+    assert -0.05 < pos[2] < 0.45  # front surface right at the silhouette
+
+    # A search radius smaller than the gap finds nothing -> sharp again
+    v.set_depth_of_field(snap_radius=10)
+    v.canvas.draw()
+    assert dof._uniform_data["autofocus"] == 1.0
+    assert dof.get_focus_position(v.renderer) is None
+    v.close()
+
+
+def _render_point_view(v, cam_height):
+    """Render with an ortho camera showing `cam_height` world units.
+
+    With a 300x300 canvas (pixel_ratio 1) the world-to-pixel ratio
+    is 300 / cam_height.
+    """
+    cam = v.camera
+    cam.width = cam_height
+    cam.height = cam_height
+    cam.zoom = 1
+    cam.depth_range = (1, 1000)
+    cam.local.position = (0, 0, 50)
+    cam.look_at((0, 0, 0))
+    return np.asarray(v.screenshot(filename=None, size=(300, 300)))
+
+
+def _color_mask(img, channel):
+    """Boolean mask of pixels dominated by the given RGB channel."""
+    rgb = img[..., :3].astype(int)
+    other = [c for c in range(3) if c != channel]
+    return (
+        (rgb[..., channel] > 120)
+        & (rgb[..., other[0]] < 100)
+        & (rgb[..., other[1]] < 100)
+    )
+
+
+def test_points2gfx_material_selection():
+    """Only requests for flex features should switch to the custom material."""
+    import pygfx as gfx
+    from octarine.visuals import points2gfx
+    from octarine.shaders import FlexPointsMaterial
+
+    pts = np.zeros((2, 3), dtype=np.float32)
+
+    # Stock materials when no flex feature is requested
+    assert type(points2gfx(pts, color="red").material) is gfx.PointsMaterial
+    assert (
+        type(points2gfx(pts, color="red", marker="ring").material)
+        is gfx.PointsMarkerMaterial
+    )
+
+    # Edge styling alone upgrades to a (stock) marker material
+    mat = points2gfx(pts, color="red", edge_width=5).material
+    assert type(mat) is gfx.PointsMarkerMaterial
+    assert mat.edge_width == 5
+
+    # ... and edge_mode is a stock passthrough as well
+    mat = points2gfx(pts, color="red", marker="ring", edge_mode="outer").material
+    assert type(mat) is gfx.PointsMarkerMaterial
+    assert mat.edge_mode == "outer"
+
+    # Flex features switch to the custom material; plain points get an
+    # invisible edge so they still look like gfx.PointsMaterial points
+    mat = points2gfx(pts, color="red", min_size=10).material
+    assert isinstance(mat, FlexPointsMaterial)
+    assert mat.min_size == 10
+    assert mat.max_size is None
+    assert mat.edge_width == 0
+
+    mat = points2gfx(
+        pts,
+        color="red",
+        marker="ring",
+        size_space="world",
+        edge_size_space="screen",
+        max_size=100,
+        min_edge_width=2,
+    ).material
+    assert isinstance(mat, FlexPointsMaterial)
+    assert mat.edge_size_space == "screen"
+    assert mat.max_size == 100
+    assert mat.min_edge_width == 2
+
+
+def test_points_min_max_size():
+    """min_size/max_size must clamp the on-screen size of world-space points."""
+    from octarine.shaders import FlexPointsMaterial
+
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.renderer.pixel_ratio = 1
+    v.add_points(
+        np.zeros((1, 3), dtype=np.float32),
+        color="red",
+        size=4,
+        size_space="world",
+        min_size=0,
+        center=False,
+    )
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    assert isinstance(obj.material, FlexPointsMaterial)
+
+    def diameter(img):
+        return 2 * np.sqrt(_color_mask(img, 0).sum() / np.pi)
+
+    # At 1 px per world unit the point covers ~4 px
+    assert abs(diameter(_render_point_view(v, 300)) - 4) < 2
+
+    # ... but never fewer than min_size (a live uniform update, no recompile)
+    obj.material.min_size = 40
+    assert abs(diameter(_render_point_view(v, 300)) - 40) < 3
+
+    # ... and never more than max_size (at 10 px/world-unit it would be 40 px)
+    obj.material.min_size = None
+    obj.material.max_size = 10
+    assert abs(diameter(_render_point_view(v, 30)) - 10) < 3
+    v.close()
+
+
+def _edge_runs(img):
+    """Lengths of contiguous red runs along the horizontal centerline."""
+    red = _color_mask(img, 0)[img.shape[0] // 2].astype(int)
+    steps = np.diff(np.r_[0, red, 0])
+    return list(np.where(steps == -1)[0] - np.where(steps == 1)[0])
+
+
+def test_points_edge_size_space():
+    """A screen-space edge must keep its pixel width as the marker scales."""
+
+    def make_viewer(edge_size_space):
+        v = oc.Viewer(offscreen=True, size=(300, 300))
+        v.renderer.pixel_ratio = 1
+        v.add_points(
+            np.zeros((1, 3), dtype=np.float32),
+            color="blue",
+            marker="circle",
+            size=60,
+            size_space="world",
+            edge_size_space=edge_size_space,
+            edge_width=8,
+            edge_color="red",
+            center=False,
+        )
+        return v
+
+    # Screen-space edge: 8 px whether the disc is 60 or 120 px wide
+    v = make_viewer("screen")
+    for cam_height in (300, 150):
+        runs = _edge_runs(_render_point_view(v, cam_height))
+        assert len(runs) == 2  # crossing the left and right rim
+        assert all(abs(r - 8) <= 2 for r in runs)
+    v.close()
+
+    # Control: a world-space edge doubles along with the disc
+    v = make_viewer("world")
+    for cam_height, expected in ((300, 8), (150, 16)):
+        runs = _edge_runs(_render_point_view(v, cam_height))
+        assert len(runs) == 2
+        assert all(abs(r - expected) <= 2 for r in runs)
+    v.close()
+
+
+def test_points_min_edge_width():
+    """min_edge_width must floor the on-screen width of a world-space edge."""
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.renderer.pixel_ratio = 1
+    v.add_points(
+        np.zeros((1, 3), dtype=np.float32),
+        color="blue",
+        marker="circle",
+        size=120,
+        size_space="world",
+        edge_width=8,
+        min_edge_width=6,
+        edge_color="red",
+        center=False,
+    )
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+
+    # At 1 px/world-unit the edge is well above the floor -> 8 px
+    runs = _edge_runs(_render_point_view(v, 300))
+    assert len(runs) == 2
+    assert all(abs(r - 8) <= 1 for r in runs)
+
+    # At 0.5 px/world-unit it would shrink to 4 px -> floored at 6 px
+    runs = _edge_runs(_render_point_view(v, 600))
+    assert len(runs) == 2
+    assert all(abs(r - 6) <= 1 for r in runs)
+
+    # Removing the floor (a live uniform update) lets it shrink to 4 px
+    obj.material.min_edge_width = None
+    runs = _edge_runs(_render_point_view(v, 600))
+    assert len(runs) == 2
+    assert all(abs(r - 4) <= 1 for r in runs)
+    v.close()
+
+
+def test_points_edge_mode():
+    """edge_mode must place the edge inside/astride/outside the outline."""
+    for mode, expected in (("inner", 60), ("centered", 70), ("outer", 80)):
+        v = oc.Viewer(offscreen=True, size=(300, 300))
+        v.renderer.pixel_ratio = 1
+        v.add_points(
+            np.zeros((1, 3), dtype=np.float32),
+            color="blue",
+            marker="circle",
+            size=60,
+            edge_width=10,
+            edge_color="red",
+            edge_mode=mode,
+            center=False,
+        )
+        img = _render_point_view(v, 300)
+        footprint = _color_mask(img, 0) | _color_mask(img, 2)
+        diam = 2 * np.sqrt(footprint.sum() / np.pi)
+        assert abs(diam - expected) < 3, mode
+        v.close()
+
+
+def test_points_size_space_combos():
+    """All size_space x edge_size_space combos must compile and render."""
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.renderer.pixel_ratio = 1
+    centers = []
+    for i, size_space in enumerate(("screen", "world", "model")):
+        for j, edge_space in enumerate((None, "screen", "world", "model")):
+            pos = np.array([[j * 60 - 90, i * 60 - 60, 0]], dtype=np.float32)
+            v.add_points(
+                pos,
+                color="red",
+                marker="diamond",
+                size=20,
+                size_space=size_space,
+                edge_size_space=edge_space,
+                edge_width=3,
+                edge_color="white",
+                min_size=5,
+                center=False,
+            )
+            centers.append(pos[0, :2])
+
+    # The camera shows 300 world units -> 1 px per world unit
+    red = _color_mask(_render_point_view(v, 300), 0)
+    h, w = red.shape
+    for cx, cy in centers:
+        px, py = int(w / 2 + cx), int(h / 2 - cy)
+        assert red[py - 15 : py + 15, px - 15 : px + 15].sum() > 20
+    v.close()
 
 
 def _scalebar_box(v, size=(400, 300)):

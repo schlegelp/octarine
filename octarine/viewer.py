@@ -1630,6 +1630,7 @@ class Viewer:
         color=None,
         alpha=None,
         silhouette=None,
+        shader=None,
         center=True,
     ):
         """Add mesh to canvas.
@@ -1657,7 +1658,17 @@ class Viewer:
                     become transparent while edges/creases are emphasized.
                     Typical values are 1-8 (same exponent semantics as
                     Neuroglancer). Use `Viewer.set_silhouette` to toggle
-                    the effect on existing meshes.
+                    the effect on existing meshes. Only works with the
+                    default "phong" shader.
+        shader :    str | pygfx.Material subclass, optional
+                    The shader (i.e. material) to use for the mesh.
+                    Defaults to "phong". Any mesh material available in
+                    the installed pygfx can be selected by name - e.g.
+                    "basic", "standard", "physical", "toon", "normal",
+                    "normal_lines" or "slice". Alternatively, pass a
+                    `pygfx.Material` subclass directly. See
+                    `octarine.visuals.available_shaders()` for the full
+                    list of options.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -1670,6 +1681,7 @@ class Viewer:
                     color=color,
                     alpha=alpha,
                     silhouette=silhouette,
+                    shader=shader,
                     center=False,
                 )
             return
@@ -1684,7 +1696,9 @@ class Viewer:
             name = str(name)
 
         if not isinstance(mesh, gfx.Mesh):
-            visual = mesh2gfx(mesh, color=color, alpha=alpha, silhouette=silhouette)
+            visual = mesh2gfx(
+                mesh, color=color, alpha=alpha, silhouette=silhouette, shader=shader
+            )
         else:
             visual = mesh
 
