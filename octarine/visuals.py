@@ -813,6 +813,35 @@ def points2gfx(
     return vis
 
 
+def _pad_at_breaks(values, lines, fill, what):
+    """Match per-node `values` to `lines` which may contain NaN breaks.
+
+    Parameters
+    ----------
+    values :    (M, ...) array
+                One value per node - either including the NaN breaks in
+                `lines` (returned as-is) or without them (padded).
+    lines :     (N, 3) array
+                Line vertices; rows of NaNs mark breaks between segments.
+    fill :      scalar
+                Value to insert for the breaks.
+    what :      str
+                What `values` are; used for the error message.
+
+    """
+    if len(values) == len(lines):
+        return values
+
+    # Count the number of non-NaN points
+    n_points = (~np.isnan(lines[:, 0])).sum()
+    if n_points != len(lines) and len(values) == n_points:
+        breaks = np.where(np.isnan(lines[:, 0]))[0]
+        offset = np.arange(len(breaks))
+        return np.insert(values, breaks - offset, fill, axis=0)
+
+    raise ValueError(f"Got {len(values)} {what} for {n_points} points.")
+
+
 def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=None):
     """Convert lines into pygfx visuals.
 
@@ -826,9 +855,10 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
     color :     str | tuple, optional
                 Color to use for plotting. Can be a single color
                 or one for every point in the line(s).
-    linewidth : float, optional
+    linewidth : float | array, optional
                 Line width. Set to 0 to use thin lines which can speed
-                up rendering.
+                up rendering. Can also be an array with one width per
+                point, in which case the line tapers between points.
     linewidth_space : "screen" | "world" | "model", optional
                 Units to use for the line width. "screen" (default)
                 will keep the line width constant on the screen, while
@@ -892,19 +922,7 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
     if isinstance(color, np.ndarray) and color.ndim == 2:
         # If colors are provided for each node we have to make sure
         # that we also include `None` for the breaks in the segments
-
-        # See if we can rescue this if there is now a mismatch in the
-        # number of colors and points
-        if len(color) != len(lines):
-            # Count the number of non-NaN points
-            n_points = (~np.isnan(lines[:, 0])).sum()
-            if n_points != len(lines):
-                if len(color) == n_points:
-                    breaks = np.where(np.isnan(lines[:, 0]))[0]
-                    offset = np.arange(len(breaks))
-                    color = np.insert(color, breaks - offset, np.nan, axis=0)
-                else:
-                    raise ValueError(f"Got {len(color)} colors for {n_points} points.")
+        color = _pad_at_breaks(color, lines, np.nan, "colors")
         color = color.astype(np.float32, copy=False)
         geometry_kwargs["colors"] = color
         material_kwargs["color_mode"] = "vertex"
@@ -913,7 +931,35 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
             color = color.astype(np.float32, copy=False)
         material_kwargs["color"] = color
 
-    if linewidth > 0:
+    # Parse linewidth(s)
+    if utils.is_iterable(linewidth):
+        linewidth = np.asarray(linewidth, dtype=np.float32)
+        if linewidth.ndim != 1:
+            raise ValueError(
+                "Expected `linewidth` to be a single value or a 1d array, "
+                f"got {linewidth.ndim}d array."
+            )
+        if (linewidth < 0).any():
+            raise ValueError("Line widths must not be negative.")
+        # The uniform thickness is what pygfx scales the dash pattern with;
+        # use the mean width so dashes look sensible on a tapered line
+        mean_width = float(np.nanmean(linewidth)) if len(linewidth) else 0
+        # The breaks between segments get a zero width (their positions are
+        # NaN anyway, so these nodes are not drawn)
+        geometry_kwargs["thicknesses"] = _pad_at_breaks(
+            linewidth, lines, 0, "line widths"
+        )
+
+        from .shaders import FlexLineMaterial
+
+        mat = FlexLineMaterial(
+            thickness=mean_width if mean_width > 0 else 1,
+            thickness_mode="vertex",
+            thickness_space=linewidth_space,
+            dash_pattern=dash_pattern,
+            **material_kwargs,
+        )
+    elif linewidth > 0:
         mat = gfx.LineMaterial(
             thickness=linewidth,
             thickness_space=linewidth_space,

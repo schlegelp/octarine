@@ -1840,8 +1840,12 @@ class Viewer:
         color :     str | tuple, optional
                     Color to use for plotting. Can be a single color
                     or one for every point in the line(s).
-        linewidth : float, optional
-                    Line width.
+        linewidth : float | array, optional
+                    Line width. Can also be an array with one width for
+                    every point in the line(s), in which case the line
+                    tapers from point to point. Note that with per-point
+                    widths, `linestyle` dashes are still scaled by the
+                    mean width.
         linewidth_space : "screen" | "world" | "model", optional
                     Units to use for the line width. "screen" (default)
                     will keep the line width constant on the screen, while
