@@ -108,6 +108,111 @@ def test_set_silhouette_toggle(mesh):
     v.close()
 
 
+
+def _scalebar_box(v, size=(400, 300)):
+    """Return (canvas_size, (row, x0, x1)) of the rendered scale bar.
+
+    Expects the scene itself to contain nothing white so that the bar can be
+    told apart from the objects.
+
+    """
+    img = np.asarray(v.screenshot(filename=None, size=size, alpha=False))
+    rgb = img[..., :3].astype(int)
+    white = (rgb.min(axis=-1) > 200) & (np.ptp(rgb, axis=-1) < 30)
+    h, w = white.shape
+    # The bar is the longest uninterrupted horizontal run of white pixels
+    best = None
+    for r in range(h):
+        cols = np.where(white[r])[0]
+        if len(cols) > 20 and (cols.max() - cols.min()) == len(cols) - 1:
+            if best is None or (cols.max() - cols.min()) > (best[2] - best[1]):
+                best = (r, int(cols.min()), int(cols.max()))
+    return (w, h), best
+
+
+def test_scalebar(mesh):
+    v = oc.Viewer(offscreen=True, size=(400, 300))
+    v.add_mesh(mesh, color="red")
+
+    # A fixed-size bar must span the expected fraction of the canvas
+    v.set_scalebar(0.5, units="nm")
+    (w, h), (row, x0, x1) = _scalebar_box(v)
+    visible_width = 2 / v.camera.projection_matrix[0, 0]
+    assert abs((x1 - x0) - 0.5 / visible_width * w) < 3
+    assert v._scalebar._label == "0.5 nm"
+    # ... and sit `margin` (logical) pixels from the bottom-right corner
+    assert abs((w - x1) - 20 * w / 400) < 3
+    assert abs((h - row) - 20 * h / 300) < 5
+
+    # The other corners must mirror that
+    v.set_scalebar(0.5, position="top-left")
+    (w2, h2), (row2, x2, x3) = _scalebar_box(v)
+    assert (w2, h2) == (w, h)
+    assert abs(x2 - (w - x1)) < 3 and abs((x3 - x2) - (x1 - x0)) < 3
+    assert abs(row2 - (h - row)) < 5
+
+    # An "auto" bar picks a nice round number covering ~a quarter of the canvas
+    v.set_scalebar(units="nm")
+    for zoom, expected in ((1, "1 nm"), (2, "0.5 nm"), (10, "0.1 nm")):
+        v.camera.zoom = zoom
+        _, (_, x0, x1) = _scalebar_box(v)
+        assert v._scalebar._label == expected, zoom
+        assert 0.1 < (x1 - x0) / w < 0.3, zoom
+    v.camera.zoom = 1
+
+    # Labels can be switched off or overridden
+    v.set_scalebar(0.5, label=False)
+    assert not v._scalebar._text.visible
+    v.set_scalebar(0.5, label="custom")
+    assert v._scalebar._text.visible and v._scalebar._label == "custom"
+
+    # Removing (also repeatedly) must clear the overlay
+    v.set_scalebar(False)
+    assert v._scalebar is None
+    assert not len(v.overlay_scene.children)
+    v.set_scalebar(False)
+
+    # Removing and re-adding between two frames must not kill the animation
+    v.set_scalebar(0.5)
+    v.set_scalebar(False)
+    v.set_scalebar(0.5)
+    v.canvas.draw()
+    v.canvas.draw()
+    assert v._update_scalebar in v._animations
+    assert v._scalebar._bar.geometry.positions.data.any()
+
+    with pytest.raises(ValueError, match="auto"):
+        v.set_scalebar("nope")
+    with pytest.raises(ValueError, match="positive"):
+        v.set_scalebar(-1)
+    with pytest.raises(ValueError, match="Unknown position"):
+        v.set_scalebar(0.5, position="middle")
+
+    v.close()
+
+
+def test_scalebar_requires_orthographic_camera(mesh):
+    v = oc.Viewer(offscreen=True, size=(400, 300), camera="perspective")
+    v.add_mesh(mesh)
+
+    with pytest.raises(ValueError, match="orthographic"):
+        v.set_scalebar(0.5)
+
+    # Switching to a perspective camera after the fact hides the bar
+    v.camera.fov = 0
+    v.set_scalebar(0.5)
+    v.canvas.draw()
+    assert v._scalebar.visible
+    v.camera.fov = 50
+    v.canvas.draw()
+    assert not v._scalebar.visible
+    v.camera.fov = 0
+    v.canvas.draw()
+    assert v._scalebar.visible
+
+    v.close()
+
+
 def test_showing_messsage():
     v = oc.Viewer(offscreen=True)
     v.show_message("test", color="red")

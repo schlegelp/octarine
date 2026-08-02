@@ -102,6 +102,37 @@ Need to communicate with the user? Try the [`octarine.Viewer.show_message`][]`()
 
 ![user message](_static/user_message.png)
 
+## Scale bar
+
+Use [`octarine.Viewer.set_scalebar`][]`()` to overlay a scale bar. By default
+the bar is dynamically re-sized as you zoom, always showing a "nice" round
+number:
+
+```python
+>>> v = oc.Viewer()
+>>> v.set_scalebar(units="nm")
+```
+
+You can also pin it to a fixed size and move it to another corner:
+
+```python
+>>> v.set_scalebar(1000, units="nm", position="top-left")
+```
+
+To remove it again:
+
+```python
+>>> v.set_scalebar(False)
+```
+
+!!! note
+
+    Scale bars require an orthographic camera (the default). With a
+    perspective camera the scale depends on the distance from the camera and
+    a single bar would be meaningless - `set_scalebar` will therefore raise
+    an error and an existing bar is hidden if you set `Viewer.camera.fov` to
+    a non-zero value.
+
 ## GUI Controls
 
 The control panel is organized into four tabs:

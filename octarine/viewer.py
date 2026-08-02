@@ -83,6 +83,23 @@ def _brighten_color(color, amount=0.3):
     return gfx.Color.from_hsl(h, s, lightness)
 
 
+def _nice_number(x):
+    """Round `x` down to the nearest 1, 2 or 5 times a power of ten."""
+    exponent = np.floor(np.log10(x))
+    fraction = x / 10**exponent  # this is somewhere in [1, 10)
+    for m in (5, 2):
+        if fraction >= m:
+            return m * 10.0**exponent
+    return 10.0**exponent
+
+
+def _format_number(x):
+    """Format a number for display without trailing zeros."""
+    if float(x).is_integer() and abs(x) < 1e9:
+        return f"{int(x):d}"
+    return f"{x:g}"
+
+
 def update_helper(viewer, legend=True, bounds=True):
     """Helper function to update legend and other properties."""
     # Always clear the cached objects dictionary
@@ -182,6 +199,11 @@ class Viewer:
                     raise ValueError(
                         'IPython event loop not running. Please use e.g. "%gui qt6" to hook into the event loop.'
                     )
+
+            # ipython is running multiple event loops and recent versions which seems to confuse rendercanvas
+            # (see https://github.com/pygfx/rendercanvas/issues/211). Here, we force it to use asyncio
+            # from rendercanvas.asyncio import loop
+            # RenderCanvas.select_loop(loop)
 
         self._title = title
 
@@ -1152,6 +1174,218 @@ class Viewer:
                         self.remove_animation(_fade_message)
 
             self.add_animation(_fade_message)
+
+    def set_scalebar(
+        self,
+        size="auto",
+        units=None,
+        position="bottom-right",
+        color="w",
+        width=3,
+        font_size=14,
+        label=True,
+        margin=20,
+    ):
+        """Add (or remove) a scale bar overlay.
+
+        The scale bar is drawn on top of the scene and indicates a given
+        distance in world units. It automatically tracks zoom level and
+        canvas size.
+
+        Note that this requires an orthographic camera (the default): with a
+        perspective camera the scale depends on the distance from the camera
+        and a single bar would be meaningless. If the camera is (or becomes)
+        perspective, the scale bar is hidden until it is orthographic again.
+
+        Parameters
+        ----------
+        size :      float | "auto" | False
+                    Length of the scale bar in world units. If "auto"
+                    (default), the bar is dynamically re-sized as you zoom
+                    to a "nice" round number spanning roughly a quarter of
+                    the canvas. Use `viewer.set_scalebar(False)` to remove
+                    an existing scale bar.
+        units :     str, optional
+                    Units to append to the label, e.g. "nm" or "µm". Note
+                    that Octarine has no notion of the units of your data -
+                    this is simply used for the label.
+        position :  "bottom-right" | "bottom-left" | "top-right" | "top-left"
+                    Corner of the canvas to place the scale bar in.
+        color :     str | tuple
+                    Color of the bar and its label.
+        width :     float
+                    Thickness of the bar in pixels.
+        font_size : int
+                    Font size of the label in pixels.
+        label :     bool | str
+                    Whether to label the bar with its size. Set to `False`
+                    for a bare bar, or pass a string to use a fixed custom
+                    label instead of the size.
+        margin :    int
+                    Distance (in pixels) of the bar from the canvas edges.
+
+        Examples
+        --------
+        >>> import octarine as oc
+        >>> v = oc.Viewer()
+        >>> # A bar that adjusts to the zoom level
+        >>> v.set_scalebar(units="nm")
+        >>> # A fixed 1000 nm bar in the top-left corner
+        >>> v.set_scalebar(1000, units="nm", position="top-left")
+        >>> # Remove the scale bar again
+        >>> v.set_scalebar(False)
+
+        """
+        # Skip if running in headless mode
+        if getattr(config, "HEADLESS", False):
+            return
+
+        if size is False or size is None:
+            if getattr(self, "_scalebar", None) is not None:
+                self.overlay_scene.remove(self._scalebar)
+                self.remove_animation(self._update_scalebar)
+                self._scalebar = None
+                self._render_stale = True
+            return
+
+        if isinstance(size, str):
+            if size != "auto":
+                raise ValueError(f'Expected a number, "auto" or False, got "{size}"')
+        else:
+            size = float(size)
+            if size <= 0:
+                raise ValueError(f"Scale bar size must be positive, got {size}")
+
+        if position not in ("bottom-right", "bottom-left", "top-right", "top-left"):
+            raise ValueError(f"Unknown position: {position}")
+
+        if self.camera.fov != 0:
+            raise ValueError(
+                "Scale bars require an orthographic camera but this viewer's "
+                f"camera has a field of view of {self.camera.fov}. Set "
+                "`Viewer.camera.fov = 0` to make it orthographic."
+            )
+
+        sb = getattr(self, "_scalebar", None)
+        if sb is None:
+            sb = self._scalebar = gfx.Group()
+            # The bar is a unit quad that `_update_scalebar` positions and
+            # scales in NDC coordinates. Note that we're using a mesh rather
+            # than a line because pygfx lines have caps which would make the
+            # bar wider than the distance it represents.
+            sb._bar = gfx.Mesh(gfx.plane_geometry(1, 1), gfx.MeshBasicMaterial())
+            sb._text = text2gfx(
+                "", font_size=font_size, anchor="bottom-center", screen_space=True
+            )
+            sb._label = ""
+            sb._state = None
+            sb.add(sb._bar, sb._text)
+            self.overlay_scene.add(sb)
+
+        sb._bar.material.color = gfx.Color(color)
+        sb._text.font_size = font_size
+        sb._text.material.color = gfx.Color(color)
+        sb._text.visible = bool(label)
+
+        self._scalebar_config = {
+            "size": size,
+            "units": units,
+            "position": position,
+            "width": width,
+            "label": label,
+            "margin": margin,
+        }
+
+        # This keeps the bar in sync with the camera and the canvas size.
+        # Note that removals are deferred to the next frame, so we have to
+        # cancel any pending one in case the bar was removed and re-added
+        # in between two frames.
+        if self._update_scalebar in self._animations_flagged_for_removal:
+            self._animations_flagged_for_removal.remove(self._update_scalebar)
+        self.add_animation(self._update_scalebar, on_error="log", req_render=False)
+        self._update_scalebar()
+        self._render_stale = True
+
+    def _update_scalebar(self):
+        """Animation hook: sync scale bar with the camera and canvas size."""
+        sb = getattr(self, "_scalebar", None)
+        if sb is None:
+            return
+
+        conf = self._scalebar_config
+
+        # A scale bar is meaningless for a perspective camera because the
+        # scale depends on the distance from the camera
+        if self.camera.fov != 0:
+            if sb.visible:
+                logger.warning(
+                    "Hiding scale bar: this requires an orthographic camera."
+                )
+                sb.visible = False
+                self._render_stale = True
+            return
+        sb.visible = True
+
+        # We run before the renderer, which is what normally syncs the camera
+        # with the canvas. Do it here so that the bar has the correct length
+        # already on the very first frame (e.g. for offscreen screenshots).
+        width_px, height_px = self.renderer.logical_size
+        if not width_px or not height_px:
+            return
+        self.camera.set_view_size(width_px, height_px)
+
+        # NDC units per world unit along the horizontal axis of the screen:
+        # the orthographic projection maps the visible width (which already
+        # accounts for zoom and aspect ratio) onto the -1 to 1 NDC range
+        ndc_per_world = float(self.camera.projection_matrix[0, 0])
+        if ndc_per_world <= 0:
+            return
+
+        size = conf["size"]
+        if size == "auto":
+            # Aim for a bar spanning a quarter of the canvas (= 0.5 in NDC)
+            # and round that down to the nearest nice number
+            size = _nice_number(0.5 / ndc_per_world)
+
+        length = size * ndc_per_world
+        margin_x = 2 * conf["margin"] / width_px
+        margin_y = 2 * conf["margin"] / height_px
+
+        top = conf["position"].startswith("top")
+        if conf["position"].endswith("right"):
+            x1 = 1 - margin_x
+            x0 = x1 - length
+        else:
+            x0 = -1 + margin_x
+            x1 = x0 + length
+        y = 1 - margin_y if top else -1 + margin_y
+        thickness = 2 * conf["width"] / height_px
+
+        # Only touch the visuals (and trigger a re-render) if anything changed
+        state = (x0, x1, y, thickness, top)
+        if state != sb._state:
+            sb._state = state
+            sb._bar.local.position = ((x0 + x1) / 2, y, 0)
+            sb._bar.local.scale = (length, thickness, 1)
+            # Label sits just above the bar (below it if the bar is at the top)
+            offset = thickness / 2 + 8 / height_px
+            sb._text.local.position = (
+                (x0 + x1) / 2,
+                y - offset if top else y + offset,
+                0,
+            )
+            sb._text.anchor = "top-center" if top else "bottom-center"
+            self._render_stale = True
+
+        label = conf["label"]
+        if not isinstance(label, str):
+            label = _format_number(size)
+            if conf["units"]:
+                label = f"{label} {conf['units']}"
+        if label != sb._label:
+            sb._text.set_text(label)
+            sb._label = label
+            self._render_stale = True
 
     def show_controls(self):
         """Show controls."""

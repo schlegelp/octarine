@@ -14,6 +14,11 @@ pip uninstall octarine3d -y
 pip install git+https://github.com/schlegelp/octarine.git
 ```
 
+#### Improvements
+- new [`Viewer.set_scalebar`][octarine.Viewer.set_scalebar] method: overlay a scale bar that
+  either shows a fixed distance or dynamically adjusts to the zoom level (see
+  [Scale bar](controls.md#scale-bar))
+
 ## Version `0.6.0` { data-toc-label="0.6.0" }
 _Date: 18/07/26_
 
