@@ -155,13 +155,22 @@ You can also set this when initializing the viewer:
 >>> v = oc.Viewer(headlight=True)
 ```
 
+The headlight is not exactly head-on but offset slightly to the top-left of the
+camera - a light shining exactly along the view direction makes objects look
+rather flat. Pass a float or an `(x, y)` / `(x, y, z)` tuple instead of `True`
+to switch the headlight on with a different offset (in camera space):
+
+```python
+>>> v.headlight = 1        # shorthand for (-1, 1, 0): further to the top-left
+>>> v.headlight = (1, -1)  # light from the bottom-right instead
+>>> v.headlight = 0        # exactly head-on (flat shading)
+```
+
+The offset is remembered when you switch the headlight off and on again.
+
 !!! note
 
-    The headlight is not exactly head-on but offset slightly to the top-left
-    of the camera - a light shining exactly along the view direction makes
-    objects look rather flat. You can change that offset (in camera space) via
-    `Viewer._headlight.local.position` and its brightness via
-    `Viewer._headlight.intensity`.
+    Use `Viewer._headlight.intensity` to change the headlight's brightness.
 
 The ambient light is independent of this setting. Use `Viewer.lights` to get
 all light sources (including the headlight) if you want to fine-tune them:

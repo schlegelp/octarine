@@ -10,7 +10,8 @@ _Date: ongoing_
 #### Improvements
 - new [`Viewer.headlight`][octarine.Viewer.headlight] property (plus a `headlight` parameter for
   [`octarine.Viewer`][] and a checkbox in the GUI controls): link the light to the camera such
-  that objects are always lit from the front (see [Lighting](controls.md#lighting))
+  that objects are always lit from the front; accepts a float or tuple to also set the light's
+  offset from the camera's axis (see [Lighting](controls.md#lighting))
 - new `Viewer.lights` property: list all light sources illuminating the scene
 
 To install the current `dev` version of `octarine`:

@@ -795,9 +795,40 @@ def test_headlight_toggle(mesh):
 
     v.toggle_headlight()
     assert v.headlight is False
+    assert v._headlight.visible is False
+    assert all(light.visible for light in v._static_lights)
 
     with pytest.raises(TypeError):
         v.headlight = "yes"
+
+    v.close()
+
+
+def test_headlight_offset():
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+
+    assert tuple(v._headlight.local.position) == (-0.5, 0.5, 0)
+
+    # A float/tuple switches the headlight on and sets the offset
+    v.headlight = 1
+    assert v.headlight is True
+    assert tuple(v._headlight.local.position) == (-1, 1, 0)
+
+    v.headlight = (0.2, 0.3)
+    assert v.headlight is True
+    assert tuple(v._headlight.local.position) == (0.2, 0.3, 0)
+
+    v.headlight = (0.2, 0.3, 0.4)
+    assert tuple(v._headlight.local.position) == (0.2, 0.3, 0.4)
+
+    # Switching off and on again must keep the offset
+    v.headlight = False
+    assert v.headlight is False
+    v.headlight = True
+    assert tuple(v._headlight.local.position) == (0.2, 0.3, 0.4)
+
+    with pytest.raises(ValueError):
+        v.headlight = (0.2, 0.3, 0.4, 0.5)
 
     v.close()
 

@@ -612,8 +612,10 @@ class Viewer:
         camera. If False (default), we use two point lights that are fixed in
         world space, i.e. the lighting changes as the camera moves. Providing
         either a float or a tuple of 2 or 3 floats will switch the headlight on
-        and set the light's offset from the camera's axis. The default offset
-        is (-0.5, 0.5, 0).
+        and set the light's offset from the camera's axis: a single float `x`
+        is shorthand for `(-x, x, 0)`, i.e. moves the light left and up. The
+        default offset is (-0.5, 0.5, 0) and is kept when you switch the
+        headlight off and on again.
 
         Note that the ambient light is unaffected by this setting.
 
@@ -622,9 +624,13 @@ class Viewer:
 
     @headlight.setter
     def headlight(self, v):
-        offset = (-0.5, 0.5, 0)  # default offset
-        if isinstance(v, (int, float)):
-            offset = (float(v), -float(v), 0)
+        offset = None  # `None` means: keep the current offset
+        if isinstance(v, bool):
+            # N.B. this check must come first because `bool` is a subclass of
+            # `int` and would otherwise be interpreted as an offset
+            pass
+        elif isinstance(v, (int, float)):
+            offset = (-float(v), float(v), 0)
             v = True
         elif isinstance(v, (tuple, list)):
             if len(v) == 2:
@@ -632,15 +638,17 @@ class Viewer:
             elif len(v) == 3:
                 offset = (float(v[0]), float(v[1]), float(v[2]))
             else:
-                raise ValueError(f"Expected 2 or 3 values for headlight offset, got {len(v)}")
+                raise ValueError(
+                    f"Expected 2 or 3 values for headlight offset, got {len(v)}"
+                )
             v = True
-
-        if not isinstance(v, bool):
-            raise TypeError(f"Expected bool, got {type(v)}")
+        else:
+            raise TypeError(f"Expected bool, float or tuple, got {type(v)}")
 
         self._headlight_enabled = v
         self._headlight.visible = v
-        self._headlight.local.position = offset
+        if offset is not None:
+            self._headlight.local.position = offset
         for light in self._static_lights:
             light.visible = not v
 
