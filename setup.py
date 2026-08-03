@@ -1,6 +1,6 @@
 import re
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
 from extreqs import parse_requirement_files
 from pathlib import Path
 
@@ -22,7 +22,9 @@ install_requires, extras_require = parse_requirement_files(
 setup(
     name='octarine3d',
     version=verstr,
-    packages=find_packages(),
+    # find_namespace_packages (rather than find_packages) so that data-only
+    # directories such as octarine/shaders/wgsl are picked up as well
+    packages=find_namespace_packages(include=["octarine", "octarine.*"]),
     license='BSD-2-Clause',
     description='WGPU-based 3d viewer',
     long_description=open('README.md').read(),
