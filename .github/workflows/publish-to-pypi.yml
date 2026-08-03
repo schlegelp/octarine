@@ -4,13 +4,23 @@ on:
   release:
     types: [created]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag, branch or SHA to build (defaults to the dispatched ref)"
+        required: false
+        type: string
 
 jobs:
   build-n-publish:
     name: Build and publish Python 🐍 distributions 📦 to PyPI
     runs-on: ubuntu-latest
+    permissions:
+      # Required for trusted publishing (OIDC) to PyPI
+      id-token: write
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -31,6 +41,4 @@ jobs:
           sdist
           bdist_wheel
       - name: Publish distribution 📦 to PyPI
-        uses: pypa/gh-action-pypi-publish@master
-        with:
-          password: ${{ secrets.pypi_password }}
+        uses: pypa/gh-action-pypi-publish@release/v1
