@@ -2096,6 +2096,8 @@ class Viewer:
         clim=None,
         mode="mip",
         step_size=0.5,
+        threshold=0.5,
+        density=0.1,
         brick_size=16,
         interpolation=None,
         hide_zero=True,
@@ -2124,28 +2126,34 @@ class Viewer:
         color :     color | list of colors | pygfx.Texture, optional
                     Colormap to render the volume (see `add_volume`).
         opacity :   float
-                    Opacity of the volume. In "density" mode this scales
-                    the extinction per voxel.
+                    Opacity of the volume.
         spacing :   tuple | float
                     (x, y, z) side lengths of a single voxel.
         offset :    tuple
                     (x, y, z) world offset for the volume.
         clim :      (min, max) tuple, optional
                     Range used to scale `values`; defaults to their min/max.
-        mode :      "mip" | "density"
-                    Render as maximum-intensity projection or with
-                    front-to-back emission/absorption (cloud-like).
+        mode :      "mip" | "density" | "surface"
+                    Render as maximum-intensity projection, with
+                    front-to-back emission/absorption (cloud-like) or as a
+                    shaded isosurface.
         step_size : float
                     Ray-march step (in voxels) inside occupied bricks.
                     Smaller values miss fewer small structures but render
                     slower.
+        threshold : float
+                    "surface" mode only: the level at which the surface
+                    sits, as a fraction of `clim`.
+        density :   float
+                    "density" mode only: extinction per voxel at the top of
+                    `clim`. Higher values render more opaque.
         brick_size : int
                     Edge length (in voxels) of the bricks used to pack the
                     data. Must be a power of two.
         interpolation : "linear" | "nearest", optional
                     Interpolation used when sampling the volume. Defaults
                     to "nearest" for binary occupancy (no `values`) and
-                    "linear" when `values` are given.
+                    "linear" when `values` are given or in "surface" mode.
         hide_zero : bool
                     Whether to hide empty space / the lowest value.
         method :    "auto" | "shader" | "dense"
@@ -2174,6 +2182,8 @@ class Viewer:
                 clim=clim,
                 mode=mode,
                 step_size=step_size,
+                threshold=threshold,
+                density=density,
                 brick_size=brick_size,
                 interpolation=interpolation,
                 hide_zero=hide_zero,

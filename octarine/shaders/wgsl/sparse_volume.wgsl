@@ -19,6 +19,11 @@ $$ if colormap_dim
     {$ include 'pygfx.colormap.wgsl' $}
 $$ endif
 {$ include 'pygfx.image_sample.wgsl' $}
+$$ if mode == 'iso'
+    {# Hard-coded headlight phong; provides lighting_phong(). This is what
+       pygfx's own VolumeIsoMaterial uses, so it needs no light bindings. #}
+    {$ include 'pygfx.light_phong_simple.wgsl' $}
+$$ endif
 
 const BRICK_SIZE: f32 = {{ brick_size }}.0;
 // Atlas cells are the brick plus a 1-voxel apron on each side
@@ -132,13 +137,34 @@ fn sample_brick(slot: u32, cell: vec3<i32>, p: vec3<f32>) -> f32 {
     return textureSampleLevel(t_atlas, s_atlas, uvw, 0.0).r;
 }
 
-// Sample the volume at an arbitrary position (used by the MIP refinement,
-// whose sub-steps may cross into a neighboring coarse cell).
+// Sample the volume at an arbitrary position. Unlike `sample_brick` this
+// re-resolves the coarse cell, so it is valid anywhere - including taps that
+// cross into a neighboring brick (used by the MIP refinement, the isosurface
+// bisection and the gradient).
 fn sample_volume(p: vec3<f32>, coarse_dim: vec3<i32>) -> f32 {
     let cell = clamp(vec3<i32>(floor(p / BRICK_SIZE)), vec3<i32>(0), coarse_dim - 1);
     let slot_plus1 = textureLoad(t_coarse, cell, 0).r;
     if (slot_plus1 == 0u) { return 0.0; }
     return sample_brick(slot_plus1 - 1u, cell, p);
+}
+
+// The atlas is r8unorm (values arrive as 0-1) while `clim` is in the 1-255
+// units the packer quantizes into - hence the * 255 (see `climcorrection`).
+// Normalized value (0-1 across `clim`) of a raw sample.
+fn value_to_clim(val: f32) -> f32 {
+    let lo = u_material.maprange[0];
+    let hi = u_material.maprange[1];
+    return saturate((val * 255.0 - lo) / max(hi - lo, 1e-6));
+}
+
+// Raw sample value at which the isosurface sits (`threshold` is given as a
+// fraction of `clim`), i.e. the inverse of `value_to_clim`. Kept strictly
+// positive so that empty space (which samples to exactly 0) never counts as
+// being inside the surface.
+fn get_iso_level() -> f32 {
+    let lo = u_material.maprange[0];
+    let hi = u_material.maprange[1];
+    return max((lo + u_material.threshold * (hi - lo)) / 255.0, 1e-6);
 }
 
 
@@ -182,16 +208,25 @@ fn fs_main(varyings: Varyings) -> FragmentOutput {
     let coarse_dim = vec3<i32>(textureDimensions(t_coarse));
     let fine_step = clamp(u_material.step_size, 0.01, BRICK_SIZE);
 
-    // Per-pixel jitter of the sampling phase: decorrelates neighboring rays
-    // so that the fixed-step march produces unobtrusive noise instead of
-    // coherent moire banding. Stable per pixel (hash of the frag coord).
-    let jitter = fract(sin(dot(varyings.position.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+    $$ if mode != 'iso'
+        // Per-pixel jitter of the sampling phase: decorrelates neighboring rays
+        // so that the fixed-step march produces unobtrusive noise instead of
+        // coherent moire banding. Stable per pixel (hash of the frag coord).
+        // Not used in "iso" mode: there the hit is refined by bisection (so
+        // there is no banding to hide) and jittering the *detection* would
+        // make thin structures speckle.
+        let jitter = fract(sin(dot(varyings.position.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+    $$ endif
 
     // ---- Two-level ray march ----
 
     $$ if mode == 'mip'
         var the_val = -1.0;
         var the_t = 0.0;
+    $$ elif mode == 'iso'
+        let iso_level = get_iso_level();
+        var the_val = 0.0;
+        var the_t = -1.0;  // < 0 = no surface hit yet
     $$ else
         // Front-to-back emission/absorption accumulators (premultiplied)
         var acc_rgb = vec3<f32>(0.0);
@@ -214,7 +249,9 @@ fn fs_main(varyings: Varyings) -> FragmentOutput {
         if (slot_plus1 != 0u) {
             let slot = slot_plus1 - 1u;
             let t_end = min(t_exit, t_len);
-            t += jitter * fine_step;
+            $$ if mode != 'iso'
+                t += jitter * fine_step;
+            $$ endif
             for (var j = 0; j < MAX_FINE_STEPS; j += 1) {
                 if (t >= t_end) { break; }
                 let val = sample_brick(slot, cell, p0 + ray * t);
@@ -223,12 +260,36 @@ fn fs_main(varyings: Varyings) -> FragmentOutput {
                         the_val = val;
                         the_t = t;
                     }
+                $$ elif mode == 'iso'
+                    if (val > iso_level) {
+                        // Bracket the crossing between the previous sample
+                        // (below the level) and this one, then bisect. The
+                        // bracket may reach back into the previous cell -
+                        // hence `sample_volume`, which is valid anywhere.
+                        var t_lo = max(t - fine_step, 0.0);
+                        var t_hi = t;
+                        for (var k = 0; k < 6; k += 1) {
+                            let t_mid = 0.5 * (t_lo + t_hi);
+                            if (sample_volume(p0 + ray * t_mid, coarse_dim) > iso_level) {
+                                t_hi = t_mid;
+                            } else {
+                                t_lo = t_mid;
+                            }
+                        }
+                        the_val = val;
+                        the_t = t_hi;
+                        break;
+                    }
                 $$ else
                     if (val > 0.0) {
                         let color = sampled_value_to_color(vec4<f32>(val, 0.0, 0.0, 1.0));
-                        let a = color.a * u_material.opacity;
-                        // Opacity correction for the step size
-                        let a_step = 1.0 - pow(1.0 - clamp(a, 0.0, 0.9999), fine_step);
+                        // Extinction per voxel: the base rate modulated by the
+                        // (clim-normalized) value and by the colormap's alpha,
+                        // so that alpha-carrying colormaps (and `hide_zero`)
+                        // still gate what is visible.
+                        let sigma = u_material.density * color.a * value_to_clim(val);
+                        // Absorption over one step (Beer-Lambert)
+                        let a_step = 1.0 - exp(-sigma * fine_step);
                         $$ if colorspace == 'srgb'
                             let physical_rgb = srgb2physical(color.rgb);
                         $$ else
@@ -250,6 +311,8 @@ fn fs_main(varyings: Varyings) -> FragmentOutput {
 
         $$ if mode == 'mip'
             if (the_val >= 1.0) { break; }  // cannot get any higher
+        $$ elif mode == 'iso'
+            if (the_t >= 0.0) { break; }  // first surface wins
         $$ else
             if (acc_a >= 0.95) { break; }  // early ray termination
         $$ endif
@@ -284,10 +347,54 @@ fn fs_main(varyings: Varyings) -> FragmentOutput {
             let physical_color = color.rgb;
         $$ endif
         let out_color = vec4<f32>(physical_color, color.a * u_material.opacity);
+    $$ elif mode == 'iso'
+        if (the_t < 0.0) { discard; }
+
+        let hit_p = p0 + ray * the_t;
+
+        // Surface normal from the gradient (central differences). Taps use
+        // `sample_volume` so that they stay correct across brick borders.
+        let d = u_material.gradient_delta;
+        var grad = vec3<f32>(
+            sample_volume(hit_p + vec3<f32>(d, 0.0, 0.0), coarse_dim)
+                - sample_volume(hit_p - vec3<f32>(d, 0.0, 0.0), coarse_dim),
+            sample_volume(hit_p + vec3<f32>(0.0, d, 0.0), coarse_dim)
+                - sample_volume(hit_p - vec3<f32>(0.0, d, 0.0), coarse_dim),
+            sample_volume(hit_p + vec3<f32>(0.0, 0.0, d), coarse_dim)
+                - sample_volume(hit_p - vec3<f32>(0.0, 0.0, d), coarse_dim),
+        );
+        // Structures thinner than `d` can put both taps of an axis outside
+        // the surface, leaving a (near) zero gradient. Fall back to a
+        // camera-facing normal rather than normalizing to NaN.
+        if (dot(grad, grad) < 1e-12) { grad = -ray; }
+
+        // Lighting must be evaluated in world space: `spacing` may scale the
+        // axes non-uniformly, which does not preserve angles. Normals
+        // transform with the inverse-transpose of the world matrix.
+        let normal = normalize((transpose(u_wobject.world_transform_inv) * vec4<f32>(grad, 0.0)).xyz);
+        let view_dir = normalize((u_wobject.world_transform * vec4<f32>(ray, 0.0)).xyz);
+
+        // Color by the value just *inside* the surface: at the crossing the
+        // value is by definition the threshold, which for binary occupancy
+        // would map every surface to the middle of the colormap. The max()
+        // keeps structures thinner than the offset from washing out.
+        let val_in = max(the_val, sample_volume(hit_p + ray, coarse_dim));
+        let color = sampled_value_to_color(vec4<f32>(val_in, 0.0, 0.0, 1.0));
+        $$ if colorspace == 'srgb'
+            let physical_color = srgb2physical(color.rgb);
+        $$ else
+            let physical_color = color.rgb;
+        $$ endif
+
+        // `grad` points *into* the volume; lighting_phong() re-orients it
+        // (same convention as pygfx's own iso volume shader).
+        let is_front = dot(normal, view_dir) > 0.0;
+        let lit_color = lighting_phong(is_front, normal, view_dir, physical_color);
+        let out_color = vec4<f32>(lit_color, color.a * u_material.opacity);
     $$ else
         if (the_t < 0.0 || acc_a <= 0.0) { discard; }
         // Un-premultiply for the standard output convention
-        let out_color = vec4<f32>(acc_rgb / max(acc_a, 1e-6), acc_a);
+        let out_color = vec4<f32>(acc_rgb / max(acc_a, 1e-6), saturate(acc_a * u_material.opacity));
     $$ endif
 
     // Depth at the MIP maximum / first contributing sample, so that opaque

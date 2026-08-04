@@ -930,7 +930,15 @@ def test_pack_sparse_voxels_apron():
     assert p.atlas.sum() == 5 * 255
 
 
-@pytest.mark.parametrize("mode", ["mip", "density"])
+@pytest.fixture()
+def solid_ball():
+    """A solid ball of voxels (radius 20) centered at (25, 25, 25)."""
+    g = np.stack(np.meshgrid(*[np.arange(-22, 23)] * 3, indexing="ij"), -1)
+    g = g.reshape(-1, 3)
+    return g[np.linalg.norm(g, axis=1) <= 20] + 25
+
+
+@pytest.mark.parametrize("mode", ["mip", "density", "surface"])
 def test_adding_sparse_volume(sphere_shell, mode):
     v = oc.Viewer(offscreen=True)
     v.add_sparse_volume(sphere_shell, mode=mode)
@@ -1003,3 +1011,147 @@ def test_sparse_volume_rolled_camera(sphere_shell):
         px = (img[..., :3].max(axis=-1) > 20).sum()
         assert px > 1000, f"Volume vanished at roll {i * 45} deg ({px} px)"
     v.close()
+
+
+def _radial_luminance(img):
+    """Per-pixel luminance of the rendered object plus its normalized radius."""
+    mask = img[..., :3].max(axis=-1) > 5
+    ys, xs = np.nonzero(mask)
+    r = np.hypot(ys - ys.mean(), xs - xs.mean())
+    return img[..., :3].mean(axis=-1)[ys, xs], r / r.max()
+
+
+def test_sparse_volume_surface_shading(solid_ball):
+    """The isosurface must be lit by its gradient, not rendered flat.
+
+    A ball lit by the headlight follows Lambert's cosine: the surface normal
+    faces the camera at the center of the silhouette and turns away toward
+    the rim. Regression test for the normal (gradient) computation - a
+    constant-luminance blob means the normals are degenerate.
+    """
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_sparse_volume(solid_ball, mode="surface", color=["k", "w"])
+    v.camera.show_object(v.scene, scale=1, view_dir=(0, 0, -1), up=(0, 1, 0))
+    img = np.asarray(v.screenshot(filename=None, size=(200, 200)))
+    v.close()
+
+    lum, r = _radial_luminance(img)
+    cos_theta = np.sqrt(np.clip(1 - r**2, 0, 1))
+    corr = np.corrcoef(lum, cos_theta)[0, 1]
+    assert corr > 0.5, f"Surface shading does not follow the normals (corr={corr:.2f})"
+    assert np.median(lum[r < 0.2]) > np.median(lum[r > 0.8]) + 40
+
+
+def test_sparse_volume_surface_anisotropic(solid_ball):
+    """Normals must be transformed into world space, not used in voxel space.
+
+    With anisotropic `spacing` the two are not related by a rotation, so
+    skipping the inverse-transpose transform visibly changes the shading.
+    """
+    lums = []
+    for spacing in ((1, 1, 1), (1, 1, 4)):
+        v = oc.Viewer(offscreen=True, size=(200, 200))
+        v.add_sparse_volume(
+            solid_ball, mode="surface", color=["k", "w"], spacing=spacing
+        )
+        v.camera.show_object(v.scene, scale=1, view_dir=(1, 0, 0), up=(0, 0, 1))
+        img = np.asarray(v.screenshot(filename=None, size=(200, 200)))
+        v.close()
+        lum, r = _radial_luminance(img)
+        lums.append(np.median(lum[r > 0.7]))
+
+    # Stretching along the view-perpendicular axis turns the rim of the
+    # silhouette more towards the camera, i.e. it must get brighter
+    assert lums[1] > lums[0] + 10, f"Shading ignores `spacing` ({lums})"
+
+
+def test_sparse_volume_surface_threshold(solid_ball):
+    """A higher threshold must carve out a smaller isosurface."""
+    center = np.array([25, 25, 25])
+    # Values ramp from 0 at the surface of the ball to 1 at its center
+    values = 1 - np.linalg.norm(solid_ball - center, axis=1) / 20
+
+    radii = []
+    for threshold in (0.2, 0.7):
+        v = oc.Viewer(offscreen=True, size=(200, 200))
+        v.add_sparse_volume(
+            solid_ball,
+            values=values,
+            mode="surface",
+            color=["k", "w"],
+            threshold=threshold,
+        )
+        v.camera.show_object(v.scene, scale=1, view_dir=(0, 0, -1), up=(0, 1, 0))
+        img = np.asarray(v.screenshot(filename=None, size=(200, 200)))
+        v.close()
+        ys, _ = np.nonzero(img[..., :3].max(axis=-1) > 5)
+        radii.append((ys.max() - ys.min() + 1) / 2)
+
+    # The iso-radius shrinks from 0.8 to 0.3 of the ball's radius
+    assert radii[0] > radii[1] * 2, f"threshold has too little effect ({radii})"
+
+
+def test_sparse_volume_density(solid_ball):
+    """Density mode must accumulate rather than saturate on the first voxel."""
+    stats = {}
+    for kwargs in (dict(mode="mip"), dict(mode="density", density=0.02),
+                   dict(mode="density", density=1.0)):
+        v = oc.Viewer(offscreen=True, size=(200, 200))
+        v.add_sparse_volume(solid_ball, color=["k", "w"], **kwargs)
+        v.camera.show_object(v.scene, scale=1, view_dir=(0, 0, -1), up=(0, 1, 0))
+        img = np.asarray(v.screenshot(filename=None, size=(200, 200)))
+        v.close()
+        lum, r = _radial_luminance(img)
+        # Ignore the antialiased silhouette, which varies in every mode
+        lum = lum[r < 0.7]
+        stats[kwargs.get("density", "mip")] = (lum.mean(), lum.std())
+
+    # MIP of a binary volume is flat by construction; density must vary with
+    # the path length through the ball
+    assert stats[0.02][1] > stats["mip"][1] * 5, f"density mode is flat: {stats}"
+    # ... and a higher extinction must render more opaque
+    assert stats[1.0][0] > stats[0.02][0] + 20, f"`density` has no effect: {stats}"
+
+
+def test_sparse_volume_material_properties():
+    from octarine.shaders import SparseVolumeMaterial
+
+    m = SparseVolumeMaterial()
+    assert m.render_mode == "mip"
+    # "surface" is an alias for pygfx's "iso"
+    m.render_mode = "surface"
+    assert m.render_mode == "iso"
+
+    m.threshold = 0.25
+    m.density = 2.0
+    m.gradient_delta = 1.5
+    m.shininess = 10
+    m.emissive = "#f00"
+    assert m.threshold == 0.25
+    assert m.density == 2.0
+    assert m.gradient_delta == 1.5
+    assert m.shininess == 10
+    assert tuple(m.emissive)[:3] == (1, 0, 0)
+
+    for prop, value in (
+        ("render_mode", "bogus"),
+        ("step_size", 0),
+        ("density", -1),
+        ("gradient_delta", 0),
+    ):
+        with pytest.raises(ValueError):
+            setattr(m, prop, value)
+
+
+def test_colormap_is_clamped():
+    """Colormaps must not wrap around.
+
+    pygfx's TextureMap defaults to `wrap="repeat"`, which makes a value at
+    the top of `clim` (texcoord 1.0) blend the last texel with the first -
+    which `hide_zero` made fully transparent - halving both color and alpha.
+    """
+    from octarine.visuals import to_colormap
+
+    for hide_zero in (True, False):
+        tm = to_colormap("red", hide_zero=hide_zero)
+        assert tm.wrap_s == "clamp"

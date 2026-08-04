@@ -202,12 +202,56 @@ Useful parameters:
 
 - `values`: per-voxel scalars mapped onto the colormap; without them the
   volume is rendered as binary occupancy
-- `mode`: `"mip"` (maximum-intensity projection; default) or `"density"`
-  (cloud-like front-to-back emission/absorption)
+- `mode`: `"mip"` (maximum-intensity projection; default), `"density"`
+  (cloud-like front-to-back emission/absorption) or `"surface"` (see below)
 - `spacing` / `offset`: voxel side lengths and world offset
 - `clim`: `(min, max)` range used to scale `values`
 - `step_size`: ray-march step in voxels - smaller values miss fewer small
   structures but render slower
+
+### Surface rendering
+
+`mode="mip"` and `mode="density"` have no notion of a surface: for binary
+occupancy data every ray that hits anything returns the same value, so the
+volume reads as a flat, homogeneous blob. `mode="surface"` instead stops at
+the first isosurface crossing and shades it using the gradient of the volume
+as the surface normal, which is what makes the shape legible:
+
+```python
+>>> v.add_sparse_volume(voxels, mode="surface")
+```
+
+- `threshold` (default `0.5`) sets the level at which the surface sits, as a
+  fraction of `clim`. For binary occupancy the default puts it halfway
+  between an empty and a full voxel; with `values` it selects an iso-level
+- lighting is a fixed headlight, so the surface is always lit from the front
+
+Because the normal is derived from the volume itself, binary data - whose
+values jump from 0 to 1 over a single voxel - gives somewhat faceted
+normals. The material exposes a few knobs to tune this:
+
+```python
+>>> vis = v["SparseVolume.1"][0]
+>>> vis.material.gradient_delta = 1.5  # smoother normals, rounder features
+>>> vis.material.shininess = 5         # duller specular highlight
+>>> vis.material.emissive = "#202020"  # lift the unlit side
+```
+
+`gradient_delta` is the half-width (in voxels) of the differences the normal
+is derived from. Raising it smooths the voxel staircase on solid, blobby
+data but only up to a point: features thinner than the delta fall *between*
+the two samples, which flattens their shading. Keep it at the default of `1`
+for thin structures such as segmentation shells or skeletons.
+
+Note that `interpolation="nearest"` in surface mode snaps the normals to the
+voxel axes, which gives a deliberately blocky, Minecraft-like look.
+
+### Density rendering
+
+In `mode="density"` the volume is accumulated front-to-back, so thicker
+parts render more opaque. The `density` parameter (default `0.1`) is the
+extinction per voxel at the top of `clim`: raise it for a more solid look,
+lower it for a wispier one.
 - `method`: `"auto"` (default) uses the custom shader and falls back to
   binning into a (downsampled) dense grid if the data occupies too many bricks
 

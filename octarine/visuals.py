@@ -422,6 +422,8 @@ def sparsevolume2gfx(
     brick_size=16,
     mode="mip",
     step_size=0.5,
+    threshold=0.5,
+    density=0.1,
     interpolation=None,
     hide_zero=True,
     method="auto",
@@ -445,8 +447,7 @@ def sparsevolume2gfx(
     clim :      (min, max) tuple, optional
                 Range used to scale `values`. Defaults to the data min/max.
     opacity :   float
-                Opacity of the volume. In "density" mode this scales the
-                extinction per voxel.
+                Opacity of the volume.
     spacing :   tuple | float
                 (x, y, z) side lengths of a single voxel.
     offset :    tuple
@@ -454,17 +455,26 @@ def sparsevolume2gfx(
     brick_size : int
                 Edge length (in voxels) of the bricks used to pack the data.
                 Must be a power of two.
-    mode :      "mip" | "density"
-                Render as maximum-intensity projection or with front-to-back
-                emission/absorption (cloud-like).
+    mode :      "mip" | "density" | "surface"
+                Render as maximum-intensity projection, with front-to-back
+                emission/absorption (cloud-like) or as a shaded isosurface.
     step_size : float
                 Ray-march step (in voxels) inside occupied bricks. Smaller
                 values miss fewer small structures but render slower.
+    threshold : float
+                "surface" mode only: the level at which the surface sits,
+                as a fraction of `clim`. For binary occupancy the default
+                of 0.5 puts it halfway between an empty and a full voxel.
+    density :   float
+                "density" mode only: extinction per voxel at the top of
+                `clim`. Higher values render more opaque.
     interpolation : "linear" | "nearest", optional
                 Interpolation used when sampling the volume. Defaults to
                 "nearest" for binary occupancy (no `values`), which renders
                 flat and artifact-free, and "linear" when `values` are
-                given, which shades smoothly.
+                given or in "surface" mode, which shades smoothly. Note
+                that "nearest" in "surface" mode gives axis-aligned normals
+                (a blocky, Minecraft-like look).
     hide_zero : bool
                 Whether to hide empty space / the lowest value.
     method :    "auto" | "shader" | "dense"
@@ -491,13 +501,18 @@ def sparsevolume2gfx(
     voxels = np.asarray(voxels)
     assert voxels.ndim == 2 and voxels.shape[1] == 3, "Expected (N, 3) array."
     assert method in ("auto", "shader", "dense")
-    assert mode in ("mip", "density")
+    assert mode in ("mip", "density", "surface", "iso")
+
     if isinstance(spacing, (int, float)):
         spacing = [spacing] * 3
     assert len(spacing) == 3, "Expected spacing as tuple of length 3."
 
     if interpolation is None:
-        interpolation = "nearest" if values is None else "linear"
+        # In surface mode the normal comes from the gradient of the volume,
+        # and "nearest" makes that gradient axis-aligned (blocky normals)
+        interpolation = (
+            "nearest" if (values is None and mode in ("mip", "density")) else "linear"
+        )
 
     if method in ("auto", "shader"):
         # Deliberately a lazy import: this registers the custom shader with
@@ -526,6 +541,8 @@ def sparsevolume2gfx(
             material = SparseVolumeMaterial(
                 render_mode=mode,
                 step_size=step_size,
+                threshold=threshold,
+                density=density,
                 # The atlas holds values quantized into 1-255 (0 = empty)
                 clim=(1, 255),
                 map=to_colormap(color, hide_zero=hide_zero),
@@ -542,9 +559,9 @@ def sparsevolume2gfx(
                 vis.local.scale_y,
                 vis.local.scale_z,
             ) = spacing
-            (vis.local.x, vis.local.y, vis.local.z) = (
-                np.asarray(offset, dtype=float) + packed.origin * np.asarray(spacing)
-            )
+            (vis.local.x, vis.local.y, vis.local.z) = np.asarray(
+                offset, dtype=float
+            ) + packed.origin * np.asarray(spacing)
 
             # Add custom attributes
             vis._object_type = "sparsevolume"
@@ -554,6 +571,11 @@ def sparsevolume2gfx(
 
     # Dense fallback: bin points into a (downsampled) grid and render it
     # through the regular volume pipeline
+    if mode != "mip":
+        warnings.warn(
+            f"The dense fallback does not implement mode={mode!r} and will "
+            "render a maximum-intensity projection instead."
+        )
     ijk = np.floor(voxels).astype(np.int64)
     origin = ijk.min(axis=0)
     ijk -= origin
@@ -650,7 +672,12 @@ def to_colormap(x, hide_zero):
         # Set alpha channel for first color to 0
         tm.texture.data[0, 3] = 0
 
-    return tm
+    # Colormaps must be clamped, not repeated: pygfx's TextureMap defaults to
+    # `wrap="repeat"`, which makes a value at the very top of `clim` sample at
+    # u=1.0 and linearly blend the last texel with the wrapped-around *first*
+    # one. With `hide_zero` that first texel is fully transparent, so the
+    # brightest voxels would render at half color and half alpha.
+    return gfx.TextureMap(tm.texture, wrap="clamp")
 
 
 def points2gfx(

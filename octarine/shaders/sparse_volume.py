@@ -68,33 +68,81 @@ class SparseVolumeMaterial(gfx.VolumeBasicMaterial):
 
      - "mip": maximum intensity projection (like `pygfx.VolumeMipMaterial`)
      - "density": front-to-back emission/absorption for a cloud-like look;
-       `opacity` scales the extinction per voxel
+       `density` sets the extinction per voxel
+     - "iso" (alias "surface"): shaded isosurface at `threshold`
 
-    In addition, `step_size` (in voxels, default 0.5) controls the ray-march
-    step inside occupied bricks: smaller = fewer misses of small structures
-    but slower rendering.
+    Parameters
+    ----------
+    render_mode :   "mip" | "density" | "iso"
+                    See above.
+    step_size :     float
+                    Ray-march step (in voxels) inside occupied bricks:
+                    smaller = fewer misses of small structures but slower
+                    rendering.
+    threshold :     float
+                    "iso" mode only: the level at which the surface sits,
+                    given as a fraction of `clim`.
+    density :       float
+                    "density" mode only: extinction per voxel at the top of
+                    `clim`. Higher = more opaque.
+    gradient_delta : float
+                    "iso" mode only: half-width (in voxels) of the central
+                    differences used to derive the surface normal. Larger
+                    values give smoother normals on blocky (e.g. binary)
+                    data but round off features thinner than the delta.
+    shininess :     float
+                    "iso" mode only: size of the specular highlight.
+    emissive :      Color
+                    "iso" mode only: color the surface emits regardless of
+                    lighting.
 
     """
 
     uniform_type = dict(
         gfx.VolumeBasicMaterial.uniform_type,
         step_size="f4",
+        threshold="f4",
+        density="f4",
+        gradient_delta="f4",
+        shininess="f4",
+        emissive_color="4xf4",
     )
 
-    def __init__(self, render_mode="mip", step_size=0.5, **kwargs):
+    def __init__(
+        self,
+        render_mode="mip",
+        step_size=0.5,
+        threshold=0.5,
+        density=0.1,
+        gradient_delta=1.0,
+        shininess=30,
+        emissive="#000",
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.render_mode = render_mode
         self.step_size = step_size
+        self.threshold = threshold
+        self.density = density
+        self.gradient_delta = gradient_delta
+        self.shininess = shininess
+        self.emissive = emissive
 
     @property
     def render_mode(self):
-        """The render mode: "mip" or "density"."""
+        """The render mode: "mip", "density" or "iso"."""
         return self._store.render_mode
 
     @render_mode.setter
     def render_mode(self, value):
-        if value not in ("mip", "density"):
-            raise ValueError(f"render_mode must be 'mip' or 'density', got {value!r}")
+        # "surface" is the more descriptive alias for what "iso" does; pygfx
+        # calls it "iso" (see VolumeIsoMaterial) and so do we internally
+        if value == "surface":
+            value = "iso"
+        if value not in ("mip", "density", "iso"):
+            raise ValueError(
+                f"render_mode must be 'mip', 'density' or 'iso', got {value!r}"
+            )
         self._store.render_mode = value
 
     @property
@@ -108,6 +156,62 @@ class SparseVolumeMaterial(gfx.VolumeBasicMaterial):
         if not 0 < value <= 16:
             raise ValueError(f"step_size must be in (0, 16], got {value}")
         self.uniform_buffer.data["step_size"] = value
+        self.uniform_buffer.update_full()
+
+    @property
+    def threshold(self):
+        """Isosurface level, as a fraction of `clim` ("iso" mode)."""
+        return float(self.uniform_buffer.data["threshold"])
+
+    @threshold.setter
+    def threshold(self, value):
+        self.uniform_buffer.data["threshold"] = float(value)
+        self.uniform_buffer.update_full()
+
+    @property
+    def density(self):
+        """Extinction per voxel at the top of `clim` ("density" mode)."""
+        return float(self.uniform_buffer.data["density"])
+
+    @density.setter
+    def density(self, value):
+        value = float(value)
+        if value < 0:
+            raise ValueError(f"density must be >= 0, got {value}")
+        self.uniform_buffer.data["density"] = value
+        self.uniform_buffer.update_full()
+
+    @property
+    def gradient_delta(self):
+        """Half-width (in voxels) of the normal's central differences."""
+        return float(self.uniform_buffer.data["gradient_delta"])
+
+    @gradient_delta.setter
+    def gradient_delta(self, value):
+        value = float(value)
+        if not 0 < value <= 16:
+            raise ValueError(f"gradient_delta must be in (0, 16], got {value}")
+        self.uniform_buffer.data["gradient_delta"] = value
+        self.uniform_buffer.update_full()
+
+    @property
+    def shininess(self):
+        """Size of the specular highlight on the isosurface."""
+        return float(self.uniform_buffer.data["shininess"])
+
+    @shininess.setter
+    def shininess(self, value):
+        self.uniform_buffer.data["shininess"] = float(value)
+        self.uniform_buffer.update_full()
+
+    @property
+    def emissive(self):
+        """Color the isosurface emits regardless of lighting."""
+        return gfx.Color(self.uniform_buffer.data["emissive_color"])
+
+    @emissive.setter
+    def emissive(self, color):
+        self.uniform_buffer.data["emissive_color"] = gfx.Color(color)
         self.uniform_buffer.update_full()
 
 
@@ -130,6 +234,7 @@ class SparseVolumeShader(BaseShader):
         self["climcorrection"] = " * 255.0"
 
         material = wobject.material
+        self["mode"] = material.render_mode
         self["colorspace"] = "srgb"
         if material.map is not None:
             self["colorspace"] = material.map.texture.colorspace

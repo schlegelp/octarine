@@ -13,6 +13,24 @@ _Date: ongoing_
   that objects are always lit from the front; accepts a float or tuple to also set the light's
   offset from the camera's axis (see [Lighting](controls.md#lighting))
 - new `Viewer.lights` property: list all light sources illuminating the scene
+- [`Viewer.add_sparse_volume`][octarine.Viewer.add_sparse_volume]: new `mode="surface"` which
+  renders the volume as a shaded isosurface (normals from the volume's gradient) instead of a
+  flat blob; the level is set via the new `threshold` parameter (see
+  [Sparse Volumes](objects.md#surface-rendering))
+- [`Viewer.add_sparse_volume`][octarine.Viewer.add_sparse_volume]: `mode="density"` now
+  accumulates properly instead of saturating on the first voxel; the extinction per voxel is
+  set via the new `density` parameter (previously it was tied to `opacity`, whose default of
+  `1` made the volume opaque at the first sample)
+
+#### Fixes
+- fixed colormaps wrapping around: values at the very top of `clim` sampled the colormap at
+  texcoord `1.0`, where pygfx's default `wrap="repeat"` blended the last color with the
+  (transparent, if `hide_zero=True`) first one - halving both color and alpha. Affects volumes
+  and sparse volumes
+
+#### Breaking
+- `opacity` no longer scales the extinction per voxel in `add_sparse_volume(mode="density")`;
+  it is now a plain global opacity in all modes and `density` takes its place
 
 To install the current `dev` version of `octarine`:
 
