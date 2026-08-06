@@ -27,6 +27,28 @@ typically employed via the respective [octarine.Viewer][] methods
     options:
       show_root_heading: true
 
+::: octarine.shaders.BitmaskVolume
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"
+
+::: octarine.shaders.BitmaskVolumeMaterial
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"
+
+::: octarine.shaders.pack_voxel_runs
+    options:
+      show_root_heading: true
+
+::: octarine.shaders.runs_from_voxels
+    options:
+      show_root_heading: true
+
 ::: octarine.shaders.SilhouetteMeshMaterial
     options:
       show_root_heading: true

@@ -21,7 +21,14 @@ def _check_pygfx_version():
 _check_pygfx_version()
 
 from .packing import pack_sparse_voxels, PackedBricks, AtlasCapacityError  # noqa: E402
+from .rle_packing import (  # noqa: E402
+    pack_voxel_runs,
+    runs_from_voxels,
+    PackedBitmask,
+    BitmaskCapacityError,
+)
 from .sparse_volume import SparseVolume, SparseVolumeMaterial  # noqa: E402
+from .bitmask_volume import BitmaskVolume, BitmaskVolumeMaterial  # noqa: E402
 from .silhouette import SilhouetteMeshMaterial  # noqa: E402
 from .background import (  # noqa: E402
     GradientBackgroundMaterial,
@@ -36,8 +43,14 @@ __all__ = [
     "pack_sparse_voxels",
     "PackedBricks",
     "AtlasCapacityError",
+    "pack_voxel_runs",
+    "runs_from_voxels",
+    "PackedBitmask",
+    "BitmaskCapacityError",
     "SparseVolume",
     "SparseVolumeMaterial",
+    "BitmaskVolume",
+    "BitmaskVolumeMaterial",
     "SilhouetteMeshMaterial",
     "GradientBackgroundMaterial",
     "BACKGROUND_PRESETS",

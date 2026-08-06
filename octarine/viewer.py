@@ -2100,6 +2100,7 @@ class Viewer:
         step_size=0.5,
         threshold=0.5,
         density=0.1,
+        smoothing=0.0,
         brick_size=16,
         interpolation=None,
         hide_zero=True,
@@ -2108,19 +2109,26 @@ class Viewer:
     ):
         """Add sparse volumetric data to canvas.
 
-        In contrast to `add_volume`, this accepts an (N, 3) array of voxel
-        coordinates instead of a dense 3D grid. The data is rendered with a
-        custom raycasting shader whose memory footprint scales with the
-        number of occupied 16^3 bricks rather than with the bounding box -
-        tens of millions of voxels are feasible.
+        In contrast to `add_volume`, this accepts voxel coordinates (or runs)
+        instead of a dense 3D grid. The data is rendered with a custom
+        raycasting shader whose memory footprint scales with the number of
+        occupied 16^3 bricks rather than with the bounding box - tens of
+        millions of voxels are feasible.
+
+        Run-length encoded voxels take a separate, bit-per-voxel path which
+        uses roughly 23x less GPU memory but is binary occupancy only.
 
         Parameters
         ----------
-        voxels :    (N, 3) array | VoxelCloud
-                    Voxel coordinates (xyz). Floats are floored to integers.
+        voxels :    (N, 3) array | (N, 4) array | VoxelCloud | VoxelRuns
+                    Either voxel coordinates (xyz; floats are floored to
+                    integers) or run-length encoded voxels as
+                    (x, y, z, x_run_length) - the layout returned by
+                    `dvid.get_sparsevol(..., voxels=False)`.
         values :    (N,) array, optional
                     Per-voxel scalar values to map onto the colormap. If not
                     provided, the volume is rendered as binary occupancy.
+                    Not supported for run-length encoded input.
         name :      str, optional
                     Name for the visual.
         group :     str, optional
@@ -2149,6 +2157,12 @@ class Viewer:
         density :   float
                     "density" mode only: extinction per voxel at the top of
                     `clim`. Higher values render more opaque.
+        smoothing : float
+                    "surface" mode only: width (in voxels) of an extra
+                    filter applied to the field the surface *normal* is
+                    taken from. 0 (the default) is off; ~1-2 removes the
+                    voxel-scale stipple from the shading. The surface
+                    itself is not moved, so no thin structures are lost.
         brick_size : int
                     Edge length (in voxels) of the bricks used to pack the
                     data. Must be a power of two.
@@ -2158,12 +2172,14 @@ class Viewer:
                     "linear" when `values` are given or in "surface" mode.
         hide_zero : bool
                     Whether to hide empty space / the lowest value.
-        method :    "auto" | "shader" | "dense"
-                    "shader" uses the custom sparse-volume shader, "dense"
-                    bins the points into a (downsampled) dense grid rendered
-                    through the regular volume pipeline. "auto" uses the
-                    shader and falls back to "dense" if the data occupies
-                    too many bricks.
+        method :    "auto" | "shader" | "bitmask" | "dense"
+                    "shader" uses the byte-per-voxel sparse-volume shader,
+                    "bitmask" the bit-per-voxel one (binary data only, ~23x
+                    smaller on the GPU), "dense" bins the points into a
+                    (downsampled) dense grid rendered through the regular
+                    volume pipeline. "auto" picks "bitmask" for runs and
+                    "shader" for coordinates, falling back to "dense" if the
+                    data occupies too many bricks.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -2186,6 +2202,7 @@ class Viewer:
                 step_size=step_size,
                 threshold=threshold,
                 density=density,
+                smoothing=smoothing,
                 brick_size=brick_size,
                 interpolation=interpolation,
                 hide_zero=hide_zero,

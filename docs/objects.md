@@ -246,6 +246,37 @@ for thin structures such as segmentation shells or skeletons.
 Note that `interpolation="nearest"` in surface mode snaps the normals to the
 voxel axes, which gives a deliberately blocky, Minecraft-like look.
 
+#### Smoothing
+
+Zoomed in far enough, an isosurface through binary data shows a fine
+voxel-scale stipple: the trilinear filter the normal is taken from only
+reaches one voxel, so the normal tracks individual voxel faces. The
+`smoothing` parameter widens *that filter only*:
+
+```python
+>>> v.add_sparse_volume(voxels, mode="surface", smoothing=1.5)
+```
+
+It is given in voxels; `0` (the default) is off and `1`-`2` is usually
+enough. The isosurface itself stays on the unsmoothed field, so the
+silhouette comes out pixel-identical and no thin structures are lost - only
+the shading changes. On a 31M-voxel neuron it costs ~4% at close zoom.
+
+!!! note "Why not smooth the surface as well?"
+
+    Because a wider filter shrinks a binary volume. A feature only reaches
+    full value while it is thicker than `2 + 2 * smoothing` voxels; below
+    that its peak drops away and the isosurface breaks up. At
+    `smoothing=1.5` a 2-voxel-thick neurite peaks at 0.51 - right at the
+    default threshold. Filtering the normal alone sidesteps that entirely,
+    and on real data it looks the same, since it is the shading rather than
+    the silhouette that carries the voxel look.
+
+`smoothing` pairs with `gradient_delta`: a difference much narrower than the
+filter reads nearly the same value at both taps and yields noise rather than
+a direction. The shader therefore widens the stencil along with the filter,
+so `gradient_delta` only takes effect once it exceeds `0.5 + smoothing`.
+
 ### Density rendering
 
 In `mode="density"` the volume is accumulated front-to-back, so thicker
@@ -255,13 +286,45 @@ lower it for a wispier one.
 - `method`: `"auto"` (default) uses the custom shader and falls back to
   binning into a (downsampled) dense grid if the data occupies too many bricks
 
-You can also wrap the coordinates in a [octarine.VoxelCloud][] - this tells
-the generic `Viewer.add` to route them to the sparse-volume pipeline
-(a plain `(N, 3)` array would be interpreted as points):
+### Run-length encoded voxels
+
+`add_sparse_volume` also accepts run-length encoded voxels as an `(N, 4)`
+array of `(x, y, z, x_run_length)` - the layout DVID's `sparsevol` endpoint
+returns:
 
 ```python
->>> from octarine import VoxelCloud
+>>> import dvid
+>>> runs = dvid.get_sparsevol(bodyid, scale=2, voxels=False)   # (N, 4)
+>>> v.add_sparse_volume(runs, mode="surface")
+```
+
+Runs take a different path through the shader. Coordinates are packed into a
+byte-per-voxel atlas that can carry per-voxel `values`; runs are packed into a
+**bit-per-voxel bitmask**, which is binary occupancy only but uses roughly
+**23x less GPU memory**. On a 31M-voxel DVID neuron:
+
+| | GPU memory | bytes/voxel |
+|---|---|---|
+| `(N, 3)` coordinates (byte-per-voxel atlas) | 328 MB | 10.5 |
+| `(N, 4)` runs (bit-per-voxel bitmask) | 14 MB | 0.45 |
+
+Passing `values` alongside runs raises an error - there is nowhere to put
+them. If you have binary `(N, 3)` coordinates and want the same saving, pass
+`method="bitmask"` and they will be converted to runs for you.
+
+Note that runs never need expanding: the packer consumes the `(N, 4)` array
+directly, so a neuron that would be 376 MB as `(N, 3)` int32 coordinates
+never materializes.
+
+You can also wrap the coordinates in a [octarine.VoxelCloud][] (or runs in a
+[octarine.VoxelRuns][]) - this tells the generic `Viewer.add` to route them to
+the sparse-volume pipeline (a plain `(N, 3)` array would be interpreted as
+points):
+
+```python
+>>> from octarine import VoxelCloud, VoxelRuns
 >>> v.add(VoxelCloud(voxels))
+>>> v.add(VoxelRuns(runs))
 ```
 
 Note that sparse volumes require `pygfx>=0.16`.

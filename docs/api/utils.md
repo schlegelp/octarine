@@ -14,6 +14,8 @@
       show_root_heading: true
 
 ::: octarine.VoxelCloud
+
+::: octarine.VoxelRuns
     options:
       show_root_heading: true
       filters:

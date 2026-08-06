@@ -424,6 +424,7 @@ def sparsevolume2gfx(
     step_size=0.5,
     threshold=0.5,
     density=0.1,
+    smoothing=0.0,
     interpolation=None,
     hide_zero=True,
     method="auto",
@@ -435,15 +436,24 @@ def sparsevolume2gfx(
     of occupied 16^3 bricks rather than the bounding box, which makes tens of
     millions of scattered voxels feasible.
 
+    Voxels can be given either as coordinates or run-length encoded. The two
+    take different paths: coordinates are packed into a byte-per-voxel atlas
+    that can carry per-voxel `values`, while runs are packed into a bit-per-
+    voxel bitmask, which uses roughly 23x less GPU memory but is binary only.
+
     Parameters
     ----------
-    voxels :    (N, 3) array | VoxelCloud
-                Voxel coordinates (xyz). Floats are floored to integers.
+    voxels :    (N, 3) array | (N, 4) array | VoxelCloud | VoxelRuns
+                Either voxel coordinates (xyz; floats are floored to integers)
+                or run-length encoded voxels as (x, y, z, x_run_length) - the
+                layout `dvid.get_sparsevol(..., voxels=False)` returns. Runs
+                are binary occupancy and cannot be combined with `values`.
     color :     str | tuple | list | cmap.Colormap, optional
-                Colormap (or single color) to render the volume.
+                Colormap (or single color) to render the volume. For runs
+                (which have no values) the top of the colormap is used.
     values :    (N,) array, optional
                 Per-voxel scalar values. If not provided, the volume is
-                rendered as binary occupancy.
+                rendered as binary occupancy. Not supported for runs.
     clim :      (min, max) tuple, optional
                 Range used to scale `values`. Defaults to the data min/max.
     opacity :   float
@@ -468,6 +478,12 @@ def sparsevolume2gfx(
     density :   float
                 "density" mode only: extinction per voxel at the top of
                 `clim`. Higher values render more opaque.
+    smoothing : float
+                "surface" mode only: width (in voxels) of an extra filter
+                applied to the field the surface *normal* is taken from.
+                0 (the default) is off; ~1-2 removes the voxel-scale
+                stipple from the shading. The surface itself is not moved,
+                so no thin structures are lost.
     interpolation : "linear" | "nearest", optional
                 Interpolation used when sampling the volume. Defaults to
                 "nearest" for binary occupancy (no `values`), which renders
@@ -477,11 +493,13 @@ def sparsevolume2gfx(
                 (a blocky, Minecraft-like look).
     hide_zero : bool
                 Whether to hide empty space / the lowest value.
-    method :    "auto" | "shader" | "dense"
-                "shader" uses the custom sparse-volume shader, "dense" bins
-                the points into a (downsampled) dense grid rendered through
-                the regular volume pipeline. "auto" uses the shader and falls
-                back to "dense" if the data occupies too many bricks.
+    method :    "auto" | "shader" | "bitmask" | "dense"
+                "shader" uses the byte-per-voxel sparse-volume shader,
+                "bitmask" the bit-per-voxel one (binary data only), "dense"
+                bins the points into a (downsampled) dense grid rendered
+                through the regular volume pipeline. "auto" picks "bitmask"
+                for runs and "shader" for coordinates, falling back to
+                "dense" if the data occupies too many bricks.
     max_dense_dim : int
                 Maximum grid side length for the "dense" fallback.
 
@@ -491,21 +509,59 @@ def sparsevolume2gfx(
                 Pygfx visual representing the sparse volume.
 
     """
-    from .utils import VoxelCloud
+    from .utils import VoxelCloud, VoxelRuns
 
-    if isinstance(voxels, VoxelCloud):
+    runs = None
+    if isinstance(voxels, VoxelRuns):
+        runs = voxels.runs
+    elif isinstance(voxels, VoxelCloud):
         if values is None:
             values = voxels.values
         voxels = voxels.coords
 
-    voxels = np.asarray(voxels)
-    assert voxels.ndim == 2 and voxels.shape[1] == 3, "Expected (N, 3) array."
-    assert method in ("auto", "shader", "dense")
+    if runs is None:
+        voxels = np.asarray(voxels)
+        if voxels.ndim == 2 and voxels.shape[1] == 4:
+            runs, voxels = voxels, None
+        else:
+            assert (
+                voxels.ndim == 2 and voxels.shape[1] == 3
+            ), "Expected an (N, 3) array of coordinates or an (N, 4) array of runs."
+
+    assert method in ("auto", "shader", "bitmask", "dense")
     assert mode in ("mip", "density", "surface", "iso")
+
+    if runs is not None and values is not None:
+        raise ValueError(
+            "Run-length encoded voxels are binary occupancy and cannot carry "
+            "`values`. Pass (N, 3) coordinates instead if you need per-voxel "
+            "values."
+        )
+    if method == "bitmask" and runs is None:
+        # The bitmask path is binary-only, but coordinates convert cheaply
+        if values is not None:
+            raise ValueError("method='bitmask' cannot be combined with `values`.")
 
     if isinstance(spacing, (int, float)):
         spacing = [spacing] * 3
     assert len(spacing) == 3, "Expected spacing as tuple of length 3."
+
+    if runs is not None or method == "bitmask":
+        return _bitmaskvolume2gfx(
+            runs if runs is not None else voxels,
+            is_runs=runs is not None,
+            color=color,
+            opacity=opacity,
+            spacing=spacing,
+            offset=offset,
+            brick_size=brick_size,
+            mode=mode,
+            step_size=step_size,
+            threshold=threshold,
+            density=density,
+            smoothing=smoothing,
+            hide_zero=hide_zero,
+        )
 
     if interpolation is None:
         # In surface mode the normal comes from the gradient of the volume,
@@ -543,6 +599,7 @@ def sparsevolume2gfx(
                 step_size=step_size,
                 threshold=threshold,
                 density=density,
+                smoothing=smoothing,
                 # The atlas holds values quantized into 1-255 (0 = empty)
                 clim=(1, 255),
                 map=to_colormap(color, hide_zero=hide_zero),
@@ -610,6 +667,70 @@ def sparsevolume2gfx(
     )
 
 
+def _bitmaskvolume2gfx(
+    data,
+    is_runs,
+    color=None,
+    opacity=1.0,
+    spacing=(1, 1, 1),
+    offset=(0, 0, 0),
+    brick_size=16,
+    mode="mip",
+    step_size=0.5,
+    threshold=0.5,
+    density=0.1,
+    smoothing=0.0,
+    hide_zero=True,
+):
+    """Render binary voxels through the bit-per-voxel shader.
+
+    See `sparsevolume2gfx`, which dispatches here for run-length encoded input
+    (and for `method="bitmask"`).
+
+    """
+    # Deliberately a lazy import: this registers the custom shader with pygfx
+    # and depends on pygfx's semi-public shader API
+    from .shaders import (
+        pack_voxel_runs,
+        runs_from_voxels,
+        BitmaskVolume,
+        BitmaskVolumeMaterial,
+    )
+
+    runs = np.asarray(data) if is_runs else runs_from_voxels(data)
+    packed = pack_voxel_runs(runs, brick_size=brick_size)
+
+    # The data is binary, so there is nothing to map: use the top of the
+    # colormap, which is what the byte-per-voxel path renders binary data as
+    cmap_data = to_colormap(color, hide_zero=hide_zero).texture.data
+    solid = gfx.Color(*(float(c) for c in cmap_data[-1]))
+
+    material = BitmaskVolumeMaterial(
+        render_mode=mode,
+        color=solid,
+        step_size=step_size,
+        threshold=threshold,
+        density=density,
+        smoothing=smoothing,
+        opacity=opacity,
+    )
+    if material.render_mode == "mip":
+        material.alpha_mode = "add"
+
+    vis = BitmaskVolume(packed, material)
+
+    (vis.local.scale_x, vis.local.scale_y, vis.local.scale_z) = spacing
+    (vis.local.x, vis.local.y, vis.local.z) = np.asarray(
+        offset, dtype=float
+    ) + packed.origin * np.asarray(spacing)
+
+    # Add custom attributes
+    vis._object_type = "sparsevolume"
+    vis._object_id = uuid.uuid4()
+
+    return vis
+
+
 def to_colormap(x, hide_zero):
     """Convert `x` to a gfx.TextureMap that can be used for Volumes."""
     # If x is None, use the default colormap
@@ -635,19 +756,27 @@ def to_colormap(x, hide_zero):
     elif isinstance(x, (dict, list)):
         # cmap can interpret dict and list of colors
         tm = cmap.Colormap(x).to_pygfx()
-    elif isinstance(x, str):
-        tm = cmap.Colormap(x).to_pygfx()
     else:
-        # Last ditch effort: see if cmap can handle it
-        c = cmap.Colormap([x])
+        if isinstance(x, str):
+            try:
+                tm = cmap.Colormap(x).to_pygfx()
+                x = None  # handled
+            except ValueError:
+                # Not the name of a colormap - fall through and treat it as a
+                # single color (e.g. a hex string like "#ff9955")
+                pass
 
-        # If x is a single (RGB) color, cmap will create a colormap
-        # with the first color being `None` and the second being `x`.
-        # We need to set the first color to black
-        if len(c.color_stops) == 2 and c.color_stops[0].color == "none":
-            c = cmap.Colormap(["k", x])
+        if x is not None:
+            # Last ditch effort: see if cmap can handle it
+            c = cmap.Colormap([x])
 
-        tm = c.to_pygfx()
+            # If x is a single (RGB) color, cmap will create a colormap
+            # with the first color being `None` and the second being `x`.
+            # We need to set the first color to black
+            if len(c.color_stops) == 2 and c.color_stops[0].color == "none":
+                c = cmap.Colormap(["k", x])
+
+            tm = c.to_pygfx()
 
     if hide_zero:
         # Add an alpha column if needed

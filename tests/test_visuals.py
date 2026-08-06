@@ -1125,11 +1125,13 @@ def test_sparse_volume_material_properties():
     m.threshold = 0.25
     m.density = 2.0
     m.gradient_delta = 1.5
+    m.smoothing = 2.0
     m.shininess = 10
     m.emissive = "#f00"
     assert m.threshold == 0.25
     assert m.density == 2.0
     assert m.gradient_delta == 1.5
+    assert m.smoothing == 2.0
     assert m.shininess == 10
     assert tuple(m.emissive)[:3] == (1, 0, 0)
 
@@ -1138,9 +1140,211 @@ def test_sparse_volume_material_properties():
         ("step_size", 0),
         ("density", -1),
         ("gradient_delta", 0),
+        ("smoothing", -1),
     ):
         with pytest.raises(ValueError):
             setattr(m, prop, value)
+
+
+def test_runs_from_voxels_roundtrip(solid_ball):
+    """Coordinates -> runs must be lossless and actually compress."""
+    from octarine.shaders import runs_from_voxels
+
+    runs = runs_from_voxels(solid_ball)
+    assert len(runs) < len(solid_ball) / 10, "runs did not compress"
+
+    expanded = np.concatenate(
+        [
+            np.column_stack([np.arange(x, x + n), np.full(n, y), np.full(n, z)])
+            for x, y, z, n in runs
+        ]
+    )
+    assert np.array_equal(
+        np.unique(solid_ball, axis=0), np.unique(expanded, axis=0)
+    )
+
+    # Duplicates and negative coordinates must survive too
+    dupes = np.repeat(solid_ball - 100, 3, axis=0)
+    runs2 = runs_from_voxels(dupes)
+    assert runs2[:, 3].sum() == len(np.unique(dupes, axis=0))
+
+
+def test_pack_voxel_runs():
+    from octarine.shaders import pack_voxel_runs
+
+    # Two runs, the second crossing a brick border (brick_size=16)
+    runs = np.array([[0, 0, 0, 4], [14, 5, 0, 6]])
+    p = pack_voxel_runs(runs, brick_size=16)
+
+    assert p.n_voxels == 10
+    assert p.n_bricks == 2  # the second run straddles bricks 0 and 1
+    assert p.shape == (20, 6, 1)
+    # 1 bit per voxel, no apron
+    assert p.bits.nbytes == p.n_bricks * 16**3 // 8
+    assert int(np.unpackbits(p.bits.view(np.uint8)).sum()) == 10
+
+    with pytest.raises(ValueError):
+        pack_voxel_runs(runs, brick_size=7)
+    with pytest.raises(ValueError):
+        pack_voxel_runs(np.zeros((0, 4)))
+
+
+@pytest.mark.parametrize("mode", ["mip", "density", "surface"])
+def test_adding_voxel_runs(solid_ball, mode):
+    from octarine.shaders import runs_from_voxels
+
+    runs = runs_from_voxels(solid_ball)
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_sparse_volume(oc.VoxelRuns(runs), mode=mode)
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    assert obj._object_type == "sparsevolume"
+    v.canvas.draw()  # force the shader to actually compile/render
+    v.close()
+
+
+def test_voxel_runs_match_coordinates(solid_ball):
+    """The bit- and byte-per-voxel paths must render the same volume."""
+    from octarine.shaders import runs_from_voxels
+
+    def silhouette(obj):
+        v = oc.Viewer(offscreen=True, size=(200, 200))
+        v.add_sparse_volume(obj, mode="surface", color=["k", "w"])
+        v.camera.show_object(v.scene, scale=1, view_dir=(0.3, 1, -0.4), up=(0, 0, 1))
+        img = np.asarray(v.screenshot(filename=None, size=(200, 200)))
+        v.close()
+        return img[..., :3].max(axis=-1) > 5
+
+    a = silhouette(solid_ball)
+    b = silhouette(oc.VoxelRuns(runs_from_voxels(solid_ball)))
+    iou = (a & b).sum() / (a | b).sum()
+    assert iou > 0.95, f"bitmask and atlas paths disagree (IoU={iou:.3f})"
+
+
+def test_voxel_runs_are_smaller(solid_ball):
+    """The whole point of the bitmask path is the GPU footprint."""
+    from octarine.shaders import runs_from_voxels, pack_voxel_runs, pack_sparse_voxels
+
+    bits = pack_voxel_runs(runs_from_voxels(solid_ball), brick_size=16)
+    atlas = pack_sparse_voxels(solid_ball, brick_size=16)
+    assert bits.nbytes * 8 < atlas.atlas.nbytes, (
+        f"bitmask ({bits.nbytes}) not much smaller than atlas ({atlas.atlas.nbytes})"
+    )
+
+
+def test_voxel_runs_reject_values(solid_ball):
+    from octarine.shaders import runs_from_voxels
+
+    runs = runs_from_voxels(solid_ball)
+    v = oc.Viewer(offscreen=True)
+    with pytest.raises(ValueError, match="binary occupancy"):
+        v.add_sparse_volume(runs, values=np.ones(len(runs)))
+    v.close()
+
+    with pytest.raises(ValueError):
+        oc.VoxelRuns(solid_ball)  # (N, 3) is not runs
+
+
+@pytest.mark.parametrize("method", ["shader", "bitmask"])
+def test_sparse_volume_surface_smoothing(solid_ball, method):
+    """`smoothing` must change the shading but never the geometry.
+
+    It widens the filter the *normal* is taken from, leaving the isosurface
+    itself on the unsmoothed field - so the set of pixels the surface covers
+    has to come out bit-identical. `emissive` makes every hit pixel bright
+    regardless of its normal, which is what lets us compare hit sets rather
+    than brightness.
+    """
+    from octarine.shaders import runs_from_voxels
+
+    obj = (
+        oc.VoxelRuns(runs_from_voxels(solid_ball))
+        if method == "bitmask"
+        else solid_ball
+    )
+
+    def render(smoothing, emissive):
+        v = oc.Viewer(offscreen=True, size=(200, 200))
+        v.add_sparse_volume(
+            obj, mode="surface", color=["k", "w"], method=method, smoothing=smoothing
+        )
+        if emissive:
+            v.objects["SparseVolume"][0].material.emissive = "#ffffff"
+        v.camera.show_object(v.scene, scale=1, view_dir=(0.3, 1, -0.4), up=(0, 0, 1))
+        img = np.asarray(v.screenshot(filename=None, size=(200, 200)))
+        v.close()
+        return img[..., :3].astype(float)
+
+    off, on = render(0.0, False), render(2.0, False)
+    assert np.abs(off - on).mean() > 0.05, "smoothing did not change the shading"
+
+    hit_off = render(0.0, True).sum(axis=-1) > 12
+    hit_on = render(2.0, True).sum(axis=-1) > 12
+    assert (hit_off == hit_on).all(), "smoothing moved the surface"
+
+
+def test_sparse_volume_smoothing_toggles_shader():
+    """Flipping `smoothing` at runtime must re-resolve the shader variant."""
+    g = np.arange(24) - 12
+    X, Y, Z = np.meshgrid(g, g, g, indexing="ij")
+    vox = np.stack(np.nonzero((X**2 + Y**2 + Z**2) <= 64), axis=1).astype(np.int32)
+
+    v = oc.Viewer(offscreen=True, size=(150, 150))
+    v.add_sparse_volume(vox, mode="surface", color=["k", "w"], method="bitmask")
+    v.camera.show_object(v.scene, scale=1, view_dir=(0.3, 1, -0.4), up=(0, 0, 1))
+
+    def shot():
+        for _ in range(2):
+            v.canvas.draw()
+        return np.asarray(v.canvas.draw())[..., :3].astype(float)
+
+    material = v.objects["SparseVolume"][0].material
+    off = shot()
+    material.smoothing = 2.0
+    on = shot()
+    material.smoothing = 0.0
+    back = shot()
+    v.close()
+
+    assert np.abs(off - on).mean() > 0.05, "turning smoothing on had no effect"
+    assert (back == off).all(), "turning smoothing back off did not restore"
+
+
+def test_bitmask_material_properties():
+    from octarine.shaders import BitmaskVolumeMaterial
+
+    m = BitmaskVolumeMaterial()
+    assert m.render_mode == "mip"
+    m.render_mode = "surface"
+    assert m.render_mode == "iso"
+
+    m.threshold = 0.25
+    m.density = 2.0
+    m.gradient_delta = 1.5
+    m.smoothing = 2.0
+    m.color = "#ff0000"
+    assert m.threshold == 0.25
+    assert m.density == 2.0
+    assert m.gradient_delta == 1.5
+    assert m.smoothing == 2.0
+    assert tuple(m.color)[:3] == (1, 0, 0)
+
+    for prop, value in (
+        ("render_mode", "bogus"),
+        ("step_size", 0),
+        ("density", -1),
+        ("smoothing", -1),
+    ):
+        with pytest.raises(ValueError):
+            setattr(m, prop, value)
+
+
+def test_colormap_accepts_hex_color():
+    """A hex string is a color, not the name of a colormap."""
+    from octarine.visuals import to_colormap
+
+    assert tuple(to_colormap("#ff9955", hide_zero=True).texture.data[-1][:3]) == pytest.approx(
+        (1.0, 0.6, 1 / 3), abs=0.01
+    )
 
 
 def test_colormap_is_clamped():

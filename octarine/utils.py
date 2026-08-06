@@ -291,6 +291,41 @@ class VoxelCloud:
         return f"<VoxelCloud with {len(self):,} voxels>"
 
 
+class VoxelRuns:
+    """Container for run-length-encoded sparse volumetric data.
+
+    Wrapping voxel runs in this class tells `Viewer.add` to render them as a
+    (sparse) volume. Runs are rendered as binary occupancy from a bitmask,
+    which uses roughly 23x less GPU memory than the same data given as
+    `VoxelCloud` coordinates - see [Sparse Volumes](../objects.md#sparse-volumes).
+
+    Parameters
+    ----------
+    runs :      (N, 4) array
+                Runs as (x, y, z, x_run_length), i.e. the layout returned by
+                `dvid.get_sparsevol(..., voxels=False)`. Runs extend along x
+                and the length is an inclusive voxel count.
+
+    """
+
+    def __init__(self, runs):
+        runs = np.asarray(runs)
+        if runs.ndim != 2 or runs.shape[1] != 4:
+            raise ValueError(f"Expected (N, 4) array, got {runs.shape}")
+        self.runs = runs
+
+    def __len__(self):
+        return len(self.runs)
+
+    @property
+    def n_voxels(self):
+        """Number of occupied voxels."""
+        return int(np.asarray(self.runs)[:, 3].astype(np.int64).sum())
+
+    def __repr__(self):
+        return f"<VoxelRuns with {len(self):,} runs ({self.n_voxels:,} voxels)>"
+
+
 def is_pygfx_visual(x):
     """Check if object is a pygfx visual."""
     if isinstance(x, gfx.WorldObject):

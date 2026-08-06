@@ -148,6 +148,33 @@ fn sample_volume(p: vec3<f32>, coarse_dim: vec3<i32>) -> f32 {
     return sample_brick(slot_plus1 - 1u, cell, p);
 }
 
+$$ if smooth
+// Wider filter for the normal: the mean of 8 trilinear taps on the corners of
+// a cube of half-width h. That convolves the hardware tent with a box, so the
+// field varies over ~2*(1 + h) voxels instead of 2 and its gradient stops
+// tracking individual voxel faces.
+//
+// Only the *normal* uses this - the surface itself stays on the unsmoothed
+// field. Widening the filter shrinks the volume (a feature of diameter D only
+// reaches its full value while D > 2 + 2h; below that it drops away and the
+// isosurface breaks up), so filtering the surface too would erase thin
+// structures. Shading is what carries the voxel look, and this leaves the
+// silhouette bit-exact.
+fn sample_smooth(p: vec3<f32>, coarse_dim: vec3<i32>) -> f32 {
+    let h = u_material.smoothing;
+    var s = 0.0;
+    for (var i = 0; i < 8; i += 1) {
+        let o = vec3<f32>(
+            select(-h, h, (i & 1) != 0),
+            select(-h, h, (i & 2) != 0),
+            select(-h, h, (i & 4) != 0),
+        );
+        s += sample_volume(p + o, coarse_dim);
+    }
+    return s * 0.125;
+}
+$$ endif
+
 // The atlas is r8unorm (values arrive as 0-1) while `clim` is in the 1-255
 // units the packer quantizes into - hence the * 255 (see `climcorrection`).
 // Normalized value (0-1 across `clim`) of a raw sample.
@@ -354,15 +381,30 @@ fn fs_main(varyings: Varyings) -> FragmentOutput {
 
         // Surface normal from the gradient (central differences). Taps use
         // `sample_volume` so that they stay correct across brick borders.
-        let d = u_material.gradient_delta;
-        var grad = vec3<f32>(
-            sample_volume(hit_p + vec3<f32>(d, 0.0, 0.0), coarse_dim)
-                - sample_volume(hit_p - vec3<f32>(d, 0.0, 0.0), coarse_dim),
-            sample_volume(hit_p + vec3<f32>(0.0, d, 0.0), coarse_dim)
-                - sample_volume(hit_p - vec3<f32>(0.0, d, 0.0), coarse_dim),
-            sample_volume(hit_p + vec3<f32>(0.0, 0.0, d), coarse_dim)
-                - sample_volume(hit_p - vec3<f32>(0.0, 0.0, d), coarse_dim),
-        );
+        $$ if smooth
+            // A difference much narrower than the filter reads nearly the same
+            // value at both taps, which leaves noise rather than a direction -
+            // so widen the stencil with the filter.
+            let d = max(u_material.gradient_delta, 0.5 + u_material.smoothing);
+            var grad = vec3<f32>(
+                sample_smooth(hit_p + vec3<f32>(d, 0.0, 0.0), coarse_dim)
+                    - sample_smooth(hit_p - vec3<f32>(d, 0.0, 0.0), coarse_dim),
+                sample_smooth(hit_p + vec3<f32>(0.0, d, 0.0), coarse_dim)
+                    - sample_smooth(hit_p - vec3<f32>(0.0, d, 0.0), coarse_dim),
+                sample_smooth(hit_p + vec3<f32>(0.0, 0.0, d), coarse_dim)
+                    - sample_smooth(hit_p - vec3<f32>(0.0, 0.0, d), coarse_dim),
+            );
+        $$ else
+            let d = u_material.gradient_delta;
+            var grad = vec3<f32>(
+                sample_volume(hit_p + vec3<f32>(d, 0.0, 0.0), coarse_dim)
+                    - sample_volume(hit_p - vec3<f32>(d, 0.0, 0.0), coarse_dim),
+                sample_volume(hit_p + vec3<f32>(0.0, d, 0.0), coarse_dim)
+                    - sample_volume(hit_p - vec3<f32>(0.0, d, 0.0), coarse_dim),
+                sample_volume(hit_p + vec3<f32>(0.0, 0.0, d), coarse_dim)
+                    - sample_volume(hit_p - vec3<f32>(0.0, 0.0, d), coarse_dim),
+            );
+        $$ endif
         // Structures thinner than `d` can put both taps of an axis outside
         // the surface, leaving a (near) zero gradient. Fall back to a
         // camera-facing normal rather than normalizing to NaN.
