@@ -14,7 +14,7 @@ from . import config, utils
 logger = config.get_logger(__name__)
 
 
-def mesh2gfx(mesh, color, alpha=None, silhouette=None, shader=None):
+def mesh2gfx(mesh, color, alpha=None, silhouette=None, subsurface=None, shader=None):
     """Convert generic mesh to pygfx visuals.
 
     Parameters
@@ -34,6 +34,14 @@ def mesh2gfx(mesh, color, alpha=None, silhouette=None, shader=None):
                     become transparent, edges/creases are emphasized.
                     Typical values are 1-8. Only works with the default
                     "phong" shader.
+    subsurface :    float | dict, optional
+                    If provided (and > 0), render the mesh with subsurface
+                    scattering: light bleeds through the surface, making
+                    backlit regions glow. A float sets the strength;
+                    pass a dict to also set `scatter_color`, `thickness`,
+                    `distortion`, `falloff`, `wrap` or `glow` (see
+                    `octarine.shaders.SubsurfaceMeshMaterial`). Only works
+                    with the default "phong" shader.
     shader :        str | pygfx.Material subclass, optional
                     The shader (i.e. material) to use for the mesh.
                     Defaults to "phong". See `available_shaders()` for
@@ -58,7 +66,7 @@ def mesh2gfx(mesh, color, alpha=None, silhouette=None, shader=None):
             positions=mesh.vertices.astype(np.float32, copy=False),
             **obj_color_kwargs,
         ),
-        _make_mesh_material(mat_color_kwargs, silhouette, shader),
+        _make_mesh_material(mat_color_kwargs, silhouette, subsurface, shader),
     )
 
     # Add custom attributes
@@ -85,21 +93,53 @@ def available_shaders():
     return shaders
 
 
-def _make_mesh_material(mat_color_kwargs, silhouette=None, shader=None):
-    """Create a mesh material, optionally with a silhouette effect."""
-    if silhouette:
+def _parse_subsurface(subsurface):
+    """Normalize the `subsurface` argument into material kwargs."""
+    if not isinstance(subsurface, dict):
+        return {"subsurface": float(subsurface)}
+
+    from .shaders import SUBSURFACE_PROPERTIES
+
+    kwargs = dict(subsurface)
+    kwargs.setdefault("subsurface", 1.0)
+    valid = {"subsurface", *SUBSURFACE_PROPERTIES}
+    if unknown := set(kwargs) - valid:
+        raise ValueError(
+            f"Unknown subsurface propert{'y' if len(unknown) == 1 else 'ies'}: "
+            f"{', '.join(sorted(unknown))}. Valid: {', '.join(sorted(valid))}."
+        )
+    return kwargs
+
+
+def _make_mesh_material(mat_color_kwargs, silhouette=None, subsurface=None, shader=None):
+    """Create a mesh material, optionally with silhouette and/or subsurface effects."""
+    if silhouette or subsurface:
         if shader is not None and str(shader).lower() != "phong":
+            effect = "silhouette" if silhouette else "subsurface"
             raise ValueError(
-                "The silhouette effect only works with the default 'phong' "
+                f"The {effect} effect only works with the default 'phong' "
                 f"shader, got shader={shader!r}."
             )
 
-        # This import registers the shader with pygfx
+        if silhouette:
+            # Weighted (order-independent) blending composites the
+            # mostly-transparent silhouette sensibly even for many
+            # overlapping meshes. Subsurface scattering does not make the
+            # mesh transparent, so it leaves the alpha mode alone.
+            mat_color_kwargs = dict(mat_color_kwargs, alpha_mode="weighted_blend")
+
+        if subsurface:
+            # These imports register the shaders with pygfx
+            from .shaders import SubsurfaceMeshMaterial
+
+            return SubsurfaceMeshMaterial(
+                silhouette=float(silhouette or 0),
+                **_parse_subsurface(subsurface),
+                **mat_color_kwargs,
+            )
+
         from .shaders import SilhouetteMeshMaterial
 
-        # Weighted (order-independent) blending composites the mostly-transparent
-        # silhouette sensibly even for many overlapping meshes
-        mat_color_kwargs = dict(mat_color_kwargs, alpha_mode="weighted_blend")
         return SilhouetteMeshMaterial(silhouette=float(silhouette), **mat_color_kwargs)
 
     if shader is None:
@@ -120,7 +160,7 @@ def _make_mesh_material(mat_color_kwargs, silhouette=None, shader=None):
     return lookup[key](**mat_color_kwargs)
 
 
-def geometry2gfx(geometry, color, alpha=None, silhouette=None, shader=None):
+def geometry2gfx(geometry, color, alpha=None, silhouette=None, subsurface=None, shader=None):
     """Convert a pygfx.Geometry to a pygfx.Mesh.
 
     Parameters
@@ -140,6 +180,14 @@ def geometry2gfx(geometry, color, alpha=None, silhouette=None, shader=None):
                     become transparent, edges/creases are emphasized.
                     Typical values are 1-8. Only works with the default
                     "phong" shader.
+    subsurface :    float | dict, optional
+                    If provided (and > 0), render the mesh with subsurface
+                    scattering: light bleeds through the surface, making
+                    backlit regions glow. A float sets the strength;
+                    pass a dict to also set `scatter_color`, `thickness`,
+                    `distortion`, `falloff`, `wrap` or `glow` (see
+                    `octarine.shaders.SubsurfaceMeshMaterial`). Only works
+                    with the default "phong" shader.
     shader :        str | pygfx.Material subclass, optional
                     The shader (i.e. material) to use for the mesh.
                     Defaults to "phong". See `available_shaders()` for
@@ -158,7 +206,9 @@ def geometry2gfx(geometry, color, alpha=None, silhouette=None, shader=None):
     # But that doesn't seem to be the case.
     mat_color_kwargs["pick_write"] = True
 
-    vis = gfx.Mesh(geometry, _make_mesh_material(mat_color_kwargs, silhouette, shader))
+    vis = gfx.Mesh(
+        geometry, _make_mesh_material(mat_color_kwargs, silhouette, subsurface, shader)
+    )
 
     # Add custom attributes
     vis._object_type = "mesh"

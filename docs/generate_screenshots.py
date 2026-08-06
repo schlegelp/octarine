@@ -143,6 +143,21 @@ if __name__ == "__main__":
     finalize(grab(v), sil_window, "silhouette = 3", "effects_silhouette_after")
     v.close()
 
+    # Subsurface scattering: single bunny, before/after. The effect is driven
+    # by light coming from *behind* the object, so the default rig's (weak)
+    # back light is boosted and the front key light dimmed to match.
+    v = oc.Viewer(offscreen=True, size=(RW, RH))
+    v.add_mesh(bunny.copy(), name="bunny", color="#c8c8c8")
+    v.center_camera()
+    key, back = v._static_lights
+    key.intensity, back.intensity = 1.0, 8.0
+    before = grab(v)
+    sss_window = crop_window(before)
+    finalize(before, sss_window, "subsurface off", "effects_subsurface_before")
+    v.set_subsurface(1.5, scatter_color="#c04030", thickness=0.6)
+    finalize(grab(v), sss_window, "subsurface = 1.5", "effects_subsurface_after")
+    v.close()
+
     # Background gradients: one tile per preset, as a contact sheet. The whole
     # frame is kept (no crop) - the gradient is defined relative to the canvas,
     # so cropping would show a different gradient than the one rendered.

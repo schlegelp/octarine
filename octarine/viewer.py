@@ -1731,6 +1731,7 @@ class Viewer:
         color=None,
         alpha=None,
         silhouette=None,
+        subsurface=None,
         shader=None,
         center=True,
     ):
@@ -1761,6 +1762,17 @@ class Viewer:
                     Neuroglancer). Use `Viewer.set_silhouette` to toggle
                     the effect on existing meshes. Only works with the
                     default "phong" shader.
+        subsurface : float | dict, optional
+                    If provided (and > 0), render the mesh with subsurface
+                    scattering: light bleeds through the surface so that
+                    backlit and thin regions glow, as with skin, wax or
+                    leaves. A float sets the strength (typical values are
+                    0.5-2); pass a dict to also set `scatter_color`,
+                    `thickness`, `distortion`, `falloff`, `wrap` or `glow`
+                    - e.g. `{"subsurface": 1.5, "scatter_color": "#c33"}`.
+                    Use `Viewer.set_subsurface` to toggle the effect on
+                    existing meshes. Only works with the default "phong"
+                    shader.
         shader :    str | pygfx.Material subclass, optional
                     The shader (i.e. material) to use for the mesh.
                     Defaults to "phong". Any mesh material available in
@@ -1782,6 +1794,7 @@ class Viewer:
                     color=color,
                     alpha=alpha,
                     silhouette=silhouette,
+                    subsurface=subsurface,
                     shader=shader,
                     center=False,
                 )
@@ -1798,7 +1811,12 @@ class Viewer:
 
         if not isinstance(mesh, gfx.Mesh):
             visual = mesh2gfx(
-                mesh, color=color, alpha=alpha, silhouette=silhouette, shader=shader
+                mesh,
+                color=color,
+                alpha=alpha,
+                silhouette=silhouette,
+                subsurface=subsurface,
+                shader=shader,
             )
         else:
             visual = mesh
@@ -2552,6 +2570,113 @@ class Viewer:
                         f'Skipped mesh "{n}": silhouette rendering requires a '
                         f"Phong-based material, got {type(mat).__name__}."
                     )
+
+    @update_viewer(legend=False, bounds=False)
+    def set_subsurface(self, subsurface=1.0, objects=None, **kwargs):
+        """Set subsurface scattering (translucency) for meshes.
+
+        Light is allowed to bleed through the surface instead of stopping
+        at it: regions with a light behind them glow, and shading eases
+        past the terminator rather than dropping off abruptly. This is what
+        gives skin, wax, marble, leaves and thin neurites their translucent
+        look.
+
+        Note that the effect uses a *constant* thickness (see below) rather
+        than the real local thickness of the mesh, so it cannot on its own
+        tell a thin part from a thick one.
+
+        Parameters
+        ----------
+        subsurface : float
+                    Master strength of the effect: 0 disables it, typical
+                    values are 0.5-2.
+        objects :   list, optional
+                    Objects to set the scattering for. If None, will set
+                    for all (mesh) objects. Non-mesh objects are silently
+                    skipped.
+        **kwargs
+                    Further properties of
+                    `octarine.shaders.SubsurfaceMeshMaterial` to set:
+                    `scatter_color`, `thickness`, `distortion`, `falloff`,
+                    `wrap` and `glow`. Anything not given is left at its
+                    current (or default) value.
+
+        """
+        subsurface = float(subsurface)
+        if subsurface < 0:
+            raise ValueError(f"subsurface must be >= 0, got {subsurface}")
+
+        # This import registers the shader with pygfx
+        from .shaders import (
+            SUBSURFACE_PROPERTIES,
+            SilhouetteMeshMaterial,
+            SubsurfaceMeshMaterial,
+        )
+
+        if unknown := set(kwargs) - set(SUBSURFACE_PROPERTIES):
+            raise ValueError(
+                f"Unknown subsurface propert{'y' if len(unknown) == 1 else 'ies'}: "
+                f"{', '.join(sorted(unknown))}. "
+                f"Valid: {', '.join(sorted(SUBSURFACE_PROPERTIES))}."
+            )
+
+        if objects is None:
+            objects = list(self.objects)
+        else:
+            objects = utils.make_iterable(objects)
+
+        for n in objects:
+            for v in self.objects[n]:
+                if getattr(v, "_pinned", False):
+                    continue
+                if not isinstance(v, gfx.Mesh):
+                    continue
+                mat = v.material
+                if not isinstance(mat, SubsurfaceMeshMaterial):
+                    if subsurface == 0:
+                        continue
+                    if not isinstance(mat, gfx.MeshPhongMaterial):
+                        logger.warning(
+                            f'Skipped mesh "{n}": subsurface scattering requires a '
+                            f"Phong-based material, got {type(mat).__name__}."
+                        )
+                        continue
+                    # Swap in a subsurface material, carrying over the
+                    # relevant properties of the old one. Note that
+                    # SubsurfaceMeshMaterial derives from the silhouette
+                    # material, so an already-silhouetted mesh keeps its
+                    # silhouette (and its pre-silhouette alpha mode).
+                    props = {
+                        p: getattr(mat, p)
+                        for p in (
+                            "color",
+                            "color_mode",
+                            "map",
+                            "opacity",
+                            "pick_write",
+                            "side",
+                            "flat_shading",
+                            "shininess",
+                            "specular",
+                            "emissive",
+                            "alpha_test",
+                            "alpha_mode",
+                        )
+                        if getattr(mat, p, None) is not None
+                    }
+                    if isinstance(mat, SilhouetteMeshMaterial):
+                        props["silhouette"] = mat.silhouette
+                    new_mat = SubsurfaceMeshMaterial(**props)
+                    if hasattr(mat, "_pre_silhouette_alpha_mode"):
+                        new_mat._pre_silhouette_alpha_mode = (
+                            mat._pre_silhouette_alpha_mode
+                        )
+                    v.material = new_mat
+                    mat = new_mat
+
+                mat.subsurface = subsurface
+                for prop, value in kwargs.items():
+                    setattr(mat, prop, value)
 
     @update_viewer(legend=False, bounds=False)
     def set_depth_of_field(

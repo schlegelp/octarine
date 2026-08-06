@@ -76,6 +76,71 @@ You can also enable the effect for a mesh right when adding it:
 >>> v.add_mesh(mesh, silhouette=2)
 ```
 
+## Subsurface scattering
+
+[`octarine.Viewer.set_subsurface`][] makes meshes *translucent*: instead of
+stopping at the surface, light is allowed to bleed through it. Regions with
+a light behind them glow, and shading eases past the terminator rather than
+dropping off abruptly - the look of skin, wax, marble, leaves or thin
+neurites.
+
+```python
+>>> v = oc.Viewer()
+>>> v.add_mesh(mesh, name='bunny')
+
+>>> # Enable scattering for all meshes (typical strengths are 0.5-2)
+>>> v.set_subsurface(1.5)
+
+>>> # Tune the look: a warm tint on a fairly thin object
+>>> v.set_subsurface(1.5, scatter_color='#c04030', thickness=0.3)
+
+>>> # Disable again
+>>> v.set_subsurface(0)
+```
+
+![subsurface off](_static/effects_subsurface_before.png){ width="49%" }
+![subsurface on](_static/effects_subsurface_after.png){ width="49%" }
+
+Note how the thin parts - the ears, and the rim where the body turns away
+from the viewer - light up, while the bulk of the body stays neutral.
+
+Two terms are added on top of the usual Phong shading:
+
+| Parameter | Effect |
+|---|---|
+| `subsurface` | Master strength; `0` disables the effect entirely |
+| `scatter_color` | The color light picks up on its way through the material |
+| `thickness` | How much material light has to cross, in `[0, 1]` |
+| `distortion` | How far the glow wraps around the silhouette, in `[0, 1]` |
+| `falloff` | Exponent of the glow; higher values tighten it around the light |
+| `wrap` | How far light bleeds past the terminator, in `[0, 1]` |
+| `glow` | A view-independent floor added to the transmission |
+
+The scattering is strongest when a light sits *behind* what you are
+looking at, so it pairs well with turning the
+[headlight](controls.md#lighting) off. It deliberately ignores shadows:
+light that scatters through an object is exactly the light that did not
+reach it directly.
+
+!!! note
+
+    `thickness` is a constant across the mesh, not the real local
+    thickness of the geometry, so the effect cannot on its own tell a thin
+    part from a thick one. In exchange it needs no preprocessing and costs
+    no extra render passes.
+
+As with the silhouette, use the `objects` parameter to restrict the effect
+to some meshes, and note that it only works for meshes with Phong-based
+materials. The two effects compose, in either order.
+
+You can also enable it right when adding a mesh, either as a strength or
+as a dict of the parameters above:
+
+```python
+>>> v.add_mesh(mesh, subsurface=1.5)
+>>> v.add_mesh(mesh, subsurface={'subsurface': 1.5, 'scatter_color': '#c04030'})
+```
+
 ## Post-processing effects
 
 [`octarine.Viewer.add_effect`][] adds a post-processing pass to the

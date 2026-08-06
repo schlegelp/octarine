@@ -30,6 +30,7 @@ from .rle_packing import (  # noqa: E402
 from .sparse_volume import SparseVolume, SparseVolumeMaterial  # noqa: E402
 from .bitmask_volume import BitmaskVolume, BitmaskVolumeMaterial  # noqa: E402
 from .silhouette import SilhouetteMeshMaterial  # noqa: E402
+from .sss import SubsurfaceMeshMaterial, SUBSURFACE_PROPERTIES  # noqa: E402
 from .background import (  # noqa: E402
     GradientBackgroundMaterial,
     BACKGROUND_PRESETS,
@@ -52,6 +53,8 @@ __all__ = [
     "BitmaskVolume",
     "BitmaskVolumeMaterial",
     "SilhouetteMeshMaterial",
+    "SubsurfaceMeshMaterial",
+    "SUBSURFACE_PROPERTIES",
     "GradientBackgroundMaterial",
     "BACKGROUND_PRESETS",
     "DepthOfFieldPass",

@@ -8,6 +8,12 @@ on the Github repository.
 _Date: ongoing_
 
 #### Improvements
+- new [`Viewer.set_subsurface`][octarine.Viewer.set_subsurface] method (plus a `subsurface`
+  parameter for [`Viewer.add_mesh`][octarine.Viewer.add_mesh]): render meshes as translucent,
+  so that backlit regions glow and shading eases past the terminator instead of dropping off
+  abruptly - the look of skin, wax, marble or thin neurites. Tunable via `scatter_color`,
+  `thickness`, `distortion`, `falloff`, `wrap` and `glow`; composes with `set_silhouette`
+  (see [Subsurface scattering](effects.md#subsurface-scattering))
 - new [`Viewer.set_bg_gradient`][octarine.Viewer.set_bg_gradient] method: use a radial ("studio")
   gradient as background - a soft pool of light behind the object fading into near-black towards
   the edges of the frame. Comes with six presets (`graphite`, `cinematic`, `warm`, `olive`,

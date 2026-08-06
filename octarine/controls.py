@@ -761,6 +761,51 @@ class Controls(QtWidgets.QWidget):
         # Horizontal divider
         self.tab4_layout.addWidget(QHLine())
 
+        # --- Subsurface scattering ---
+        # If scattering was already enabled via the API, reflect that here
+        sss_strength = 0.0
+        if shaders_available:
+            from .shaders import SubsurfaceMeshMaterial
+
+            for vis in self.viewer.scene.children:
+                if isinstance(vis, gfx.Mesh) and isinstance(
+                    vis.material, SubsurfaceMeshMaterial
+                ):
+                    sss_strength = max(sss_strength, vis.material.subsurface)
+
+        self.subsurface_checkbox = QtWidgets.QCheckBox("Subsurface")
+        self.subsurface_checkbox.setToolTip(
+            "Let light bleed through meshes instead of stopping at the "
+            "surface, so that backlit regions glow and shading eases into "
+            "shadow - the look of skin, wax or thin neurites."
+        )
+        self.subsurface_checkbox.setChecked(sss_strength > 0)
+        self.tab4_layout.addWidget(self.subsurface_checkbox)
+
+        self.subsurface_slider = self.create_effect_slider(
+            "Strength",
+            min=0.1,
+            max=3.0,
+            step=0.1,
+            value=sss_strength if sss_strength > 0 else 1.0,
+            parent_layout=self.tab4_layout,
+            callback=lambda v: self.subsurface_checkbox.isChecked()
+            and self.viewer.set_subsurface(v),
+        )
+        self.subsurface_slider.setEnabled(sss_strength > 0)
+
+        def toggle_subsurface(checked):
+            slider = self.subsurface_slider
+            self.viewer.set_subsurface(
+                slider.value() * slider._step if checked else 0
+            )
+            slider.setEnabled(checked)
+
+        self.subsurface_checkbox.toggled.connect(toggle_subsurface)
+
+        # Horizontal divider
+        self.tab4_layout.addWidget(QHLine())
+
         # --- Depth of field ---
         # If depth of field was already enabled via the API, reflect that here
         dof_pass = getattr(self.viewer, "_dof_pass", None)
@@ -1032,7 +1077,11 @@ class Controls(QtWidgets.QWidget):
                 "Effects require pygfx >= 0.16 "
                 f"(you have {pygfx.__version__}). Please update pygfx."
             )
-            for widget in (self.silhouette_checkbox, self.silhouette_slider) + (
+            for widget in (
+                self.silhouette_checkbox,
+                self.silhouette_slider,
+                self.subsurface_checkbox,
+                self.subsurface_slider,
                 self.dof_checkbox,
             ) + dof_widgets:
                 widget.setEnabled(False)

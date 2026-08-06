@@ -77,6 +77,10 @@ def test_adding_mesh_shader(mesh):
     with pytest.raises(ValueError, match="silhouette"):
         v.add_mesh(mesh, shader="toon", silhouette=2.0)
 
+    # ... and so does subsurface scattering
+    with pytest.raises(ValueError, match="subsurface"):
+        v.add_mesh(mesh, shader="toon", subsurface=1.0)
+
     v.close()
 
 
@@ -130,6 +134,226 @@ def test_set_silhouette_toggle(mesh):
 
     # Turning it off restores the previous alpha mode
     v.set_silhouette(0)
+    assert obj.material.silhouette == 0
+    assert obj.material.alpha_mode == mode_before
+    v.canvas.draw()
+    v.close()
+
+
+def _render_lit(mesh, material, light_z):
+    """Render `mesh` with a single point light at (0, 0, light_z).
+
+    Octarine's camera looks down +z, so a light at positive z sits *behind*
+    the object as seen from the camera.
+    """
+    import pygfx as gfx
+
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh, color="red")
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    if material is not None:
+        obj.material = material
+    for light in list(v.lights):  # drop the default lighting rig
+        light.parent.remove(light)
+    light = gfx.PointLight(intensity=30)
+    light.local.position = (0, 0, light_z)
+    v.scene.add(light)
+    img = np.asarray(v.screenshot(filename=None, size=(200, 200)))[..., :3]
+    v.close()
+    return img.astype(float)
+
+
+def test_subsurface_off_is_plain_phong(mesh):
+    """A subsurface material with the effect off must render as plain Phong."""
+    import pygfx as gfx
+    from octarine.shaders import SubsurfaceMeshMaterial
+
+    plain = _render_lit(mesh, gfx.MeshPhongMaterial(color="red"), -5)
+    off = _render_lit(mesh, SubsurfaceMeshMaterial(subsurface=0, color="red"), -5)
+    assert np.abs(plain - off).max() == 0
+
+
+def test_subsurface_backlight_render(mesh):
+    """Transmission must light up a backlit mesh, but not a front-lit one."""
+    import pygfx as gfx
+    from octarine.shaders import SubsurfaceMeshMaterial
+
+    def sss():
+        return SubsurfaceMeshMaterial(
+            subsurface=3.0, color="red", thickness=1.0, wrap=0.0, glow=0.0
+        )
+
+    # Backlit: plain Phong leaves the visible side unlit, subsurface does not
+    plain_back = _render_lit(mesh, gfx.MeshPhongMaterial(color="red"), 5)
+    sss_back = _render_lit(mesh, sss(), 5)
+    lit = sss_back.max(axis=-1) > 5
+    assert lit.any()
+    assert plain_back.max() < 5
+    assert sss_back[lit].mean() > 20
+
+    # Front-lit: the transmission lobe points away from the viewer, so the
+    # image must be unchanged
+    plain_front = _render_lit(mesh, gfx.MeshPhongMaterial(color="red"), -5)
+    sss_front = _render_lit(mesh, sss(), -5)
+    assert np.abs(plain_front - sss_front).max() == 0
+
+
+def test_subsurface_wrap_softens_terminator(mesh):
+    """Wrap must brighten the mesh past the terminator without moving the lit side."""
+    import pygfx as gfx
+    from octarine.shaders import SubsurfaceMeshMaterial
+
+    # Light from the side, so the terminator runs across the visible face
+    def render(material):
+        v = oc.Viewer(offscreen=True, size=(200, 200))
+        v.add_mesh(mesh, color="red")
+        (obj,) = [o for objs in v.objects.values() for o in objs]
+        obj.material = material
+        for light in list(v.lights):
+            light.parent.remove(light)
+        light = gfx.PointLight(intensity=30)
+        light.local.position = (-5, 0, -2)
+        v.scene.add(light)
+        img = np.asarray(v.screenshot(filename=None, size=(200, 200)))[..., :3]
+        v.close()
+        return img.astype(float).mean(axis=-1)
+
+    plain = render(gfx.MeshPhongMaterial(color="red"))
+    wrapped = render(
+        SubsurfaceMeshMaterial(
+            subsurface=1.0, color="red", wrap=1.0, thickness=0.0, glow=0.0
+        )
+    )
+
+    # The shadowed half must gain light...
+    dark = (plain > 0) & (plain < 10)  # on the mesh, but only dimly lit
+    assert dark.any()
+    assert wrapped[dark].mean() > plain[dark].mean() + 2
+
+    # ... while wrapping never *removes* light. Checked away from the
+    # outline only: pygfx resolves its 2x supersampling with a Mitchell
+    # filter, whose negative lobes undershoot by ~1/255 next to an edge
+    # that got brighter, which has nothing to do with the shading.
+    interior = plain > 0
+    for _ in range(3):
+        for shift, axis in ((1, 0), (-1, 0), (1, 1), (-1, 1)):
+            interior &= np.roll(interior, shift, axis=axis)
+    assert interior.any()
+    assert (wrapped[interior] >= plain[interior] - 1e-3).all()
+
+
+def test_set_subsurface_toggle(mesh):
+    from octarine.shaders import SubsurfaceMeshMaterial
+
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.add_mesh(mesh, color="red")
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    color_before = tuple(obj.material.color)
+    mode_before = obj.material.alpha_mode
+
+    # Turning it on swaps in the custom material, keeping color and, unlike
+    # the silhouette, the alpha mode (the mesh stays opaque)
+    v.set_subsurface(1.5, thickness=0.8, scatter_color="#00ff00")
+    assert isinstance(obj.material, SubsurfaceMeshMaterial)
+    assert obj.material.subsurface == pytest.approx(1.5)
+    assert obj.material.thickness == pytest.approx(0.8)
+    assert tuple(obj.material.scatter_color)[:3] == pytest.approx((0, 1, 0))
+    assert obj.material.alpha_mode == mode_before
+    assert tuple(obj.material.color) == color_before
+    assert obj.material.silhouette == 0  # not turned on behind the user's back
+    v.canvas.draw()
+
+    v.set_subsurface(0)
+    assert obj.material.subsurface == 0
+    v.canvas.draw()
+    v.close()
+
+
+def test_set_subsurface_validation(mesh):
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.add_mesh(mesh, color="red")
+
+    with pytest.raises(ValueError, match="subsurface must be >= 0"):
+        v.set_subsurface(-1)
+    with pytest.raises(ValueError, match="Unknown subsurface"):
+        v.set_subsurface(1.0, sccatter_color="red")
+    with pytest.raises(ValueError, match="Unknown subsurface"):
+        v.add_mesh(mesh, subsurface={"subsurface": 1.0, "thicknes": 0.5})
+
+    v.set_subsurface(1.0)
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    with pytest.raises(ValueError, match="falloff must be >= 1"):
+        obj.material.falloff = 0.5
+    with pytest.raises(ValueError, match="thickness must be >= 0"):
+        obj.material.thickness = -0.1
+
+    v.close()
+
+
+def test_subsurface_controls_qt(mesh):
+    """The subsurface checkbox/slider in the (Qt) controls panel."""
+    # Note that the import can also fail if PySide6 *is* installed but clashes
+    # with another Qt binding in the same environment - skip either way
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    from octarine.controls import Controls
+    from octarine.shaders import SubsurfaceMeshMaterial
+
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.add_mesh(mesh, color="red")
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+
+    ctrl = Controls(v)
+    assert not ctrl.subsurface_checkbox.isChecked()
+    assert not ctrl.subsurface_slider.isEnabled()
+
+    ctrl.subsurface_checkbox.setChecked(True)
+    assert isinstance(obj.material, SubsurfaceMeshMaterial)
+    assert obj.material.subsurface > 0
+    assert ctrl.subsurface_slider.isEnabled()
+
+    slider = ctrl.subsurface_slider
+    slider.setValue(int(round(2.0 / slider._step)))
+    assert obj.material.subsurface == pytest.approx(2.0, abs=0.05)
+
+    ctrl.subsurface_checkbox.setChecked(False)
+    assert obj.material.subsurface == 0
+    assert not ctrl.subsurface_slider.isEnabled()
+
+    # A panel built while the effect is active must reflect that
+    v.set_subsurface(1.2)
+    assert Controls(v).subsurface_checkbox.isChecked()
+
+    v.close()
+
+
+@pytest.mark.parametrize("order", ["sss_first", "silhouette_first"])
+def test_subsurface_and_silhouette_compose(mesh, order):
+    """The two effects must not clobber each other, in either order."""
+    from octarine.shaders import SubsurfaceMeshMaterial
+
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.add_mesh(mesh, color="red")
+    (obj,) = [o for objs in v.objects.values() for o in objs]
+    mode_before = obj.material.alpha_mode
+
+    if order == "sss_first":
+        v.set_subsurface(1.5)
+        v.set_silhouette(2.0)
+    else:
+        v.set_silhouette(2.0)
+        v.set_subsurface(1.5)
+
+    assert isinstance(obj.material, SubsurfaceMeshMaterial)
+    assert obj.material.subsurface == pytest.approx(1.5)
+    assert obj.material.silhouette == pytest.approx(2.0)
+    assert obj.material.alpha_mode == "weighted_blend"
+    v.canvas.draw()
+
+    # Dropping the silhouette keeps the scattering and restores the alpha mode
+    v.set_silhouette(0)
+    assert obj.material.subsurface == pytest.approx(1.5)
     assert obj.material.silhouette == 0
     assert obj.material.alpha_mode == mode_before
     v.canvas.draw()
