@@ -15,10 +15,9 @@ whatever is behind them.
 
 import math
 import time
+import wgpu
 
 import numpy as np
-import pygfx as gfx
-import wgpu
 
 from pygfx.renderers.wgpu import EffectPass
 
