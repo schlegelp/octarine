@@ -8,6 +8,14 @@ on the Github repository.
 _Date: ongoing_
 
 #### Improvements
+- new [`Viewer.set_bg_gradient`][octarine.Viewer.set_bg_gradient] method: use a radial ("studio")
+  gradient as background - a soft pool of light behind the object fading into near-black towards
+  the edges of the frame. Comes with six presets (`graphite`, `cinematic`, `warm`, `olive`,
+  `burgundy`, `halo`), each of which can be tweaked via `colors`, `center`, `radius`, `falloff`
+  and `vignette` (see [Background](controls.md#background)). The presets are also available from
+  a new `Background` dropdown in the GUI controls (both the Qt panel and the Jupyter toolbar)
+- [`Viewer.set_bgcolor`][octarine.Viewer.set_bgcolor] now also takes two colors (for a
+  bottom-to-top gradient) or four colors (one per corner)
 - new [`Viewer.headlight`][octarine.Viewer.headlight] property (plus a `headlight` parameter for
   [`octarine.Viewer`][] and a checkbox in the GUI controls): link the light to the camera such
   that objects are always lit from the front; accepts a float or tuple to also set the light's

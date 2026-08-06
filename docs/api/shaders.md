@@ -34,6 +34,13 @@ typically employed via the respective [octarine.Viewer][] methods
        - "!^_"
        - "^__init__$"
 
+::: octarine.shaders.GradientBackgroundMaterial
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"
+
 ::: octarine.shaders.FlexPointsMaterial
     options:
       show_root_heading: true

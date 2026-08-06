@@ -117,6 +117,79 @@ def make_iterable(x, force_type=None):
     return np.asarray(x, dtype=force_type)
 
 
+def as_color_list(*colors):
+    """Turn one or more color specs into a list of `pygfx.Color`.
+
+    Both `as_color_list("r", "g")` and `as_color_list(["r", "g"])` give the
+    same result, i.e. colors can be passed as separate arguments or as a
+    single sequence. Note that a sequence of numbers - e.g. `(1, 0, 0)` - is
+    always treated as a single RGB(A) color.
+
+    Examples
+    --------
+    >>> import octarine as oc
+    >>> oc.utils.as_color_list("red")
+    [Color(1.0, 0.0, 0.0, 1.0)]
+    >>> oc.utils.as_color_list([(1, 0, 0), "blue"])
+    [Color(1.0, 0.0, 0.0, 1.0), Color(0.0, 0.0, 1.0, 1.0)]
+
+    """
+    if len(colors) == 1 and _is_color_sequence(colors[0]):
+        colors = tuple(colors[0])
+    return [gfx.Color(c) for c in colors]
+
+
+def background_options(viewer):
+    """Options for the background dropdown in the GUI controls.
+
+    Returns a list of labels, the corresponding values to pass to
+    `Viewer.set_bg_gradient()`, and the index of the viewer's current
+    background.
+
+    """
+    labels, values = ["Plain"], [None]
+
+    # The gradients require octarine's custom shaders (pygfx >= 0.16)
+    try:
+        from .shaders import BACKGROUND_PRESETS, GradientBackgroundMaterial
+    except ImportError:
+        return labels, values, 0
+
+    labels.extend(name.title() for name in BACKGROUND_PRESETS)
+    values.extend(BACKGROUND_PRESETS)
+
+    mat = viewer._background.material
+    if not isinstance(mat, GradientBackgroundMaterial):
+        return labels, values, 0
+    elif mat.preset in BACKGROUND_PRESETS:
+        return labels, values, values.index(mat.preset)
+
+    # A gradient set via the API with custom parameters: add an entry for it
+    # so that we can switch back to it
+    labels.append("Custom")
+    values.append(
+        dict(
+            colors=mat.colors,
+            center=mat.center,
+            radius=mat.radius,
+            falloff=mat.falloff,
+            vignette=mat.vignette,
+        )
+    )
+    return labels, values, len(values) - 1
+
+
+def _is_color_sequence(x):
+    """Check if `x` is a sequence of colors rather than a single color."""
+    if isinstance(x, (str, gfx.Color)) or not isinstance(x, (list, tuple, np.ndarray)):
+        return False
+    # A single color is a sequence of numbers - anything that isn't must be
+    # a color in its own right
+    return len(x) > 0 and all(
+        isinstance(c, (str, list, tuple, np.ndarray, gfx.Color)) for c in x
+    )
+
+
 def is_iterable(x) -> bool:
     """Test if input is iterable (but not str).
 

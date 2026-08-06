@@ -267,7 +267,9 @@ class Viewer:
         self._static_lights = [key_light, back_light]
         self.scene.add(key_light, back_light)
 
-        # Set up a default background
+        # Set up a default background (see also `set_bgcolor` and
+        # `set_bg_gradient`)
+        self._bgcolor = [gfx.Color("black")]
         self._background = gfx.Background(None, gfx.BackgroundMaterial((0, 0, 0)))
         self.scene.add(self._background)
 
@@ -2726,16 +2728,131 @@ class Viewer:
 
         self.set_colors(colormap)
 
-    def set_bgcolor(self, c):
+    def set_bgcolor(self, c, *more):
         """Set background color.
 
         Parameters
         ----------
-        c :     tuple | str
-                RGB(A) color to use for the background.
+        c :     tuple | str | list
+                RGB(A) color to use for the background. Pass two or four
+                colors - either as separate arguments or as a single list -
+                for a linear gradient: two colors run bottom to top, four
+                colors set the bottom left, bottom right, top left and top
+                right corner, respectively.
+
+        See Also
+        --------
+        [`octarine.Viewer.set_bg_gradient`][]
+                    Radial ("studio") gradient backgrounds, incl. presets.
+
+        Examples
+        --------
+        >>> import octarine as oc
+        >>> v = oc.Viewer()
+        >>> v.set_bgcolor("white")
+        >>> v.set_bgcolor("black", "#1B2838")  # vertical gradient
 
         """
-        self._background.material.set_colors(gfx.Color(c).rgba)
+        colors = utils.as_color_list(c, *more)
+        if len(colors) not in (1, 2, 4):
+            raise ValueError(f"Need 1, 2 or 4 colors, got {len(colors)}.")
+
+        # Remember for when a gradient background is switched off again
+        self._bgcolor = colors
+
+        # If a gradient background is currently in place we have to swap the
+        # material rather than just re-color it
+        if isinstance(self._background.material, gfx.BackgroundMaterial):
+            self._background.material.set_colors(*colors)
+        else:
+            self._background.material = gfx.BackgroundMaterial(*colors)
+
+    def set_bg_gradient(
+        self,
+        preset="graphite",
+        *,
+        colors=None,
+        center=None,
+        radius=None,
+        falloff=None,
+        vignette=None,
+    ):
+        """Set a radial ("studio") gradient as background.
+
+        This is the kind of backdrop product or hero renders are typically
+        shot against: a soft pool of light behind the object that fades into
+        near-black towards the edges of the frame. The gradient is fixed to
+        the canvas, i.e. it does not move with the camera.
+
+        Available presets:
+
+        | Preset      | Description                                            |
+        |-------------|--------------------------------------------------------|
+        | `graphite`  | Neutral studio grey; the all-rounder (default)         |
+        | `cinematic` | Desaturated blue-black; dark metals, tech, sci-fi      |
+        | `warm`      | Warm charcoal; flatters brass, bronze, wood, leather   |
+        | `olive`     | Muted olive; organic and natural materials             |
+        | `burgundy`  | Dusty burgundy; editorial/photographic                 |
+        | `halo`      | Near-black halo; dramatic, minimal                     |
+
+        Parameters
+        ----------
+        preset :    str | dict | None
+                    Name of a preset (see table above) or a dict of the
+                    parameters below. Use `None` to switch the gradient off
+                    again and go back to a plain background.
+        colors :    tuple, optional
+                    Three colors `(inner, mid, outer)` - the center of the
+                    glow, the lift half-way out, and the color the gradient
+                    settles into. Two colors `(inner, outer)` also work, in
+                    which case the mid stop is interpolated.
+        center :    (x, y) tuple, optional
+                    Center of the gradient in relative image coordinates:
+                    `(0, 0)` is the top left, `(1, 1)` the bottom right
+                    corner.
+        radius :    float, optional
+                    Distance at which the gradient reaches its outer color,
+                    as a fraction of the canvas width.
+        falloff :   float, optional
+                    Shape of the ramp: values > 1 keep the core bright and
+                    push the transition towards the rim (3 confines it to
+                    roughly the outer 30% of the radius), 1 is linear, and
+                    values < 1 drop off right at the center.
+        vignette :  float, optional
+                    Strength (0-1) of the additional darkening towards the
+                    corners of the frame. 0 disables it.
+
+        Examples
+        --------
+        >>> import octarine as oc
+        >>> v = oc.Viewer()
+        >>> v.set_bg_gradient("cinematic")
+
+        Presets are just starting points - every parameter can be overridden:
+
+        >>> v.set_bg_gradient("cinematic", radius=0.5, vignette=0.4)
+        >>> v.set_bg_gradient(colors=("#3A292C", "#070405"), falloff=2)
+
+        Back to a plain background:
+
+        >>> v.set_bg_gradient(None)
+
+        """
+        if preset is None:
+            self.set_bgcolor(self._bgcolor)
+            return
+
+        # This import registers the shader with pygfx
+        from .shaders import GradientBackgroundMaterial
+
+        self._background.material = GradientBackgroundMaterial.from_preset(
+            preset,
+            colors=colors,
+            center=center,
+            radius=radius,
+            falloff=falloff,
+            vignette=vignette,
+        )
 
     def _toggle_fps(self):
         """Switch FPS measurement on and off."""

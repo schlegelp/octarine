@@ -7,6 +7,8 @@ import pygfx as gfx
 from functools import wraps
 from pathlib import Path
 
+from . import utils
+
 try:
     from PySide6 import QtWidgets, QtCore, QtGui
 except ModuleNotFoundError:
@@ -362,6 +364,12 @@ class Controls(QtWidgets.QWidget):
         # Horizontal divider
         self.tab2_layout.addWidget(QHLine())
 
+        # Add dropdown to pick a background
+        self.build_background_dropdown()
+
+        # Horizontal divider
+        self.tab2_layout.addWidget(QHLine())
+
         # Add dropdown to determine render mode
         self.render_mode_label = QtWidgets.QLabel("Render trigger:")
         self.tab2_layout.addWidget(self.render_mode_label)
@@ -398,6 +406,48 @@ class Controls(QtWidgets.QWidget):
         # This would make it so the legend does not stretch when
         # we resize the window vertically
         self.tab2_layout.addStretch(1)
+
+    def build_background_dropdown(self):
+        """Build the dropdown for picking a background gradient."""
+        self.background_label = QtWidgets.QLabel("Background:")
+        self.tab2_layout.addWidget(self.background_label)
+
+        self.background_dropdown = QtWidgets.QComboBox()
+        self.background_dropdown.setToolTip(
+            'Use a radial ("studio") gradient as background instead of a plain color.'
+        )
+
+        labels, self._background_values, current = utils.background_options(self.viewer)
+        self.background_dropdown.addItems(labels)
+        self.background_dropdown.setItemData(
+            0,
+            "Plain, single-color background - see `Viewer.set_bgcolor()`.",
+            QtCore.Qt.ToolTipRole,
+        )
+        if len(labels) == 1:
+            # Only the plain background, i.e. the custom shaders are missing
+            self.background_dropdown.setEnabled(False)
+        else:
+            from .shaders import BACKGROUND_PRESETS
+
+            for i, value in enumerate(self._background_values):
+                if isinstance(value, str):  # i.e. a preset, not "Custom"
+                    self.background_dropdown.setItemData(
+                        i,
+                        BACKGROUND_PRESETS[value]["description"],
+                        QtCore.Qt.ToolTipRole,
+                    )
+
+        # Reflect the background that's currently in place. Note that this
+        # must happen before connecting the signal below.
+        self.background_dropdown.setCurrentIndex(current)
+
+        def set_background(index):
+            self.viewer.set_bg_gradient(self._background_values[index])
+            self.viewer._render_stale = True
+
+        self.background_dropdown.currentIndexChanged.connect(set_background)
+        self.tab2_layout.addWidget(self.background_dropdown)
 
     def build_screenshot_gui(self):
         """Build the GUI for the screenshot tab."""

@@ -63,12 +63,61 @@ Use [`octarine.Viewer.set_colors`][]`()` to set colors for given objects:
 >>> v.set_colors({'cube': 'r'})  # set colors for individual objects
 ```
 
+## Background
+
 Use [`octarine.Viewer.set_bgcolor`][]`()` to change the background color:
 
 ```python
 >>> v = oc.Viewer()
 >>> v.set_bgcolor("white")
 ```
+
+Pass two or four colors for a linear gradient - two run bottom to top, four
+set the bottom left, bottom right, top left and top right corner:
+
+```python
+>>> v.set_bgcolor("black", "#1B2838")
+```
+
+For something more photographic there is
+[`octarine.Viewer.set_bg_gradient`][]`()`: a radial "studio" gradient, i.e. a
+soft pool of light behind the object that fades into near-black towards the
+edges of the frame. `Octarine` ships a handful of presets:
+
+```python
+>>> v.set_bg_gradient("graphite")  # the default
+```
+
+| Preset      | Description                                            |
+|-------------|--------------------------------------------------------|
+| `graphite`  | Neutral studio grey; the all-rounder (default)         |
+| `cinematic` | Desaturated blue-black; dark metals, tech, sci-fi      |
+| `warm`      | Warm charcoal; flatters brass, bronze, wood, leather   |
+| `olive`     | Muted olive; organic and natural materials             |
+| `burgundy`  | Dusty burgundy; editorial/photographic                 |
+| `halo`      | Near-black halo; dramatic, minimal                     |
+
+![background presets](_static/background_presets.png)
+
+The presets are just starting points - each of the parameters can be
+overridden (see [`octarine.Viewer.set_bg_gradient`][] for details):
+
+```python
+>>> # Move the light pool to the right and tighten it
+>>> v.set_bg_gradient("cinematic", center=(0.65, 0.4), radius=0.5)
+
+>>> # Or roll your own: (inner, mid, outer) colors
+>>> v.set_bg_gradient(colors=("#3A292C", "#180F12", "#070405"), vignette=0.4)
+```
+
+Note that the gradient is fixed to the canvas: it does not move with the
+camera, and `radius` is relative to the canvas *width* so the shape of the
+pool does not change when you resize the window. Use `set_bg_gradient(None)`
+(or `set_bgcolor("black")`) to go back to a plain background.
+
+The presets are also available from the `Background` dropdown in the
+[GUI controls](#gui-controls) - a gradient you set up via the API shows up
+there as "Custom" so you can switch away from it and back again.
 
 ## Hotkeys
 While the viewer or widget is active you can use a set of hotkeys to control the viewer:

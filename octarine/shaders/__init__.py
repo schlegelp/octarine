@@ -23,6 +23,10 @@ _check_pygfx_version()
 from .packing import pack_sparse_voxels, PackedBricks, AtlasCapacityError  # noqa: E402
 from .sparse_volume import SparseVolume, SparseVolumeMaterial  # noqa: E402
 from .silhouette import SilhouetteMeshMaterial  # noqa: E402
+from .background import (  # noqa: E402
+    GradientBackgroundMaterial,
+    BACKGROUND_PRESETS,
+)
 from .dof import DepthOfFieldPass  # noqa: E402
 from .depth import NormalizedDepthPass  # noqa: E402
 from .points import FlexPointsMaterial  # noqa: E402
@@ -35,6 +39,8 @@ __all__ = [
     "SparseVolume",
     "SparseVolumeMaterial",
     "SilhouetteMeshMaterial",
+    "GradientBackgroundMaterial",
+    "BACKGROUND_PRESETS",
     "DepthOfFieldPass",
     "NormalizedDepthPass",
     "FlexPointsMaterial",

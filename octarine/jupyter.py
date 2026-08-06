@@ -1,5 +1,7 @@
 import pygfx as gfx
 
+from . import utils
+
 from ipywidgets import VBox
 from IPython.display import display
 
@@ -193,6 +195,17 @@ class JupyterToolbar(VBox):
             indent=False,
             layout=Layout(width="auto"),
         )
+        # Dropdown for the background; the widget's values are indices into
+        # `self._background_values` (see `set_background`)
+        labels, self._background_values, current = utils.background_options(viewer)
+        self.background_dropdown = Dropdown(
+            options=[(label, i) for i, label in enumerate(labels)],
+            value=current,
+            description="",
+            disabled=len(labels) == 1,  # i.e. no custom shaders available
+            layout=Layout(width="auto"),
+            tooltip="Background gradient",
+        )
 
         # self._panzoom_controller_button.observe(self.panzoom_handler, "value")
         self.center_camera_button.on_click(self.center_camera)
@@ -206,6 +219,7 @@ class JupyterToolbar(VBox):
         self.ambient_light_slider.observe(self.set_ambient_light, names="value")
         self.headlight_toggle.observe(self.toggle_headlight, names="value")
         self.bounds_toggle.observe(self.toggle_bounds, names="value")
+        self.background_dropdown.observe(self.set_background, names="value")
 
         # Split into object and scene widgets
         object_widgets = [
@@ -222,6 +236,7 @@ class JupyterToolbar(VBox):
             self.ambient_light_slider,
             self.headlight_toggle,
             self.bounds_toggle,
+            self.background_dropdown,
         ]
 
         # Combine object and scene widgets in tabs
@@ -318,3 +333,7 @@ class JupyterToolbar(VBox):
     def toggle_bounds(self, change):
         """Toggle visibility of scene bounds."""
         self.viewer.show_bounds = change["new"]
+
+    def set_background(self, change):
+        """Set the background to a plain color or a gradient preset."""
+        self.viewer.set_bg_gradient(self._background_values[change["new"]])
