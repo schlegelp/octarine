@@ -256,6 +256,16 @@ def is_volume(x):
     return False
 
 
+# Attributes that identify a tube profile (e.g. `sparsecubes.TubeProfile`).
+# Deliberately duck-typed: octarine must not depend on sparse-cubes.
+_TUBE_PROFILE_ATTRS = ("a0", "mag", "phase", "frame", "edges", "to_gpu_buffer")
+
+
+def is_tube_profile(x):
+    """Check if object could be a tube profile (i.e. per-node radial harmonics)."""
+    return all(hasattr(x, a) for a in _TUBE_PROFILE_ATTRS)
+
+
 class VoxelCloud:
     """Container for sparse volumetric data.
 

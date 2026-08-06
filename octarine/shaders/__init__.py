@@ -29,6 +29,7 @@ from .rle_packing import (  # noqa: E402
 )
 from .sparse_volume import SparseVolume, SparseVolumeMaterial  # noqa: E402
 from .bitmask_volume import BitmaskVolume, BitmaskVolumeMaterial  # noqa: E402
+from .tubes import TubeVisual, TubeMaterial, decimate_edges  # noqa: E402
 from .silhouette import SilhouetteMeshMaterial  # noqa: E402
 from .sss import SubsurfaceMeshMaterial, SUBSURFACE_PROPERTIES  # noqa: E402
 from .background import (  # noqa: E402
@@ -52,6 +53,9 @@ __all__ = [
     "SparseVolumeMaterial",
     "BitmaskVolume",
     "BitmaskVolumeMaterial",
+    "TubeVisual",
+    "TubeMaterial",
+    "decimate_edges",
     "SilhouetteMeshMaterial",
     "SubsurfaceMeshMaterial",
     "SUBSURFACE_PROPERTIES",

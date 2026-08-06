@@ -781,6 +781,172 @@ def _bitmaskvolume2gfx(
     return vis
 
 
+def tubes2gfx(
+    profile,
+    color=None,
+    alpha=None,
+    edges=None,
+    axial_lod=0,
+    n_theta=32,
+    k=None,
+    k_normal=1,
+    offset=(0, 0, 0),
+):
+    """Convert per-node tube coefficients to a pygfx visual.
+
+    No mesh is ever built: the surface is generated in the vertex shader
+    straight from the coefficients, and its level-of-detail knobs are
+    uniforms, so changing them re-draws without touching the (comparatively
+    large) coefficient buffer.
+
+    Parameters
+    ----------
+    profile :   TubeProfile | (M, 8 + 2K) array
+                Either an object with a `to_gpu_buffer()` method and an
+                `edges` attribute (e.g. `sparsecubes.TubeProfile`), or the
+                raw coefficient array in its Cartesian form: position (3),
+                frame quaternion xyzw (4), mean radius a0 (1), then K cosine
+                and K sine coefficients. Positions are expected in physical
+                units (i.e. with any voxel spacing already applied).
+    color :     str | tuple | (M, 3) array | (M, 4) array, optional
+                Color to use for plotting. An array with one color per node
+                is rendered as per-node colors (useful for debug colormaps
+                such as a profile's `non_star` severity).
+    alpha :     float, optional
+                Opacity value [0-1]. If provided, will override the alpha
+                channel of the color.
+    edges :     (E, 2) array, optional
+                Index pairs into the nodes. Required if `profile` is a raw
+                coefficient array; otherwise taken from `profile.edges`.
+                A skeleton is a tree, so geometry is built per edge -
+                consecutive node indices are not assumed to be connected.
+    axial_lod : int
+                Axial level of detail: keep every 2**axial_lod-th node along
+                each unbranched run. 0 is full resolution, 1 halves, 2
+                quarters, and so on. Branch points and tips are always kept,
+                so no arm can go missing. This is the main quality lever: a
+                swept surface folds through itself wherever the radius exceeds
+                the centreline's local radius of curvature - which rasterised
+                skeletons routinely violate, giving a pile of intersecting
+                discs - and a coarser axis curves more gently, so the rings
+                stop intersecting.
+    n_theta :   int
+                Number of angular samples around the tube. This is the
+                angular level of detail; 32 is smooth, 8 is still a
+                reasonable silhouette at a quarter of the vertices.
+    k :         int, optional
+                Number of harmonics to evaluate for the surface position.
+                Defaults to all that are present in the buffer; 0 renders
+                circular tubes of radius a0.
+    k_normal :  int
+                Number of harmonics to evaluate for the *normal*, clamped to
+                `k`. Deliberately much lower: dr/dtheta weights harmonic k by
+                k, so the harmonics that still sharpen the silhouette already
+                make the shading look like sandpaper - and dark wherever the
+                normal tilts past the view direction. 0 is the smooth-tube
+                floor.
+    offset :    tuple
+                (x, y, z) world offset for the tubes.
+
+    Returns
+    -------
+    vis :       gfx.WorldObject
+                Pygfx visual representing the tubes.
+
+    """
+    # Deliberately a lazy import: this registers the custom shaders with pygfx
+    # and depends on pygfx's semi-public shader API
+    from .shaders import TubeVisual, TubeMaterial, decimate_edges
+
+    axial_lod = int(axial_lod)
+    if axial_lod < 0:
+        raise ValueError(f"axial_lod must be >= 0, got {axial_lod}")
+
+    if utils.is_tube_profile(profile):
+        coefs, header = profile.to_gpu_buffer()
+        # `form="polar"` puts m_k/phi_k in the same slots and is indistinguishable
+        # by shape, so check rather than trust the default
+        form = header.get("form", "cartesian") if isinstance(header, dict) else None
+        if form != "cartesian":
+            raise ValueError(
+                f"Expected Cartesian tube coefficients, got form={form!r}. The "
+                "shader evaluates a_k/b_k, not magnitude/phase."
+            )
+        if edges is None:
+            edges = profile.edges
+    else:
+        coefs = np.asarray(profile)
+        if edges is None:
+            raise ValueError(
+                "`edges` is required when passing raw tube coefficients: a "
+                "skeleton is a tree, so the surface cannot be swept between "
+                "consecutive node indices."
+            )
+
+    coefs = np.ascontiguousarray(coefs, dtype=np.float32)
+    if coefs.ndim != 2 or coefs.shape[1] < 8:
+        raise ValueError(f"Expected a (M, 8 + 2K) coefficient array, got {coefs.shape}")
+    n_nodes = len(coefs)
+    k_buf = (coefs.shape[1] - 8) // 2
+
+    # Axial LOD thins the edge list, never the coefficients: the nodes stay
+    # uploaded exactly as they are, so switching level is a small index swap
+    edges = decimate_edges(edges, n_nodes, 2**axial_lod)
+
+    # Parse color: an array with one entry per node becomes per-node colors
+    colors = None
+    mat_kwargs = {}
+    if isinstance(color, np.ndarray) and color.ndim == 2:
+        if len(color) != n_nodes:
+            raise ValueError(
+                f"Expected one color per node ({n_nodes}), got {len(color)}."
+            )
+        colors = color.astype(np.float32, copy=True)
+        if colors.shape[1] == 3:
+            colors = np.hstack((colors, np.ones((len(colors), 1), dtype=np.float32)))
+        elif colors.shape[1] != 4:
+            raise ValueError("Expected colors to have 3 or 4 channels.")
+        if alpha is not None:
+            colors[:, -1] = alpha
+        mat_kwargs["color_mode"] = "vertex"
+        is_transparent = bool(np.any(colors[:, -1] < 1))
+    else:
+        if color is None:
+            color = "w"
+        if alpha is not None:
+            c = gfx.Color(color).rgba
+            color = (c[0], c[1], c[2], alpha)
+        mat_kwargs["color"] = color
+        is_transparent = bool(gfx.Color(color).a < 1)
+
+    if is_transparent:
+        # The default blend mode is "auto" which will show transparency but is
+        # a bit ugly. Note that transparent tubes do expose the frame twist at
+        # branch points, which opaque rendering hides (see the shader's docs).
+        mat_kwargs["alpha_mode"] = "add"
+
+    # In theory we should be able to change pick_write on-the-fly since
+    # pygfx 0.3.0. But that doesn't seem to be the case.
+    mat_kwargs["pick_write"] = True
+    mat_kwargs["k_max"] = k_buf if k is None else k
+    mat_kwargs["k_normal"] = k_normal
+
+    vis = TubeVisual(
+        coefs,
+        edges,
+        TubeMaterial(n_theta=n_theta, **mat_kwargs),
+        colors=colors,
+    )
+
+    (vis.local.x, vis.local.y, vis.local.z) = offset
+
+    # Add custom attributes
+    vis._object_type = "tubes"
+    vis._object_id = uuid.uuid4()
+
+    return vis
+
+
 def to_colormap(x, hide_zero):
     """Convert `x` to a gfx.TextureMap that can be used for Volumes."""
     # If x is None, use the default colormap

@@ -49,6 +49,24 @@ typically employed via the respective [octarine.Viewer][] methods
     options:
       show_root_heading: true
 
+::: octarine.shaders.TubeVisual
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"
+
+::: octarine.shaders.TubeMaterial
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"
+
+::: octarine.shaders.decimate_edges
+    options:
+      show_root_heading: true
+
 ::: octarine.shaders.SilhouetteMeshMaterial
     options:
       show_root_heading: true

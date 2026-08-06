@@ -21,7 +21,7 @@ from pygfx.renderers.wgpu.engine.bloom import PhysicalBasedBloomPass
 
 from rendercanvas.offscreen import OffscreenRenderCanvas
 
-from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx, sparsevolume2gfx
+from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx, sparsevolume2gfx, tubes2gfx
 from .conversion import get_converter
 from . import utils, config
 
@@ -2225,6 +2225,106 @@ class Viewer:
                 interpolation=interpolation,
                 hide_zero=hide_zero,
                 method=method,
+            )
+        )
+        for vis in visuals:
+            vis._object_id = name if name else uuid.uuid4()
+            vis._object_group = group
+            self._add_to_scene(vis, center)
+
+    def add_tubes(
+        self,
+        profile,
+        edges=None,
+        name=None,
+        group=None,
+        color=None,
+        alpha=None,
+        axial_lod=0,
+        n_theta=32,
+        k=None,
+        k_normal=1,
+        offset=(0, 0, 0),
+        center=True,
+    ):
+        """Add parametric tubes to canvas.
+
+        Tubes are skeletons with a per-node radial profile
+
+            r(theta) = a0 + sum_k [a_k cos(k*theta) + b_k sin(k*theta)]
+
+        rendered with a custom vertex-pulling shader: the surface is generated
+        in the vertex shader straight from the coefficients, so no mesh is
+        ever built. `n_theta` and `k` are uniforms, which makes angular level
+        of detail a re-draw rather than a re-upload.
+
+        Parameters
+        ----------
+        profile :   TubeProfile | (M, 8 + 2K) array
+                    Either an object with a `to_gpu_buffer()` method and an
+                    `edges` attribute (e.g. `sparsecubes.TubeProfile`), or the
+                    raw coefficient array in its Cartesian form: position (3),
+                    frame quaternion xyzw (4), mean radius a0 (1), then K
+                    cosine and K sine coefficients. Positions are expected in
+                    physical units.
+        edges :     (E, 2) array, optional
+                    Index pairs into the nodes. Required if `profile` is a raw
+                    coefficient array; otherwise taken from `profile.edges`.
+        name :      str, optional
+                    Name for the visual.
+        group :     str, optional
+                    Group for the visual.
+        color :     str | tuple | (M, 3) array | (M, 4) array, optional
+                    Color for the tubes. An array with one color per node is
+                    rendered as per-node colors.
+        alpha :     float, optional
+                    Opacity value [0-1]; overrides the color's alpha channel.
+        axial_lod : int
+                    Axial level of detail: keep every 2**axial_lod-th node
+                    along each unbranched run. 0 is full resolution, 1 halves,
+                    2 quarters, and so on. Branch points and tips are always
+                    kept, so no arm can go missing. This is the main quality
+                    lever: a swept surface folds through itself wherever the
+                    radius exceeds the centreline's local radius of curvature -
+                    which rasterised skeletons routinely violate, giving a pile
+                    of intersecting discs - so raise it until that clears.
+        n_theta :   int
+                    Number of angular samples around the tube. 32 is smooth,
+                    8 still gives a reasonable silhouette at a quarter of the
+                    vertices.
+        k :         int, optional
+                    Number of harmonics to evaluate for the surface position.
+                    Defaults to all that are present in the buffer; 0 renders
+                    circular tubes of radius a0.
+        k_normal :  int
+                    Number of harmonics to evaluate for the *normal*, clamped
+                    to `k`. Deliberately much lower: dr/dtheta weights
+                    harmonic k by k, so the harmonics that still sharpen the
+                    silhouette already make the shading look like sandpaper -
+                    and dark wherever the normal tilts past the view
+                    direction. 0 is the smooth-tube floor.
+        offset :    tuple
+                    (x, y, z) world offset for the tubes.
+        center :    bool, optional
+                    If True, re-center camera to all objects on canvas.
+
+        """
+        if name is None:
+            name = self._next_label("Tubes")
+        elif not isinstance(name, str):
+            name = str(name)
+
+        visuals = utils.make_iterable(
+            tubes2gfx(
+                profile,
+                color=color,
+                alpha=alpha,
+                edges=edges,
+                axial_lod=axial_lod,
+                n_theta=n_theta,
+                k=k,
+                k_normal=k_normal,
+                offset=offset,
             )
         )
         for vis in visuals:

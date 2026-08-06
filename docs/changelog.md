@@ -22,6 +22,11 @@ _Date: ongoing_
   a new `Background` dropdown in the GUI controls (both the Qt panel and the Jupyter toolbar)
 - [`Viewer.set_bgcolor`][octarine.Viewer.set_bgcolor] now also takes two colors (for a
   bottom-to-top gradient) or four colors (one per corner)
+- new [`Viewer.add_tubes`][octarine.Viewer.add_tubes] method: render skeletons with a per-node
+  radial profile as tubes, straight from the coefficients with no mesh in between. The surface is
+  generated in the vertex shader, so angular level of detail via `n_theta`, `k` and `k_normal` is
+  a re-draw rather than a re-upload; `axial_lod` thins the skeleton without touching its topology
+  (see [Tubes](objects.md#tubes))
 - new [`Viewer.headlight`][octarine.Viewer.headlight] property (plus a `headlight` parameter for
   [`octarine.Viewer`][] and a checkbox in the GUI controls): link the light to the camera such
   that objects are always lit from the front; accepts a float or tuple to also set the light's

@@ -1,6 +1,6 @@
 # Adding Objects to the Viewer
 
-Off the bat `Octarine` supports 5 types of objects, all of
+Off the bat `Octarine` supports 6 types of objects, all of
 which have dedicated `Viewer` methods:
 
 |   | Object Type                       | Viewer method                          |
@@ -10,6 +10,7 @@ which have dedicated `Viewer` methods:
 | 3.| [Lines](#lines)                   | [octarine.Viewer.add_lines][]          |
 | 4.| [Image Volumes](#image-volumes)   | [octarine.Viewer.add_volume][]         |
 | 5.| [Sparse Volumes](#sparse-volumes) | [octarine.Viewer.add_sparse_volume][]  |
+| 6.| [Tubes](#tubes)                   | [octarine.Viewer.add_tubes][]          |
 
 As a general entry point you can use the [octarine.Viewer.add][]`()` method
 which will pass an object to the respective specialized function:
@@ -330,6 +331,114 @@ points):
 Note that sparse volumes require `pygfx>=0.16`.
 
 See [octarine.Viewer.add_sparse_volume][]`()` for details!
+
+## Tubes
+
+Skeletons with a varying, non-circular cross-section - neuronal arbors,
+vessels, streamlines - can be drawn as tubes without ever building a mesh.
+[octarine.Viewer.add_tubes][]`()` takes a per-node radial profile
+
+$$r(\theta) = a_0 + \sum_k \left[ a_k \cos(k\theta) + b_k \sin(k\theta) \right]$$
+
+and generates the whole surface in the vertex shader. Each node is 8 + 2K
+floats - position, a frame quaternion, the mean radius `a0`, then K cosine
+and K sine coefficients - plus an `(E, 2)` edge list. At K = 4 that is 64
+bytes a node, whatever resolution you draw it at:
+
+```python
+>>> import numpy as np
+>>> import octarine as oc
+
+>>> # A straight tube along +x with an elliptic cross-section
+>>> n, K = 50, 2
+>>> coefs = np.zeros((n, 8 + 2 * K), dtype=np.float32)
+>>> coefs[:, 0] = np.linspace(0, 100, n)      # positions
+>>> coefs[:, 3:7] = (0.5, 0.5, 0.5, 0.5)      # frame (u, v, t) = (+y, +z, +x)
+>>> coefs[:, 7] = 5                           # mean radius a0
+>>> coefs[:, 9] = 2                           # a_2: make it elliptic
+>>> edges = np.column_stack([np.arange(n - 1), np.arange(1, n)])
+
+>>> v = oc.Viewer()
+>>> v.add_tubes(coefs, edges=edges)
+```
+
+Useful parameters:
+
+- `axial_lod`: axial level of detail. `0` is full resolution, `1` keeps every
+  2nd node, `2` every 4th, and so on. Branch points and tips are always kept,
+  so no arm can go missing - see [below](#self-intersection-and-axial_lod)
+- `n_theta`: number of angular samples around the tube. This is the angular
+  level of detail - 32 is smooth, 8 still gives a reasonable silhouette at a
+  quarter of the vertices
+- `k`: number of harmonics to evaluate for the surface position; `0` renders
+  circular tubes of radius `a0`
+- `k_normal`: number of harmonics to evaluate for the *normal* (default `1`,
+  clamped to `k`) - see the note below
+- `color`: a single color, or an `(M, 3)`/`(M, 4)` array for per-node colors
+- `offset`: world offset (node positions are expected in physical units, so
+  there is no `spacing`)
+
+### Self-intersection and `axial_lod`
+
+The tube *surface* is generated in the vertex shader by sweeping the
+cross-section along the skeleton. It is cheap - the cost is per vertex, and a
+coarse `n_theta` makes it cheaper still - and the silhouette is exactly the
+profile you gave it.
+
+Its one failure mode is inherent to sweeping: **a swept surface folds through
+itself wherever the cross-section radius exceeds the centreline's local radius
+of curvature.** Skeletons traced from voxel data routinely violate that, since
+node spacing is typically ~1 voxel while radii are several, so a little
+positional jitter tilts consecutive rings into one another. The result looks
+like a pile of intersecting discs - the classic "why does my tube look like a
+crappy mesh".
+
+The fix is to raise `axial_lod` until the axis is smooth relative to the radius
+- as a rule of thumb, node spacing of about one radius:
+
+```python
+>>> v.add_tubes(coefs, edges=edges, axial_lod=2)
+```
+
+This thins the edge list along unbranched runs only; the coefficient buffer is
+untouched, so switching level is a small index swap rather than a re-upload.
+
+!!! note "Why `k_normal` defaults lower than `k`"
+
+    The surface normal comes from `dr/dθ`, which weights harmonic *k* by *k*.
+    Once the harmonic magnitudes flatten out at the resolution floor of the
+    data - which they typically do, with no clear knee - every extra harmonic
+    contributes more slope than shape: the silhouette keeps improving while
+    the shading gets noisier, until the normal tilts far enough past the view
+    direction to leave dark patches. Truncating the normal at `k_normal=1`
+    (or `0` for a perfectly smooth tube) keeps the full silhouette and drops
+    the sandpaper. Raise it only if you want the roughness.
+
+Both `n_theta` and `k` are uniforms, so changing them re-draws at a different
+resolution without touching the coefficient buffer:
+
+```python
+>>> vis = v.objects["Tubes"][0]
+>>> vis.material.n_theta = 8     # no upload, no reallocation
+>>> vis.material.k_normal = 0    # ... and so is smoothing the shading
+```
+
+Axial detail is not free in quite the same way: dropping nodes means a
+different edge list. That is still only a small index buffer - pass a
+decimated `edges` array while the coefficients stay as they are.
+
+`add_tubes` also accepts anything that quacks like a `sparsecubes.TubeProfile`
+(i.e. has `a0`, `mag`, `phase`, `frame`, `edges` and `to_gpu_buffer()`), in
+which case the coefficients and edges are pulled off the object - and
+`Viewer.add` routes such objects here automatically:
+
+```python
+>>> v.add(profile)
+```
+
+Note that tubes require `pygfx>=0.16`.
+
+See [octarine.Viewer.add_tubes][]`()` for details!
 
 ## Custom Objects
 
