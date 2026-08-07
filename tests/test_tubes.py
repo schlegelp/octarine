@@ -506,7 +506,8 @@ def test_axial_lod():
         assert arms_at(mask, 0.3) == 1
         assert arms_at(mask, 0.7) == 2
 
-    # The coefficients are never touched - only the edge list is
+    # The node buffer is never thinned - only the edge list is. (The frames in
+    # it are realigned against the decimated chords, but no node is dropped.)
     v = oc.Viewer(offscreen=True, size=(128, 128))
     v.add_tubes(dense, edges=dense_edges, axial_lod=2)
     (vis,) = [o for objs in v.objects.values() for o in objs]
@@ -518,6 +519,160 @@ def test_lod_validation():
     coefs, edges = straight_tube()
     with pytest.raises(ValueError, match="axial_lod"):
         render(coefs, edges, axial_lod=-1)
+
+
+# --------------------------------------------------------------------------
+# Frame realignment
+# --------------------------------------------------------------------------
+
+
+def ring_points(coefs, n_theta=64):
+    """CPU mirror of the swept surface, sampled per node."""
+    from octarine.shaders.tubes import _frame_uvt
+
+    k = (coefs.shape[1] - 8) // 2
+    u, v, _ = _frame_uvt(coefs[:, 3:7].astype(np.float64))
+    theta = np.linspace(0, 2 * np.pi, n_theta, endpoint=False)
+    kk = np.arange(1, k + 1)[None, :, None]
+    a = coefs[:, 8 : 8 + k].astype(np.float64)
+    b = coefs[:, 8 + k : 8 + 2 * k].astype(np.float64)
+    r = coefs[:, 7][:, None].astype(np.float64) + (
+        a[:, :, None] * np.cos(kk * theta) + b[:, :, None] * np.sin(kk * theta)
+    ).sum(1)
+    e_r = (
+        np.cos(theta)[None, :, None] * u[:, None, :]
+        + np.sin(theta)[None, :, None] * v[:, None, :]
+    )
+    return (coefs[:, :3][:, None, :].astype(np.float64) + r[:, :, None] * e_r).reshape(
+        -1, 3
+    )
+
+
+def twist_per_edge(coefs, edges):
+    """Angle between one node's theta = 0 carried onto the next, and the next's.
+
+    Zero everywhere is a rotation-minimizing frame - i.e. the quad between the
+    two rings connects corresponding points rather than twisting between them.
+    """
+    from octarine.shaders.tubes import _frame_uvt, _transport
+
+    u, v, t = _frame_uvt(coefs[:, 3:7].astype(np.float64))
+    i, j = np.asarray(edges)[:, 0], np.asarray(edges)[:, 1]
+    p = _transport(u[i], t[i], t[j])
+    return np.abs(np.degrees(np.arctan2((p * v[j]).sum(1), (p * u[j]).sum(1))))
+
+
+def twisted_y(k=2, radius=1.0, seed=0):
+    """A Y whose stored frames are rolled by a random angle at every node."""
+    from octarine.shaders.tubes import _frame_uvt, _quat_from_uvt
+
+    coefs, edges = y_skeleton(k=k, radius=radius)
+    u, v, t = _frame_uvt(coefs[:, 3:7].astype(np.float64))
+    roll = np.random.default_rng(seed).uniform(-np.pi, np.pi, len(coefs))
+    c, s = np.cos(roll)[:, None], np.sin(roll)[:, None]
+    u2 = u * c + v * s
+    coefs[:, 3:7] = _quat_from_uvt(u2, np.cross(t, u2), t)
+    # An off-centre, non-circular cross-section, so a mis-rotated frame shows
+    coefs[:, 8] = 0.4 * radius
+    coefs[:, 8 + k] = 0.25 * radius
+    return coefs, edges
+
+
+def test_split_runs():
+    """Every edge belongs to exactly one run, ends have degree != 2."""
+    from octarine.shaders import split_runs
+
+    # Node 2 is the branch point, 0/4/6 the tips: three runs of three nodes
+    edges = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [5, 6]])
+    runs = split_runs(edges, 7)
+    assert sorted(len(r) for r in runs) == [3, 3, 3]
+    seen = sorted(tuple(sorted(p)) for run in runs for p in zip(run[:-1], run[1:]))
+    assert seen == sorted(tuple(sorted(e)) for e in edges), "edges not covered once"
+
+    # A closed loop has no degree != 2 node; it comes back broken open
+    loop = np.column_stack([np.arange(6), (np.arange(6) + 1) % 6])
+    (run,) = split_runs(loop, 6)
+    assert run[0] == run[-1] and len(run) == 7
+
+    assert split_runs(np.zeros((0, 2), int), 0) == []
+
+
+def test_rotate_profile_matches_reevaluation():
+    """Rotating the coefficients by psi must equal evaluating at theta + psi."""
+    from octarine.shaders import rotate_profile
+
+    rng = np.random.default_rng(1)
+    k = 5
+    coefs = np.zeros((7, 8 + 2 * k), np.float32)
+    coefs[:, 3:7] = QUAT_X
+    coefs[:, 7] = 3.0
+    coefs[:, 8:] = rng.uniform(-0.4, 0.4, (7, 2 * k))
+    psi = rng.uniform(-np.pi, np.pi, 7)
+
+    theta = np.linspace(0, 2 * np.pi, 37, endpoint=False)
+    kk = np.arange(1, k + 1)[None, :, None]
+
+    def radius(c, th):
+        a = c[:, 8 : 8 + k].astype(np.float64)[:, :, None]
+        b = c[:, 8 + k :].astype(np.float64)[:, :, None]
+        return c[:, 7][:, None].astype(np.float64) + (
+            a * np.cos(kk * th) + b * np.sin(kk * th)
+        ).sum(1)
+
+    expect = radius(coefs, (theta[None, None, :] + psi[:, None, None]))
+    got = radius(rotate_profile(coefs.copy(), psi), theta[None, None, :])
+    assert np.abs(got - expect).max() < 1e-5
+
+
+def test_align_frames_phase_only_preserves_the_surface():
+    """Realigning the phase rotates the parametrisation, not the geometry."""
+    from octarine.shaders import align_frames
+
+    coefs, edges = twisted_y(radius=2.0)
+    before, after = (
+        ring_points(coefs, 2048),
+        ring_points(align_frames(coefs, edges, retangent=False), 64),
+    )
+    # Compared as point sets: sample i of one is not sample i of the other
+    d = np.linalg.norm(after[:, None, :] - before[None, :, :], axis=-1).min(axis=1)
+    assert d.max() < 0.02, "phase realignment moved the surface"
+
+
+def test_align_frames_removes_twist():
+    """One rotation-minimizing chain over the whole tree, branch points included."""
+    from octarine.shaders import align_frames
+
+    coefs, edges = twisted_y()
+    assert twist_per_edge(coefs, edges).max() > 45, "fixture is not twisted"
+    # Floor is the float32 quaternion the frame round-trips through
+    assert twist_per_edge(align_frames(coefs, edges), edges).max() < 1e-3
+
+
+def test_align_frames_retangents_onto_the_chords():
+    """With `retangent`, a node's tangent follows the chords it is swept along."""
+    from octarine.shaders import align_frames
+    from octarine.shaders.tubes import _frame_uvt
+
+    # A right-angle bend whose stored tangents all point along +x, i.e. as
+    # wrong as they can be for the second arm
+    pts = np.array([[0, 0, 0], [4, 0, 0], [4, 4, 0], [4, 8, 0]], np.float32)
+    coefs = np.zeros((4, 8 + 2 * 2), np.float32)
+    coefs[:, :3] = pts
+    coefs[:, 3:7] = QUAT_X  # t = +x everywhere
+    coefs[:, 7] = 1.0
+    edges = np.array([[0, 1], [1, 2], [2, 3]], np.int32)
+
+    _, _, t = _frame_uvt(align_frames(coefs, edges)[:, 3:7].astype(np.float64))
+    # The corner bisects +x and +y; the far arm is pure +y
+    assert np.allclose(t[0], [1, 0, 0], atol=1e-6)
+    assert np.allclose(t[1], np.array([1, 1, 0]) / np.sqrt(2), atol=1e-6)
+    assert np.allclose(t[3], [0, 1, 0], atol=1e-6)
+
+    # ... and the frame stays orthonormal and right-handed throughout
+    u, v, t = _frame_uvt(align_frames(coefs, edges)[:, 3:7].astype(np.float64))
+    assert np.abs((u * v).sum(1)).max() < 1e-6
+    assert np.abs((u * t).sum(1)).max() < 1e-6
+    assert np.allclose(np.cross(u, v), t, atol=1e-6)
 
 
 def test_material_validation():

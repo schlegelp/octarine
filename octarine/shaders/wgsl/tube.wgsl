@@ -18,6 +18,14 @@
 // uniform write plus a smaller draw call - no upload, no reallocation, and the
 // coefficient buffer never moves.
 //
+// Each quad is a straight interpolation between two rings, which makes the
+// surface only C0 across a ring. That is a real defect - a median 20 degrees of
+// normal discontinuity at every ring on rasterized arbor data - but replacing
+// the lerp with a C2 cubic B-spline was tried and did not visibly help, along
+// with two other axial fixes. Read "What has been tried" in tubes.py before
+// reaching for a fourth one; the evidence says the remaining jaggedness is
+// angular, not axial.
+//
 // The normal is truncated harder than the position, at `k_normal` rather than
 // `k_max`, and that is deliberate. dr/dtheta weights harmonic k by k, so once
 // the harmonic magnitudes flatten out at the rasterization floor - which they
@@ -203,7 +211,8 @@ fn vs_main(in: VertexInput) -> Varyings {
     // boutons and varicosities are exactly that, a local bump in a0 along the
     // axis rather than an angular phenomenon. It is one-sided where the CPU
     // mirror's is centred, so the two quads meeting at a ring get slightly
-    // different normals; that faceting is expected.
+    // different normals; that faceting is expected - and it is not the reason
+    // arbors look jagged (see "What has been tried" in tubes.py).
     //
     // Note it is oriented along +t rather than away from this corner's own
     // end, which is what makes the normal outward *by construction*:

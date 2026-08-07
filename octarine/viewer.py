@@ -2533,11 +2533,11 @@ class Viewer:
                     Axial level of detail: keep every 2**axial_lod-th node
                     along each unbranched run. 0 is full resolution, 1 halves,
                     2 quarters, and so on. Branch points and tips are always
-                    kept, so no arm can go missing. This is the main quality
-                    lever: a swept surface folds through itself wherever the
-                    radius exceeds the centreline's local radius of curvature -
-                    which rasterised skeletons routinely violate, giving a pile
-                    of intersecting discs - so raise it until that clears.
+                    kept, so no arm can go missing. This is a cost lever
+                    rather than a quality one: the intersecting-discs problem
+                    it looks like it should fix is not really an axial one at
+                    all (see "What has been tried" in
+                    `octarine.shaders.tubes`).
         n_theta :   int
                     Number of angular samples around the tube. 32 is smooth,
                     8 still gives a reasonable silhouette at a quarter of the

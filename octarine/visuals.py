@@ -824,12 +824,10 @@ def tubes2gfx(
                 Axial level of detail: keep every 2**axial_lod-th node along
                 each unbranched run. 0 is full resolution, 1 halves, 2
                 quarters, and so on. Branch points and tips are always kept,
-                so no arm can go missing. This is the main quality lever: a
-                swept surface folds through itself wherever the radius exceeds
-                the centreline's local radius of curvature - which rasterised
-                skeletons routinely violate, giving a pile of intersecting
-                discs - and a coarser axis curves more gently, so the rings
-                stop intersecting.
+                so no arm can go missing. This is a cost lever rather than a
+                quality one: the intersecting-discs problem it looks like it
+                should fix is not really an axial one at all (see "What has
+                been tried" in `octarine.shaders.tubes`).
     n_theta :   int
                 Number of angular samples around the tube. This is the
                 angular level of detail; 32 is smooth, 8 is still a
@@ -856,7 +854,7 @@ def tubes2gfx(
     """
     # Deliberately a lazy import: this registers the custom shaders with pygfx
     # and depends on pygfx's semi-public shader API
-    from .shaders import TubeVisual, TubeMaterial, decimate_edges
+    from .shaders import TubeVisual, TubeMaterial, align_frames, decimate_edges
 
     axial_lod = int(axial_lod)
     if axial_lod < 0:
@@ -892,6 +890,15 @@ def tubes2gfx(
     # Axial LOD thins the edge list, never the coefficients: the nodes stay
     # uploaded exactly as they are, so switching level is a small index swap
     edges = decimate_edges(edges, n_nodes, 2**axial_lod)
+
+    # The frames arrive rotation-minimizing only within each unbranched run -
+    # the chain restarts at every branch point, which leaves the quads spanning
+    # a junction twisted - and describing the full-resolution centreline.
+    # Realign them against the edge list actually being swept. Re-deriving the
+    # tangents as well is only worth its (second-order) shift of the surface
+    # once decimation has re-cut the chords; the phase half of this is an exact
+    # rotation of the profile either way.
+    coefs = align_frames(coefs, edges, retangent=bool(axial_lod))
 
     # Parse color: an array with one entry per node becomes per-node colors
     colors = None

@@ -366,7 +366,7 @@ Useful parameters:
 
 - `axial_lod`: axial level of detail. `0` is full resolution, `1` keeps every
   2nd node, `2` every 4th, and so on. Branch points and tips are always kept,
-  so no arm can go missing - see [below](#self-intersection-and-axial_lod)
+  so no arm can go missing. A cost lever rather than a quality one
 - `n_theta`: number of angular samples around the tube. This is the angular
   level of detail - 32 is smooth, 8 still gives a reasonable silhouette at a
   quarter of the vertices
@@ -378,7 +378,7 @@ Useful parameters:
 - `offset`: world offset (node positions are expected in physical units, so
   there is no `spacing`)
 
-### Self-intersection and `axial_lod`
+### Self-intersection
 
 The tube *surface* is generated in the vertex shader by sweeping the
 cross-section along the skeleton. It is cheap - the cost is per vertex, and a
@@ -386,22 +386,33 @@ coarse `n_theta` makes it cheaper still - and the silhouette is exactly the
 profile you gave it.
 
 Its one failure mode is inherent to sweeping: **a swept surface folds through
-itself wherever the cross-section radius exceeds the centreline's local radius
+itself wherever the cross-section radius outruns the centreline's local radius
 of curvature.** Skeletons traced from voxel data routinely violate that, since
 node spacing is typically ~1 voxel while radii are several, so a little
 positional jitter tilts consecutive rings into one another. The result looks
 like a pile of intersecting discs - the classic "why does my tube look like a
 crappy mesh".
 
-The fix is to raise `axial_lod` until the axis is smooth relative to the radius
-- as a rule of thumb, node spacing of about one radius:
+There is currently **no good fix for this**, and the ones that look obvious
+have been tried and reverted - a raycast union of solids, low-passing the
+centreline, and sweeping each edge as a C2 cubic B-spline rather than a straight
+interpolation. All three improved the self-intersection metrics; none visibly
+improved the render. See "What has been tried" in
+[`octarine.shaders.tubes`](api/shaders.md) before attempting a fourth, because
+the evidence points at the *angular* profile rather than the sweep: adjacent
+nodes' harmonic magnitudes differ by 50-65%, so consecutive cross-sections are
+genuinely different shapes.
+
+The one lever that does help today is dropping harmonics, which trades
+silhouette fidelity for a much cleaner surface:
 
 ```python
->>> v.add_tubes(coefs, edges=edges, axial_lod=2)
+>>> v.add_tubes(coefs, edges=edges, k=3)
 ```
 
-This thins the edge list along unbranched runs only; the coefficient buffer is
-untouched, so switching level is a small index swap rather than a re-upload.
+`axial_lod` also reduces self-intersection, but weakly and at a steep price in
+axial detail - it drops the nodes carrying it, and boutons and varicosities are
+a local bump in `a0` along the axis. Treat it as a vertex-cost knob.
 
 !!! note "Why `k_normal` defaults lower than `k`"
 

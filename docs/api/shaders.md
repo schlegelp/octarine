@@ -67,6 +67,18 @@ typically employed via the respective [octarine.Viewer][] methods
     options:
       show_root_heading: true
 
+::: octarine.shaders.align_frames
+    options:
+      show_root_heading: true
+
+::: octarine.shaders.rotate_profile
+    options:
+      show_root_heading: true
+
+::: octarine.shaders.split_runs
+    options:
+      show_root_heading: true
+
 ::: octarine.shaders.SilhouetteMeshMaterial
     options:
       show_root_heading: true
