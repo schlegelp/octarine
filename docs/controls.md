@@ -46,6 +46,60 @@ view again:
 >>> v.set_view(state)  # re-apply the view
 ```
 
+### Linking viewers
+
+Comparing two things side by side is much easier if they move together. Use
+[`octarine.Viewer.link`][]`()` to keep the camera synchronised between viewers:
+
+```python
+>>> v1 = oc.Viewer()
+>>> v2 = oc.Viewer()
+>>> v1.link(v2)
+```
+
+From now on, panning, rotating or zooming in either viewer does the same in the
+other. The same goes for [`octarine.Viewer.set_view`][]`()` and
+[`octarine.Viewer.center_camera`][]`()` (including the implicit centering when
+you add objects) - but not for changes you make directly on the `Viewer.camera`
+object. On linking, the other viewer immediately adopts the view of the viewer
+you called `link()` on.
+
+Links are symmetrical and transitive: linking `v1` to `v2` and then `v2` to `v3`
+means that all three move together. You can also link several viewers in one go:
+
+```python
+>>> v1.link(v2, v3)
+```
+
+Use [`octarine.Viewer.unlink`][]`()` to break the link again. Without arguments
+it removes the viewer itself from its group (leaving the others linked with each
+other); with arguments it removes the given viewers:
+
+```python
+>>> v1.unlink(v3)  # v3 moves on its own again, v1 and v2 stay linked
+>>> v1.unlink()  # v1 moves on its own again too
+```
+
+The [`octarine.Viewer.linked`][] property tells you who a viewer is currently
+linked with.
+
+!!! note "Partial links"
+
+    Sometimes you only want to share *part* of the camera state - e.g. rotate
+    in lockstep but zoom into each viewer separately. Use the `sync` or
+    `exclude` parameters for that. The three interactive controls map onto
+    `"position"` (panning), `"rotation"` (rotating) and `"width"` + `"height"`
+    (zooming):
+
+    ```python
+    >>> v1.link(v2, sync='rotation')  # only rotate together
+    >>> v1.link(v2, exclude=['width', 'height'])  # everything but the zoom
+    ```
+
+Viewers don't have to show the same data, use the same controls or even be of
+the same camera type: linking an orthographic with a perspective viewer works
+fine, the field of view simply stays out of the sync.
+
 ## Colors
 Use [`octarine.Viewer.colorize`][]`()` to randomize colors:
 

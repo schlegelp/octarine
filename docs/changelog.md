@@ -8,6 +8,13 @@ on the Github repository.
 _Date: ongoing_
 
 #### Improvements
+- new [`Viewer.link`][octarine.Viewer.link] / [`Viewer.unlink`][octarine.Viewer.unlink] methods
+  (plus a [`Viewer.linked`][octarine.Viewer.linked] property): keep the camera synchronised
+  between two or more viewers, so that panning, rotating or zooming in one of them does the
+  same in all the others - handy for comparing things side by side. Links are symmetrical and
+  transitive, and `sync`/`exclude` let you share only part of the camera state (e.g. rotate
+  together but zoom separately). Viewers need not show the same data or use the same controls
+  (see [Linking viewers](controls.md#linking-viewers))
 - new [`Viewer.set_subsurface`][octarine.Viewer.set_subsurface] method (plus a `subsurface`
   parameter for [`Viewer.add_mesh`][octarine.Viewer.add_mesh]): render meshes as translucent,
   so that backlit regions glow and shading eases past the terminator instead of dropping off

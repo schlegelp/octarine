@@ -100,6 +100,89 @@ def _format_number(x):
     return f"{x:g}"
 
 
+# Fields of a pygfx camera state (see `gfx.PerspectiveCamera.get_state`). Note
+# that "position" is accepted as an alias for "x", "y" and "z" combined.
+CAMERA_STATE_FIELDS = {
+    "x",
+    "y",
+    "z",
+    "scale",
+    "rotation",
+    "reference_up",
+    "fov",
+    "width",
+    "height",
+    "depth",
+    "zoom",
+    "maintain_aspect",
+    "depth_range",
+}
+
+
+def _parse_state_fields(fields):
+    """Parse camera state field names (see `Viewer.link`)."""
+    if fields is None:
+        return None
+
+    if isinstance(fields, str):
+        fields = {fields}
+    fields = set(fields)
+
+    if not fields:
+        return None
+
+    # "position" is a single field in the state dict but the filters work on
+    # the individual coordinates (same as in pygfx)
+    if "position" in fields:
+        fields.discard("position")
+        fields.update({"x", "y", "z"})
+
+    unknown = fields - CAMERA_STATE_FIELDS
+    if unknown:
+        raise ValueError(
+            f"Unknown camera state field(s): {', '.join(sorted(unknown))}. "
+            f"Must be 'position' or one of {sorted(CAMERA_STATE_FIELDS)}."
+        )
+
+    return fields
+
+
+def _flatten_viewers(args, func):
+    """Flatten (potentially nested) viewer arguments into a flat list."""
+    viewers_ = []
+    for arg in args:
+        arg = arg if isinstance(arg, (list, tuple, set)) else [arg]
+        for v in arg:
+            if not isinstance(v, Viewer):
+                raise TypeError(
+                    f"`Viewer.{func}` expected Viewer(s), got '{type(v).__name__}'"
+                )
+            if v not in viewers_:
+                viewers_.append(v)
+    return viewers_
+
+
+def _filter_camera_state(state, include=None, exclude=None):
+    """Drop camera state fields that should not be synchronised.
+
+    This mirrors what pygfx' controllers do for partially linked cameras.
+    """
+    if include is None and exclude is None:
+        return state
+
+    # Split "position" into its components so the filters can address them
+    if "position" in state:
+        state = state.copy()
+        state["x"], state["y"], state["z"] = state.pop("position")
+
+    if include is not None:
+        state = {k: v for k, v in state.items() if k in include}
+    if exclude is not None:
+        state = {k: v for k, v in state.items() if k not in exclude}
+
+    return state
+
+
 def update_helper(viewer, legend=True, bounds=True):
     """Helper function to update legend and other properties."""
     # Always clear the cached objects dictionary
@@ -361,6 +444,11 @@ class Viewer:
         self._selected = []
         self._render_trigger = "continuous"
 
+        # Camera links (see `Viewer.link`)
+        self._linked = []
+        self._link_filter = (None, None)
+        self._last_camera_sig = None
+
         viewers.append(self)
 
         # This starts the animation loop
@@ -416,6 +504,11 @@ class Viewer:
                     self.canvas.request_draw()
                     return
         elif rm == "reactive":
+            # If we're linked to another viewer, our camera may have been moved
+            # by that viewer's controller - in which case none of our own events
+            # fired and nothing flagged us as stale (see `Viewer.link`)
+            if self._linked and self._camera_sig() != self._last_camera_sig:
+                self._render_stale = True
             # If the scene is not stale, we can skip rendering
             if not getattr(self, "_render_stale", False):
                 self.canvas.request_draw()
@@ -439,6 +532,7 @@ class Viewer:
 
         # Set stale to False
         self._render_stale = False
+        self._last_camera_sig = self._camera_sig() if self._linked else None
 
         self.canvas.request_draw()
 
@@ -1632,6 +1726,162 @@ class Viewer:
             self.camera.show_object(
                 self.scene, scale=1, view_dir=(0.0, 0.0, 1.0), up=(0.0, -1.0, 0.0)
             )
+            self._sync_linked()
+
+    @property
+    def linked(self):
+        """Viewers this viewer's camera is linked with (see `Viewer.link`)."""
+        return tuple(self._linked)
+
+    def _camera_sig(self):
+        """Cheap fingerprint of the camera state - used to detect movement."""
+        return (
+            *self.camera.local.position,
+            *self.camera.local.rotation,
+            self.camera.width,
+            self.camera.height,
+            self.camera.zoom,
+            self.camera.fov,
+        )
+
+    def _sync_linked(self):
+        """Push this viewer's camera state to any linked viewers."""
+        if not self._linked:
+            return
+
+        state = _filter_camera_state(self.camera.get_state(), *self._link_filter)
+        for v in self._linked:
+            v.camera.set_state(state)
+            # The other viewers don't know that anything happened, so we have to
+            # ask them to re-render themselves
+            v._render_stale = True
+            v.canvas.request_draw()
+
+    def link(self, *others, sync=None, exclude=None):
+        """Keep the camera synchronised with (an)other viewer(s).
+
+        Panning, rotating or zooming in any of the linked viewers moves the
+        cameras in all the others as well. The same goes for programmatic
+        changes via [`Viewer.set_view`][octarine.Viewer.set_view] and
+        [`Viewer.center_camera`][octarine.Viewer.center_camera] (including the
+        implicit centering when adding objects) but not for changes made
+        directly on the `Viewer.camera` object.
+
+        Links are symmetrical and transitive: linking `A` to `B` and then `B` to
+        `C` means that all three viewers move together. On linking, the other
+        viewers immediately adopt this viewer's current view.
+
+        Parameters
+        ----------
+        *others :   Viewer | list thereof
+                    Viewer(s) to link with this one.
+        sync :      str | list of str, optional
+                    Which fields of the camera state to synchronise. If `None`
+                    (default) everything is synchronised. The three interactive
+                    controls map onto "position" (panning; can also be addressed
+                    as the individual "x", "y" and "z"), "rotation" (rotating)
+                    and "width" + "height" (zooming).
+        exclude :   str | list of str, optional
+                    The inverse of `sync`: which fields of the camera state to
+                    keep independent. Can be combined with `sync`.
+                    Note that `sync`/`exclude` apply to the entire group, i.e.
+                    linking a new viewer into an existing group also (re-)sets
+                    the filter for the viewers that were already in it.
+
+        See Also
+        --------
+        [`Viewer.unlink`][octarine.Viewer.unlink]
+                    Break the link again.
+        [`Viewer.linked`][octarine.Viewer.linked]
+                    The viewers currently linked with this one.
+
+        Examples
+        --------
+        >>> import octarine as oc
+        >>> v1, v2 = oc.Viewer(), oc.Viewer()
+        >>> v1.link(v2)                      # fully link the two viewers
+        >>> v1.unlink()                      # ... and unlink them again
+        >>> v1.link(v2, sync='rotation')     # only synchronise the rotation
+        >>> v1.link(v2, exclude=['width', 'height'])  # ... or zoom separately
+
+        """
+        others = _flatten_viewers(others, "link")
+        if not others:
+            raise ValueError("Must provide at least one viewer to link with.")
+        if any(v is self for v in others):
+            raise ValueError("Can not link a viewer with itself.")
+
+        sync = _parse_state_fields(sync)
+        exclude = _parse_state_fields(exclude)
+
+        # Collect the full group: the viewers to link plus whatever they (and
+        # we) were already linked with
+        group = []
+        for v in [self] + others:
+            for w in [v] + list(v._linked):
+                if w not in group:
+                    group.append(w)
+
+        # A group that mixes orthographic with perspective cameras must not
+        # synchronise the field of view: the orthographic cameras have theirs
+        # locked to zero and would flatten the perspective ones (pygfx clamps
+        # the fov in the other direction). Unless explicitly asked to, that is.
+        is_ortho = {isinstance(v.camera, gfx.OrthographicCamera) for v in group}
+        if len(is_ortho) > 1 and (sync is None or "fov" not in sync):
+            exclude = (exclude or set()) | {"fov"}
+
+        # Let every viewer's controller drive every other viewer's camera. Note
+        # that each controller already has its own camera registered first which
+        # is important because that's the one it reads the current state from.
+        for v in group:
+            v._linked = [w for w in group if w is not v]
+            v._link_filter = (sync, exclude)
+            for w in v._linked:
+                v.controller.add_camera(
+                    w.camera, include_state=sync, exclude_state=exclude
+                )
+
+        # Make the others adopt our view so we start out in sync
+        self._sync_linked()
+
+    def unlink(self, *others):
+        """Unlink viewers such that their cameras move independently again.
+
+        Parameters
+        ----------
+        *others :   Viewer | list thereof, optional
+                    Viewer(s) to remove from this viewer's link group. If not
+                    provided, this viewer itself is removed and any other
+                    viewers in the group stay linked with each other. Viewers
+                    that aren't part of this viewer's group are silently
+                    ignored.
+
+        See Also
+        --------
+        [`Viewer.link`][octarine.Viewer.link]
+                    Link viewers in the first place.
+
+        """
+        others = _flatten_viewers(others, "unlink")
+
+        group = [self] + list(self._linked)
+        drop = [v for v in (others or [self]) if v in group]
+        if not drop:
+            return
+        keep = [v for v in group if v not in drop]
+
+        for v in drop:
+            for w in group:
+                if w is not v:
+                    v.controller.remove_camera(w.camera)
+                    w.controller.remove_camera(v.camera)
+            v._linked = []
+            v._link_filter = (None, None)
+
+        for v in keep:
+            v._linked = [w for w in keep if w is not v]
+            if not v._linked:
+                v._link_filter = (None, None)
 
     @update_viewer(legend=True, bounds=True)
     def add(self, x, name=None, group=None, center=True, clear=False, **kwargs):
@@ -2340,6 +2590,10 @@ class Viewer:
 
         # Clear first to free all visuals
         self.clear()
+
+        # Make sure we don't leave a dangling camera behind in another viewer's
+        # controller
+        self.unlink()
 
         # Remove from config if this is the primary viewer
         if self == getattr(config, "PRIMARY_VIEWER", None):
@@ -3209,6 +3463,8 @@ class Viewer:
             self.camera.set_state(view)
         else:
             raise TypeError(f"Unable to set view from {type(view)}")
+
+        self._sync_linked()
 
     def get_view(self):
         """Get current camera position."""
