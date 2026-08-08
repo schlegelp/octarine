@@ -674,6 +674,15 @@ class Controls(QtWidgets.QWidget):
         scroll_area.setWidget(effects_widget)
         self.tab4_layout.addWidget(scroll_area)
 
+        # Most of the effects require octarine's custom shaders (pygfx >=
+        # 0.16); if those are unavailable we show their controls greyed-out.
+        try:
+            from . import shaders  # noqa: F401
+
+            shaders_available = True
+        except ImportError:
+            shaders_available = False
+
         # --- Shadows ---
         # Like the eye-dome lighting below this comes straight from pygfx,
         # i.e. it does not require octarine's custom shaders.
@@ -689,6 +698,119 @@ class Controls(QtWidgets.QWidget):
         self.shadows_checkbox.toggled.connect(
             lambda checked: setattr(self.viewer, "shadows", checked)
         )
+
+        # --- Environment (image-based lighting) ---
+        env_on = getattr(self.viewer, "_env_map", None) is not None
+
+        self.env_section = self.add_effect_section(
+            "Environment",
+            "Light the scene with a procedural environment map instead of "
+            "with the lights alone: surfaces are lit from every direction "
+            "and pick up reflections of their surroundings.",
+            checked=env_on,
+        )
+        self.env_checkbox = self.env_section.checkbox
+
+        env_presets = []
+        if shaders_available:
+            from .shaders import ENVIRONMENT_PRESETS
+
+            env_presets = list(ENVIRONMENT_PRESETS)
+
+        env_row = QtWidgets.QHBoxLayout()
+        env_row.addWidget(QtWidgets.QLabel("Preset"))
+        self.env_dropdown = QtWidgets.QComboBox()
+        self.env_dropdown.addItems([name.title() for name in env_presets])
+        if shaders_available:
+            for i, name in enumerate(env_presets):
+                self.env_dropdown.setItemData(
+                    i, ENVIRONMENT_PRESETS[name]["description"], QtCore.Qt.ToolTipRole
+                )
+        current_env = getattr(self.viewer._env_map, "preset", None) if env_on else None
+        if current_env in env_presets:
+            self.env_dropdown.setCurrentIndex(env_presets.index(current_env))
+        env_row.addWidget(self.env_dropdown)
+        self.env_section.content_layout.addLayout(env_row)
+
+        self.env_background_checkbox = QtWidgets.QCheckBox("Show as background")
+        self.env_background_checkbox.setToolTip(
+            "Also use the environment as the background, so that the "
+            "reflections and the backdrop agree."
+        )
+        self.env_background_checkbox.setChecked(
+            getattr(self.viewer, "_env_background", False)
+        )
+        self.env_section.content_layout.addWidget(self.env_background_checkbox)
+
+        def env_kwargs():
+            return dict(
+                rotation=self.env_rotation_slider.value()
+                * self.env_rotation_slider._step,
+                roughness=self.env_roughness_slider.value()
+                * self.env_roughness_slider._step,
+                metalness=self.env_metalness_slider.value()
+                * self.env_metalness_slider._step,
+                show_background=self.env_background_checkbox.isChecked(),
+            )
+
+        def update_env(*args):
+            if not self.env_checkbox.isChecked():
+                return
+            self.viewer.set_environment(
+                env_presets[self.env_dropdown.currentIndex()], **env_kwargs()
+            )
+            self.viewer._render_stale = True
+
+        self.env_rotation_slider = self.create_effect_slider(
+            "Rotation",
+            min=0,
+            max=360,
+            step=5,
+            value=0,
+            parent_layout=self.env_section.content_layout,
+            callback=lambda v: update_env(),
+        )
+        self.env_roughness_slider = self.create_effect_slider(
+            "Roughness",
+            min=0.0,
+            max=1.0,
+            step=0.05,
+            value=0.4,
+            parent_layout=self.env_section.content_layout,
+            callback=lambda v: update_env(),
+        )
+        self.env_metalness_slider = self.create_effect_slider(
+            "Metalness",
+            min=0.0,
+            max=1.0,
+            step=0.05,
+            value=0.0,
+            parent_layout=self.env_section.content_layout,
+            callback=lambda v: update_env(),
+        )
+
+        env_widgets = (
+            self.env_dropdown,
+            self.env_background_checkbox,
+            self.env_rotation_slider,
+            self.env_roughness_slider,
+            self.env_metalness_slider,
+        )
+        for widget in env_widgets:
+            widget.setEnabled(env_on)
+
+        def toggle_env(checked):
+            if checked:
+                update_env()
+            else:
+                self.viewer.set_environment(None)
+                self.viewer._render_stale = True
+            for widget in env_widgets:
+                widget.setEnabled(checked)
+
+        self.env_checkbox.toggled.connect(toggle_env)
+        self.env_dropdown.currentIndexChanged.connect(lambda *_: update_env())
+        self.env_background_checkbox.toggled.connect(lambda *_: update_env())
 
         # --- Eye-Dome Lighting ---
         # If EDL was already enabled via the API, reflect that here
@@ -752,15 +874,6 @@ class Controls(QtWidgets.QWidget):
             self.edl_radius_slider.setEnabled(checked)
 
         self.edl_checkbox.toggled.connect(toggle_edl)
-
-        # The effects below require octarine's custom shaders (pygfx >=
-        # 0.16); if those are unavailable we show the controls greyed-out.
-        try:
-            from . import shaders  # noqa: F401
-
-            shaders_available = True
-        except ImportError:
-            shaders_available = False
 
         # --- Ambient occlusion ---
         # If AO was already enabled via the API, reflect that here
@@ -927,6 +1040,126 @@ class Controls(QtWidgets.QWidget):
 
         self.ao_checkbox.toggled.connect(toggle_ao)
 
+        # --- Outline ---
+        # If outlines were already enabled via the API, reflect that here
+        outline_pass = getattr(self.viewer, "_outline_pass", None)
+        outline_on = outline_pass is not None and outline_pass.enabled
+
+        self.outline_section = self.add_effect_section(
+            "Outline",
+            "Draw a line around silhouettes and along creases, the way a "
+            "technical illustration would. Makes overlapping objects of "
+            "similar color readable as separate things.",
+            checked=outline_on,
+        )
+        self.outline_checkbox = self.outline_section.checkbox
+
+        # Just the three colors an outline is realistically drawn in; the
+        # API takes any color (see `Viewer.set_outline`)
+        outline_colors = [("Black", "#000"), ("White", "#fff"), ("Grey", "#888")]
+
+        def outline_kwargs():
+            def value(slider):
+                return slider.value() * slider._step
+
+            color = gfx.Color(outline_colors[self.outline_color_dropdown.currentIndex()][1])
+            return dict(
+                color=(*color.rgb, value(self.outline_opacity_slider)),
+                thickness=value(self.outline_thickness_slider),
+                depth_threshold=value(self.outline_depth_slider),
+                normal_threshold=value(self.outline_normal_slider),
+                debug=self.outline_debug_checkbox.isChecked(),
+            )
+
+        def update_outline(*args):
+            if not self.outline_checkbox.isChecked():
+                return
+            self.viewer.set_outline(**outline_kwargs())
+
+        outline_color_row = QtWidgets.QHBoxLayout()
+        outline_color_row.addWidget(QtWidgets.QLabel("Color"))
+        self.outline_color_dropdown = QtWidgets.QComboBox()
+        self.outline_color_dropdown.addItems([name for name, _ in outline_colors])
+        if outline_on:
+            # Reflect the color that is currently in place, if it is one of ours
+            current = outline_pass.color.hex.lower()
+            for i, (_, value) in enumerate(outline_colors):
+                if gfx.Color(value).hex.lower() == current:
+                    self.outline_color_dropdown.setCurrentIndex(i)
+                    break
+        outline_color_row.addWidget(self.outline_color_dropdown)
+        self.outline_section.content_layout.addLayout(outline_color_row)
+
+        self.outline_opacity_slider = self.create_effect_slider(
+            "Opacity",
+            min=0.05,
+            max=1.0,
+            step=0.05,
+            value=outline_pass.color.a if outline_on else 1.0,
+            parent_layout=self.outline_section.content_layout,
+            callback=lambda v: update_outline(),
+        )
+        self.outline_thickness_slider = self.create_effect_slider(
+            "Thickness",
+            min=1,
+            max=5,
+            step=1,
+            value=outline_pass.thickness if outline_on else 1,
+            parent_layout=self.outline_section.content_layout,
+            callback=lambda v: update_outline(),
+        )
+        self.outline_depth_slider = self.create_effect_slider(
+            "Depth",
+            min=0.002,
+            max=0.1,
+            step=0.002,
+            value=outline_pass.depth_threshold if outline_on else 0.02,
+            parent_layout=self.outline_section.content_layout,
+            callback=lambda v: update_outline(),
+        )
+        self.outline_normal_slider = self.create_effect_slider(
+            "Crease",
+            min=0.0,
+            max=1.0,
+            step=0.05,
+            value=outline_pass.normal_threshold if outline_on else 0.3,
+            parent_layout=self.outline_section.content_layout,
+            callback=lambda v: update_outline(),
+        )
+
+        self.outline_debug_checkbox = QtWidgets.QCheckBox("Show edges only")
+        self.outline_debug_checkbox.setToolTip(
+            "Render the detected edges as white on black instead of drawing "
+            "them over the scene. Useful for tuning the two thresholds."
+        )
+        self.outline_debug_checkbox.setChecked(
+            outline_pass.debug if outline_on else False
+        )
+        self.outline_debug_checkbox.toggled.connect(update_outline)
+        self.outline_section.content_layout.addWidget(self.outline_debug_checkbox)
+
+        outline_widgets = (
+            self.outline_color_dropdown,
+            self.outline_opacity_slider,
+            self.outline_thickness_slider,
+            self.outline_depth_slider,
+            self.outline_normal_slider,
+            self.outline_debug_checkbox,
+        )
+        for widget in outline_widgets:
+            widget.setEnabled(outline_on)
+
+        def toggle_outline(checked):
+            if checked:
+                self.viewer.set_outline(**outline_kwargs())
+            else:
+                self.viewer.set_outline(False)
+            for widget in outline_widgets:
+                widget.setEnabled(checked)
+
+        self.outline_checkbox.toggled.connect(toggle_outline)
+        self.outline_color_dropdown.currentIndexChanged.connect(update_outline)
+
         # --- Silhouette ---
         # If silhouette was already enabled via the API, reflect that here
         sil_power = 0.0
@@ -1010,6 +1243,89 @@ class Controls(QtWidgets.QWidget):
             slider.setEnabled(checked)
 
         self.subsurface_checkbox.toggled.connect(toggle_subsurface)
+
+        # --- Matcap ---
+        # If a matcap was already applied via the API, reflect that here
+        matcap_presets, current_matcap = [], None
+        if shaders_available:
+            from .shaders import MATCAP_PRESETS, MatcapMeshMaterial
+
+            matcap_presets = list(MATCAP_PRESETS)
+            for vis in self.viewer.scene.children:
+                if isinstance(vis, gfx.Mesh) and isinstance(
+                    vis.material, MatcapMeshMaterial
+                ):
+                    current_matcap = getattr(vis.material.matcap, "preset", None)
+                    break
+        matcap_on = current_matcap is not None
+
+        self.matcap_section = self.add_effect_section(
+            "Matcap",
+            "Shade meshes with a picture of a shaded sphere, indexed by the "
+            "surface normal, instead of with the scene's lights. Surface "
+            "shape reads very well, but the shading turns with the camera.",
+            checked=matcap_on,
+        )
+        self.matcap_checkbox = self.matcap_section.checkbox
+
+        matcap_row = QtWidgets.QHBoxLayout()
+        matcap_row.addWidget(QtWidgets.QLabel("Preset"))
+        self.matcap_dropdown = QtWidgets.QComboBox()
+        self.matcap_dropdown.addItems([name.title() for name in matcap_presets])
+        if shaders_available:
+            for i, name in enumerate(matcap_presets):
+                self.matcap_dropdown.setItemData(
+                    i, MATCAP_PRESETS[name]["description"], QtCore.Qt.ToolTipRole
+                )
+        if current_matcap in matcap_presets:
+            self.matcap_dropdown.setCurrentIndex(matcap_presets.index(current_matcap))
+        matcap_row.addWidget(self.matcap_dropdown)
+        self.matcap_section.content_layout.addLayout(matcap_row)
+
+        def update_matcap(*args):
+            if not self.matcap_checkbox.isChecked():
+                return
+            self.viewer.set_matcap(
+                matcap_presets[self.matcap_dropdown.currentIndex()],
+                tint=self.matcap_tint_slider.value() * self.matcap_tint_slider._step,
+            )
+
+        self.matcap_tint_slider = self.create_effect_slider(
+            "Tint",
+            min=0.0,
+            max=1.0,
+            step=0.05,
+            value=1.0,
+            parent_layout=self.matcap_section.content_layout,
+            callback=lambda v: update_matcap(),
+        )
+        self.matcap_tint_slider.setToolTip(
+            "How much of an object's own color tints the matcap: 0 lets the "
+            "matcap's colors win, 1 keeps objects distinguishable."
+        )
+
+        matcap_widgets = (self.matcap_dropdown, self.matcap_tint_slider)
+        for widget in matcap_widgets:
+            widget.setEnabled(matcap_on)
+
+        def toggle_matcap(checked):
+            if checked:
+                # Start from the preset's own tint rather than the slider's
+                preset = matcap_presets[self.matcap_dropdown.currentIndex()]
+                self.viewer.set_matcap(preset)
+                tint = MATCAP_PRESETS[preset].get("tint", 1.0)
+                self.matcap_tint_slider.blockSignals(True)
+                self.matcap_tint_slider.setValue(
+                    round(tint / self.matcap_tint_slider._step)
+                )
+                self.matcap_tint_slider.blockSignals(False)
+            else:
+                self.viewer.set_matcap(None)
+            for widget in matcap_widgets:
+                widget.setEnabled(checked)
+
+        self.matcap_checkbox.toggled.connect(toggle_matcap)
+        self.matcap_dropdown.currentIndexChanged.connect(lambda *_: toggle_matcap(True))
 
         # --- Depth of field ---
         # If depth of field was already enabled via the API, reflect that here
@@ -1275,6 +1591,97 @@ class Controls(QtWidgets.QWidget):
 
         self.dof_checkbox.toggled.connect(toggle_dof)
 
+        # --- Tone mapping ---
+        # If tone mapping was already enabled via the API, reflect that here
+        tonemap_pass = getattr(self.viewer, "_tonemap_pass", None)
+        tonemap_on = tonemap_pass is not None and tonemap_pass.enabled
+
+        self.tonemap_section = self.add_effect_section(
+            "Tone Mapping",
+            "Compress the rendered high dynamic range image into what the "
+            "display can show, so that bright regions roll off smoothly "
+            "instead of clipping to flat white. Also sets the exposure.",
+            checked=tonemap_on,
+        )
+        self.tonemap_checkbox = self.tonemap_section.checkbox
+
+        tonemap_modes = []
+        if shaders_available:
+            from .shaders import TONEMAP_MODES
+
+            tonemap_modes = list(TONEMAP_MODES)
+
+        tonemap_row = QtWidgets.QHBoxLayout()
+        tonemap_row.addWidget(QtWidgets.QLabel("Curve"))
+        self.tonemap_dropdown = QtWidgets.QComboBox()
+        self.tonemap_dropdown.addItems([name.title() for name in tonemap_modes])
+        if "aces" in tonemap_modes:
+            self.tonemap_dropdown.setCurrentIndex(tonemap_modes.index("aces"))
+        if tonemap_on and tonemap_pass.mode in tonemap_modes:
+            self.tonemap_dropdown.setCurrentIndex(tonemap_modes.index(tonemap_pass.mode))
+        tonemap_row.addWidget(self.tonemap_dropdown)
+        self.tonemap_section.content_layout.addLayout(tonemap_row)
+
+        def update_tonemap(*args):
+            if not self.tonemap_checkbox.isChecked():
+                return
+            self.viewer.set_tonemapping(
+                tonemap_modes[self.tonemap_dropdown.currentIndex()],
+                # The slider is in stops, which is how exposure is normally
+                # thought about: +1 is twice as bright
+                exposure=2.0
+                ** (self.tonemap_exposure_slider.value()
+                    * self.tonemap_exposure_slider._step),
+                white_point=self.tonemap_white_slider.value()
+                * self.tonemap_white_slider._step,
+            )
+
+        self.tonemap_exposure_slider = self.create_effect_slider(
+            "Exposure",
+            min=-3.0,
+            max=3.0,
+            step=0.25,
+            value=tonemap_pass.stops if tonemap_on else 0.0,
+            parent_layout=self.tonemap_section.content_layout,
+            callback=lambda v: update_tonemap(),
+        )
+        self.tonemap_exposure_slider.setToolTip(
+            "Exposure in stops: +1 is twice as bright, -1 half as bright."
+        )
+        self.tonemap_white_slider = self.create_effect_slider(
+            "White point",
+            min=1.0,
+            max=16.0,
+            step=0.5,
+            value=tonemap_pass.white_point if tonemap_on else 4.0,
+            parent_layout=self.tonemap_section.content_layout,
+            callback=lambda v: update_tonemap(),
+        )
+        self.tonemap_white_slider.setToolTip(
+            'The input value that maps to white. Only used by the "Reinhard" '
+            'and "Filmic" curves.'
+        )
+
+        tonemap_widgets = (
+            self.tonemap_dropdown,
+            self.tonemap_exposure_slider,
+            self.tonemap_white_slider,
+        )
+        for widget in tonemap_widgets:
+            widget.setEnabled(tonemap_on)
+
+        def toggle_tonemap(checked):
+            if checked:
+                update_tonemap()
+            else:
+                self.viewer.set_tonemapping(None)
+                self.viewer._render_stale = True
+            for widget in tonemap_widgets:
+                widget.setEnabled(checked)
+
+        self.tonemap_checkbox.toggled.connect(toggle_tonemap)
+        self.tonemap_dropdown.currentIndexChanged.connect(lambda *_: update_tonemap())
+
         if not shaders_available:
             import pygfx
 
@@ -1284,10 +1691,14 @@ class Controls(QtWidgets.QWidget):
             )
             # Disabling the sections takes their contents with them
             for section in (
+                self.env_section,
                 self.ao_section,
+                self.outline_section,
                 self.silhouette_section,
                 self.subsurface_section,
+                self.matcap_section,
                 self.dof_section,
+                self.tonemap_section,
             ):
                 section.setEnabled(False)
                 section.setToolTip(msg)

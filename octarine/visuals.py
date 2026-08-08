@@ -14,7 +14,9 @@ from . import config, utils
 logger = config.get_logger(__name__)
 
 
-def mesh2gfx(mesh, color, alpha=None, silhouette=None, subsurface=None, shader=None):
+def mesh2gfx(
+    mesh, color, alpha=None, silhouette=None, subsurface=None, shader=None, matcap=None
+):
     """Convert generic mesh to pygfx visuals.
 
     Parameters
@@ -48,6 +50,13 @@ def mesh2gfx(mesh, color, alpha=None, silhouette=None, subsurface=None, shader=N
                     the full list of options - e.g. "basic", "standard",
                     "physical" or "toon". Alternatively, pass a
                     `pygfx.Material` subclass directly.
+    matcap :        str | dict | array, optional
+                    If provided, shade the mesh with a matcap instead of
+                    with the scene's lights: the name of a preset (see
+                    `octarine.shaders.matcap.MATCAP_PRESETS`), a recipe
+                    dict, or a matcap image. Replaces the material, so it
+                    cannot be combined with `silhouette`, `subsurface` or
+                    a `shader`.
 
     """
     # Skip empty meshes
@@ -66,7 +75,7 @@ def mesh2gfx(mesh, color, alpha=None, silhouette=None, subsurface=None, shader=N
             positions=mesh.vertices.astype(np.float32, copy=False),
             **obj_color_kwargs,
         ),
-        _make_mesh_material(mat_color_kwargs, silhouette, subsurface, shader),
+        _make_mesh_material(mat_color_kwargs, silhouette, subsurface, shader, matcap),
     )
 
     # Add custom attributes
@@ -111,8 +120,32 @@ def _parse_subsurface(subsurface):
     return kwargs
 
 
-def _make_mesh_material(mat_color_kwargs, silhouette=None, subsurface=None, shader=None):
-    """Create a mesh material, optionally with silhouette and/or subsurface effects."""
+def _make_mesh_material(
+    mat_color_kwargs, silhouette=None, subsurface=None, shader=None, matcap=None
+):
+    """Create a mesh material, optionally with silhouette/subsurface/matcap."""
+    if matcap is not None:
+        if silhouette or subsurface:
+            raise ValueError(
+                "A matcap replaces the lighting entirely, so it cannot be "
+                "combined with the silhouette or subsurface effects."
+            )
+        if shader is not None and str(shader).lower() not in ("phong", "matcap"):
+            raise ValueError(
+                f"A matcap replaces the material, so it cannot be combined "
+                f"with shader={shader!r}."
+            )
+
+        # This import registers the shader with pygfx
+        from .shaders import MATCAP_PRESETS, MatcapMeshMaterial
+
+        tint = 1.0
+        if isinstance(matcap, str):
+            tint = MATCAP_PRESETS.get(matcap, {}).get("tint", 1.0)
+        elif isinstance(matcap, dict):
+            tint = matcap.get("tint", 1.0)
+        return MatcapMeshMaterial(matcap=matcap, tint=tint, **mat_color_kwargs)
+
     if silhouette or subsurface:
         if shader is not None and str(shader).lower() != "phong":
             effect = "silhouette" if silhouette else "subsurface"
@@ -1148,7 +1181,9 @@ def points2gfx(
         or max_size is not None
         or min_edge_width is not None
     )
-    needs_edge = edge_width is not None or edge_color is not None or edge_mode is not None
+    needs_edge = (
+        edge_width is not None or edge_color is not None or edge_mode is not None
+    )
 
     if needs_flex or needs_edge or marker is not None:
         if edge_width is not None:

@@ -139,6 +139,45 @@ if __name__ == "__main__":
     finalize(grab(v, n_predraw=4), window, "depth of field", "effects_dof")
     v.close()
 
+    # Outline: the overlapping bunnies are exactly the case this is for
+    v = make_scene()
+    v.set_outline(color="#000", thickness=2)
+    finalize(grab(v), window, "outline", "effects_outline")
+    v.close()
+
+    # Environment lighting: one tile per preset, plus the baseline. The
+    # environment is shown as the background so that the lighting and the
+    # backdrop agree, and tone mapped so the highlights do not just clip.
+    from octarine.shaders import ENVIRONMENT_PRESETS
+
+    for preset in ENVIRONMENT_PRESETS:
+        v = make_scene()
+        v.set_environment(preset, show_background=True, roughness=0.35)
+        v.set_tonemapping("aces")
+        finalize(grab(v), window, f"environment = {preset}", f"effects_env_{preset}")
+        v.close()
+
+    # Tone mapping: the same (deliberately over-exposed) environment-lit
+    # scene through each curve, to show what the roll-off buys you
+    for mode in ("none", "reinhard", "aces", "filmic"):
+        v = make_scene()
+        v.set_environment("studio", show_background=True, roughness=0.2, metalness=0.5)
+        v.set_tonemapping(mode, exposure=2.5)
+        finalize(grab(v), window, f"tonemap = {mode}", f"effects_tonemap_{mode}")
+        v.close()
+
+    # Matcaps: one tile per preset, on a single bunny
+    from octarine.shaders import MATCAP_PRESETS
+
+    for preset in MATCAP_PRESETS:
+        v = oc.Viewer(offscreen=True, size=(RW, RH))
+        v.add_mesh(bunny.copy(), name="bunny", color="#4e79a7")
+        v.center_camera()
+        mc_window = crop_window(grab(v))
+        v.set_matcap(preset)
+        finalize(grab(v), mc_window, f"matcap = {preset}", f"effects_matcap_{preset}")
+        v.close()
+
     # Silhouette: single bunny, before/after
     v = oc.Viewer(offscreen=True, size=(RW, RH))
     v.add_mesh(bunny.copy(), name="bunny", color="#4e79a7")

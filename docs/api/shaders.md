@@ -93,6 +93,21 @@ typically employed via the respective [octarine.Viewer][] methods
        - "!^_"
        - "^__init__$"
 
+::: octarine.shaders.MatcapMeshMaterial
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"
+
+::: octarine.shaders.make_matcap
+    options:
+      show_root_heading: true
+
+::: octarine.shaders.matcap_texture
+    options:
+      show_root_heading: true
+
 ::: octarine.shaders.GradientBackgroundMaterial
     options:
       show_root_heading: true
@@ -127,3 +142,29 @@ typically employed via the respective [octarine.Viewer][] methods
       filters:
        - "!^_"
        - "^__init__$"
+
+::: octarine.shaders.OutlinePass
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"
+
+::: octarine.shaders.ToneMappingPass
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"
+
+::: octarine.shaders.procedural_env_map
+    options:
+      show_root_heading: true
+
+::: octarine.shaders.environment_radiance
+    options:
+      show_root_heading: true
+
+::: octarine.shaders.cube_directions
+    options:
+      show_root_heading: true

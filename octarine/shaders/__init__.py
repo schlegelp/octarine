@@ -46,6 +46,22 @@ from .background import (  # noqa: E402
 from .dof import DepthOfFieldPass  # noqa: E402
 from .depth import NormalizedDepthPass  # noqa: E402
 from .ao import AmbientOcclusionPass  # noqa: E402
+from .outline import OutlinePass  # noqa: E402
+from .tonemap import ToneMappingPass, TONEMAP_MODES  # noqa: E402
+from .environment import (  # noqa: E402
+    ENVIRONMENT_PRESETS,
+    ENVIRONMENT_PROPERTIES,
+    cube_directions,
+    environment_radiance,
+    procedural_env_map,
+)
+from .matcap import (  # noqa: E402
+    MATCAP_PRESETS,
+    MATCAP_PROPERTIES,
+    MatcapMeshMaterial,
+    make_matcap,
+    matcap_texture,
+)
 from .points import FlexPointsMaterial  # noqa: E402
 from .lines import FlexLineMaterial  # noqa: E402
 
@@ -75,6 +91,19 @@ __all__ = [
     "DepthOfFieldPass",
     "NormalizedDepthPass",
     "AmbientOcclusionPass",
+    "OutlinePass",
+    "ToneMappingPass",
+    "TONEMAP_MODES",
+    "ENVIRONMENT_PRESETS",
+    "ENVIRONMENT_PROPERTIES",
+    "cube_directions",
+    "environment_radiance",
+    "procedural_env_map",
+    "MATCAP_PRESETS",
+    "MATCAP_PROPERTIES",
+    "MatcapMeshMaterial",
+    "make_matcap",
+    "matcap_texture",
     "FlexPointsMaterial",
     "FlexLineMaterial",
 ]

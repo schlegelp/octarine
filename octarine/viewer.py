@@ -17,7 +17,12 @@ from pathlib import Path
 from collections import OrderedDict
 from functools import wraps, lru_cache, partial
 from pygfx.renderers.wgpu.engine.edl import EDLPass
-from pygfx.renderers.wgpu.engine.effectpasses import NoisePass, FogPass, NormalPass
+from pygfx.renderers.wgpu.engine.effectpasses import (
+    NoisePass,
+    FogPass,
+    NormalPass,
+    PPAAPass,
+)
 from pygfx.renderers.wgpu.engine.bloom import PhysicalBasedBloomPass
 
 from rendercanvas.offscreen import OffscreenRenderCanvas
@@ -40,18 +45,31 @@ EFFECT_CLASSES = {
     "edl": EDLPass,
     "noise": NoisePass,
     "fog": FogPass,
-    # `None` = resolved lazily inside `add_effect` (octarine's own
-    # NormalizedDepthPass and AmbientOcclusionPass; avoids importing
-    # .shaders at module load)
+    # `None` = resolved lazily inside `add_effect` (octarine's own passes;
+    # avoids importing .shaders at module load)
     "depth": None,
     "ao": None,
+    "outline": None,
+    "tonemap": None,
     "normal": NormalPass,
     "bloom": PhysicalBasedBloomPass,
 }
 
-# Effects that must run before the others (in particular before the
-# anti-aliasing pass, which pygfx always keeps last)
-EFFECTS_RUN_FIRST = {"ao"}
+# Post-processing passes run in a fixed order, no matter in which order they
+# were switched on. An effect's stage says where in the chain it belongs:
+#
+#  0/1 - part of how the scene is shaded. These have to come before anything
+#        that moves pixels around, so that e.g. a depth-of-field blur blurs
+#        the occlusion and the outlines along with the image.
+#    2 - the default: lens and image effects (depth of field, bloom, fog, ...)
+#    3 - tone mapping, which needs the finished high dynamic range image
+#    4 - anti-aliasing, which wants the tone mapped one: run on values that
+#        are still allowed to exceed white it smears highlights into their
+#        surroundings. pygfx adds its own AA pass at renderer creation, i.e.
+#        *before* everything else, so we move it to the end.
+EFFECT_STAGES = {"ao": 0, "outline": 1, "tonemap": 3}
+DEFAULT_EFFECT_STAGE = 2
+PPAA_EFFECT_STAGE = 4
 
 # TODO
 # - add styles for viewer (lights, background, etc.) - e.g. .set_style(dark)
@@ -233,6 +251,9 @@ def update_helper(viewer, legend=True, bounds=True):
                 viewer._update_shadows(bounds=world_bounds)
             if fit_ao:
                 viewer._update_ao_radius(bounds=world_bounds)
+        # ... and new meshes have to be lit by the environment like the rest
+        if getattr(viewer, "_env_map", None) is not None:
+            viewer._update_environment()
 
     # Any time we update the viewer, we should set it to stale
     viewer._render_stale = True
@@ -479,6 +500,13 @@ class Viewer:
         self._shadow_fit = None  # (center, radius) of the scene; see `_fit_shadows`
         self._ao_pass = None
         self._ao_auto_radius = True  # see `Viewer._update_ao_radius`
+        self._outline_pass = None
+        self._tonemap_pass = None
+        # Image-based lighting; see `Viewer.set_environment`
+        self._env_map = None
+        self._env_settings = {}
+        self._env_background = False
+        self._pre_env_light_intensities = None
         self._animations = {}
         self._animations_flagged_for_removal = []
         self._animations_frame_counter = 0
@@ -1319,6 +1347,37 @@ class Viewer:
         else:
             raise TypeError(f"Expected callable or index (int), got {type(x)}")
 
+    @staticmethod
+    def _effect_stage(effect_pass):
+        """Where in the chain a post-processing pass belongs."""
+        stage = getattr(effect_pass, "_octarine_stage", None)
+        if stage is not None:
+            return stage
+        if isinstance(effect_pass, PPAAPass):
+            return PPAA_EFFECT_STAGE
+        return DEFAULT_EFFECT_STAGE
+
+    def _add_effect_pass(self, effect_pass, stage=DEFAULT_EFFECT_STAGE):
+        """Insert a post-processing pass at its place in the chain.
+
+        Passes are ordered by `stage` (see `EFFECT_STAGES`) rather than by
+        the order in which they were switched on, so that e.g. switching
+        ambient occlusion on after depth of field still occludes first and
+        blurs second. Passes we did not add ourselves - anything the user
+        put into `renderer.effect_passes` directly - count as the default
+        stage and keep their relative order.
+
+        """
+        effect_pass._octarine_stage = stage
+        passes = list(self.renderer.effect_passes)
+        index = len(passes)
+        for i, other in enumerate(passes):
+            if self._effect_stage(other) > stage:
+                index = i
+                break
+        passes.insert(index, effect_pass)
+        self.renderer.effect_passes = tuple(passes)
+
     def add_effect(self, effect, disable=False, **kwargs):
         """Add post-processing effect to the renderer.
 
@@ -1346,6 +1405,15 @@ class Viewer:
                        Screen-space ambient occlusion: darkens creases,
                        cavities and the contact points between objects.
                        See also `Viewer.set_ambient_occlusion`.
+                     - "outline"
+                       Draws a line around silhouettes and along creases,
+                       the way a technical illustration would. See also
+                       `Viewer.set_outline`.
+                     - "tonemap"
+                       Compresses the rendered high dynamic range image into
+                       what the display can show, so bright regions roll off
+                       instead of clipping to white; also provides the
+                       exposure control. See also `Viewer.set_tonemapping`.
                      - "normal"
                        Renders normals reconstructed from the depth buffer.
                      - "bloom"
@@ -1385,6 +1453,23 @@ class Viewer:
                       - power (default 1): exponent applied to the occlusion
                       - blur (default True): radius of the bilateral blur
                       - debug (default False): render the occlusion itself
+                    - outline:
+                      - camera (default: the viewer's camera)
+                      - color (default "#000"): outline color; its alpha is
+                        the strength of the effect
+                      - thickness (default 1): width in physical pixels
+                      - depth_threshold (default 0.02): relative step in
+                        depth that counts as a separate object
+                      - normal_threshold (default 0.3): how sharp a fold
+                        counts as a crease; 0 outlines silhouettes only
+                      - debug (default False): render the edges themselves
+                    - tonemap:
+                      - mode (default "aces"): "aces", "filmic", "reinhard"
+                        or "none"
+                      - exposure (default 1): scales the image before the
+                        tone mapping curve is applied
+                      - white_point (default 4): input value that maps to
+                        white ("reinhard" and "filmic" only)
                     - normal: no parameters
                     - bloom:
                       - bloom_strength (default 0.04): strength of the bloom
@@ -1414,6 +1499,15 @@ class Viewer:
             # deriving it from the scene (see `Viewer._update_ao_radius`)
             self._ao_auto_radius = "radius" not in kwargs
             kwargs.setdefault("radius", self._default_ao_radius())
+        elif effect == "outline":
+            from .shaders import OutlinePass
+
+            effect_cls = OutlinePass
+            kwargs.setdefault("camera", self.camera)
+        elif effect == "tonemap":
+            from .shaders import ToneMappingPass
+
+            effect_cls = ToneMappingPass
 
         # Check if we already have this effect
         p = None
@@ -1427,8 +1521,9 @@ class Viewer:
                 self.renderer.effect_passes = tuple(
                     e for e in self.renderer.effect_passes if e is not p
                 )
-                if p is getattr(self, "_ao_pass", None):
-                    self._ao_pass = None
+                for attr in ("_ao_pass", "_outline_pass", "_tonemap_pass"):
+                    if p is getattr(self, attr, None):
+                        setattr(self, attr, None)
             return
 
         if p is None:
@@ -1437,18 +1532,15 @@ class Viewer:
                 kwargs["strength"] = 5.0
 
             p = effect_cls(**kwargs)
-            passes = list(self.renderer.effect_passes)
-            if effect in EFFECTS_RUN_FIRST:
-                # Occlusion is part of the shading, so it has to run before
-                # the anti-aliasing and any lens effects
-                passes.insert(0, p)
-            else:
-                passes.append(p)
-            self.renderer.effect_passes = tuple(passes)
+            self._add_effect_pass(p, EFFECT_STAGES.get(effect, DEFAULT_EFFECT_STAGE))
+            # Keep the dedicated `set_*` methods and `add_effect` on the same
+            # pass instead of each adding one of their own
             if effect == "ao":
-                # Keep `set_ambient_occlusion` and `add_effect` on the same
-                # pass instead of each adding one of their own
                 self._ao_pass = p
+            elif effect == "outline":
+                self._outline_pass = p
+            elif effect == "tonemap":
+                self._tonemap_pass = p
         else:
             # Update parameters
             for k, v in kwargs.items():
@@ -2223,6 +2315,7 @@ class Viewer:
         silhouette=None,
         subsurface=None,
         shader=None,
+        matcap=None,
         center=True,
     ):
         """Add mesh to canvas.
@@ -2272,6 +2365,15 @@ class Viewer:
                     `pygfx.Material` subclass directly. See
                     `octarine.visuals.available_shaders()` for the full
                     list of options.
+        matcap :    str | dict | array, optional
+                    If provided, shade the mesh with a matcap instead of
+                    with the scene's lights: a picture of a shaded sphere
+                    indexed by the surface normal. Pass the name of a
+                    preset ("pearl", "clay", "metal", "gold", "jade" or
+                    "neon"), a recipe dict, or a matcap image. Use
+                    `Viewer.set_matcap` to apply one to existing meshes.
+                    A matcap replaces the material, so it cannot be
+                    combined with `silhouette`, `subsurface` or `shader`.
         center :    bool, optional
                     If True, re-center camera to all objects on canvas.
 
@@ -2286,6 +2388,7 @@ class Viewer:
                     silhouette=silhouette,
                     subsurface=subsurface,
                     shader=shader,
+                    matcap=matcap,
                     center=False,
                 )
             return
@@ -2307,6 +2410,7 @@ class Viewer:
                 silhouette=silhouette,
                 subsurface=subsurface,
                 shader=shader,
+                matcap=matcap,
             )
         else:
             visual = mesh
@@ -3273,6 +3377,413 @@ class Viewer:
                     setattr(mat, prop, value)
 
     @update_viewer(legend=False, bounds=False)
+    def set_matcap(self, matcap="pearl", objects=None, *, tint=None, **overrides):
+        """Shade meshes with a matcap instead of with the scene's lights.
+
+        A matcap ("material capture") is a picture of a shaded sphere used
+        as a lookup table: the surface normal - as seen from the camera -
+        picks a point on that sphere, and its color becomes the color of the
+        pixel. Everything the sphere shows (the falloff, the highlights, the
+        rim light) comes along with it, without a single light being
+        evaluated.
+
+        This is a staple of scientific and sculpting viewers because surface
+        shape reads exceptionally well and the result cannot be under- or
+        overlit. The trade-off is that the shading is locked to the camera:
+        it turns with the view, and the mesh takes no part in shadows,
+        ambient occlusion or anything else the lights drive.
+
+        Octarine generates its matcaps procedurally, so they are recipes
+        rather than images - see `octarine.shaders.matcap.MATCAP_PRESETS`:
+
+        | Preset  | Description                                            |
+        |---------|--------------------------------------------------------|
+        | `pearl` | Neutral glossy white; shape without a color (default)  |
+        | `clay`  | Matte modelling clay; no highlights, pure form         |
+        | `metal` | Brushed steel; hard highlight and a strong rim         |
+        | `gold`  | Warm polished metal, lit by a low sun                  |
+        | `jade`  | Deep green stone with a translucent glowing rim        |
+        | `neon`  | Near-black with magenta/cyan edges; for dark scenes    |
+
+        Parameters
+        ----------
+        matcap :    str | dict | array | None
+                    Name of a preset (see table above), a dict of the
+                    properties below, or an image to use as-is: an
+                    (N, M, 3) or (N, M, 4) array of floats (linear) or
+                    uint8 (sRGB), which is what an off-the-shelf matcap PNG
+                    looks like once loaded. Use `None` to go back to the
+                    material the meshes had before.
+        objects :   list, optional
+                    Objects to set the matcap for. If None, will set for
+                    all (mesh) objects. Non-mesh objects are silently
+                    skipped.
+        tint :      float, optional
+                    How much of an object's own color tints the matcap,
+                    from 0 (the matcap's colors win) to 1 (fully multiplied
+                    in). Tinting keeps differently colored objects
+                    distinguishable, which is why the neutral presets ask
+                    for it and the strongly colored ones do not. Defaults
+                    to whatever the preset asks for.
+        **overrides
+                    Individual properties of the recipe to override:
+                    `environment` (which lighting setup the sphere is lit
+                    with, see `Viewer.set_environment`), `base_color`,
+                    `specular`, `shininess`, `rim`, `rim_color` and
+                    `rim_power`.
+
+        Examples
+        --------
+        >>> import octarine as oc
+        >>> v = oc.Viewer()
+        >>> v.set_matcap("clay")
+
+        Presets are starting points - every property can be overridden:
+
+        >>> v.set_matcap("pearl", base_color="#b0c4de", rim=0.6)
+        >>> v.set_matcap("metal", environment="sunset")
+
+        Back to the regular lit materials:
+
+        >>> v.set_matcap(None)
+
+        """
+        # These imports register the shader with pygfx
+        from .shaders import MATCAP_PRESETS, MatcapMeshMaterial, matcap_texture
+
+        if objects is None:
+            objects = list(self.objects)
+        else:
+            objects = utils.make_iterable(objects)
+
+        if matcap is None:
+            restored = []
+            for n in objects:
+                for v in self.objects[n]:
+                    previous = getattr(v, "_pre_matcap_material", None)
+                    if previous is not None:
+                        v.material = previous
+                        del v._pre_matcap_material
+                        restored.append(v)
+            # A matcap is exempt from the environment; now that it is gone,
+            # these meshes have to be lit like the rest again
+            self._update_environment(objects=restored)
+            return
+
+        tex_map = matcap_texture(matcap, **overrides)
+        if tint is None:
+            # The recipe's own tint. An image we were handed directly says
+            # nothing about tinting, so leave the object's color in place.
+            recipe = MATCAP_PRESETS.get(matcap, {}) if isinstance(matcap, str) else matcap
+            tint = recipe.get("tint", 1.0) if isinstance(recipe, dict) else 1.0
+
+        for n in objects:
+            for v in self.objects[n]:
+                if getattr(v, "_pinned", False):
+                    continue
+                if not isinstance(v, gfx.Mesh):
+                    continue
+                mat = v.material
+                if isinstance(mat, MatcapMeshMaterial):
+                    mat.matcap = tex_map
+                    mat.tint = tint
+                    continue
+
+                # Swap in a matcap material, carrying over the relevant
+                # properties of the old one. The old material is kept so
+                # that `set_matcap(None)` can put it back - including any
+                # silhouette or subsurface settings it may have had.
+                props = {
+                    p: getattr(mat, p)
+                    for p in (
+                        "color",
+                        "color_mode",
+                        "map",
+                        "opacity",
+                        "pick_write",
+                        "side",
+                        "flat_shading",
+                        "alpha_test",
+                        "alpha_mode",
+                        "wireframe",
+                    )
+                    if getattr(mat, p, None) is not None
+                }
+                new_mat = MatcapMeshMaterial(matcap=tex_map, tint=tint, **props)
+                v._pre_matcap_material = mat
+                v.material = new_mat
+
+    @update_viewer(legend=False, bounds=False)
+    def set_environment(
+        self, preset="studio", *, resolution=128, rotation=0.0,
+        show_background=False, pbr=True, roughness=0.4, metalness=0.0,
+        reflectivity=0.35, dim_lights=0.5, **overrides,
+    ):
+        """Light the scene with a procedural environment map (IBL).
+
+        A handful of lights leaves surfaces looking flat: every pixel is lit
+        from two or three directions and from nowhere else. Real objects are
+        lit from *every* direction - sky, ground, the walls of the room -
+        which is what gives them their gradients and their reflections.
+        Image-based lighting captures that by wrapping the scene in an
+        environment map and treating the whole thing as a light source.
+
+        Octarine synthesizes its environments rather than loading HDRI
+        photographs, so nothing has to be downloaded: each one is a sky
+        gradient plus a few "softboxes" (see
+        `octarine.shaders.environment.ENVIRONMENT_PRESETS`):
+
+        | Preset   | Description                                           |
+        |----------|-------------------------------------------------------|
+        | `studio` | Neutral three-point studio; the all-rounder (default) |
+        | `soft`   | Overcast dome; near-shadowless, for figures           |
+        | `sky`    | Outdoor daylight; blue zenith, warm sun               |
+        | `sunset` | Low warm sun against a violet sky; dramatic           |
+        | `neon`   | Near-black room with magenta/cyan rims; dark scenes   |
+
+        Only physically-based (`shader="standard"` or `"physical"`) meshes
+        can be lit by an environment in full. By default the plain Phong
+        meshes octarine creates are therefore converted to PBR ones (see
+        `pbr` below); meshes with a silhouette, subsurface or matcap
+        material keep theirs and receive only a reflection on top of their
+        normal shading.
+
+        Because an environment lights a surface from all directions at once
+        it adds up to a lot of light, and the scene's own lights are dimmed
+        to compensate (see `dim_lights`). Pairing this with
+        `Viewer.set_tonemapping` is recommended: environments produce values
+        well above white, which are otherwise simply clipped.
+
+        Parameters
+        ----------
+        preset :    str | dict | None
+                    Name of a preset (see table above) or a dict of the
+                    properties below. Use `None` to switch the environment
+                    off again, which also undoes everything below.
+        resolution : int
+                    Size of one cube map face. 128 is plenty for the
+                    lighting itself; raise it if a mirror-like material
+                    shows the softboxes as visibly polygonal.
+        rotation :  float
+                    Rotation of the environment about the vertical axis in
+                    degrees; moves the highlights without having to
+                    redefine the lights.
+        show_background : bool
+                    If True, also show the environment as the background,
+                    so that reflections and backdrop agree.
+        pbr :       bool
+                    Whether to convert plain Phong meshes to physically
+                    based ones, which is what lets them pick the
+                    environment up as full (diffuse + specular) lighting.
+                    Their previous materials are restored by
+                    `set_environment(None)`.
+        roughness : float
+                    Roughness of the converted materials, from 0 (a mirror)
+                    to 1 (completely matte).
+        metalness : float
+                    Metalness of the converted materials, from 0 (a
+                    dielectric - plastic, stone, tissue) to 1 (bare metal,
+                    which takes its color entirely from its reflections).
+        reflectivity : float
+                    How strong an environment reflection non-PBR materials
+                    (Phong, toon, ...) get on top of their normal shading.
+        dim_lights : float | bool
+                    Factor the scene's own lights are scaled by while the
+                    environment is on, so that the two do not add up to a
+                    washed-out image. Pass 1 (or False) to leave them
+                    alone; the original intensities are restored by
+                    `set_environment(None)`.
+        **overrides
+                    Individual properties of the environment to override:
+                    `intensity`, `sky`, `horizon`, `ground`, `gradient` and
+                    `lights`.
+
+        Examples
+        --------
+        >>> import octarine as oc
+        >>> v = oc.Viewer()
+        >>> v.set_environment("studio")
+
+        For the full effect, show the environment and tone map the result:
+
+        >>> v.set_environment("sunset", show_background=True)
+        >>> v.set_tonemapping("aces")
+
+        Presets are starting points - every property can be overridden:
+
+        >>> v.set_environment("studio", rotation=90, intensity=1.5)
+        >>> v.set_environment("neon", roughness=0.15, metalness=0.9)
+
+        Back to the plain lights:
+
+        >>> v.set_environment(None)
+
+        """
+        if preset is None:
+            self._clear_environment()
+            return
+
+        # These imports register the shaders with pygfx
+        from .shaders import procedural_env_map
+
+        self._env_map = procedural_env_map(
+            preset, resolution=resolution, rotation=rotation, **overrides
+        )
+        self._env_settings = dict(
+            pbr=bool(pbr),
+            roughness=float(roughness),
+            metalness=float(metalness),
+            reflectivity=float(reflectivity),
+        )
+
+        # Physically-based materials pick this up on their own - including
+        # any that are added later
+        self.scene.environment = self._env_map
+
+        if show_background:
+            self._background.material = gfx.BackgroundSkyboxMaterial(map=self._env_map)
+            self._env_background = True
+        elif getattr(self, "_env_background", False):
+            self.set_bgcolor(self._bgcolor)
+            self._env_background = False
+
+        self._dim_lights(dim_lights)
+        self._update_environment()
+
+    def _dim_lights(self, factor):
+        """Scale the scene's own lights while an environment is lighting it.
+
+        An environment lights a surface from every direction at once, so
+        leaving the punctual lights at full strength on top of it washes the
+        image out. The original intensities are remembered so that
+        `set_environment(None)` can put them back.
+        """
+        if factor is False:
+            factor = 1.0
+        factor = float(factor)
+        if factor < 0:
+            raise ValueError(f"dim_lights must be >= 0, got {factor}")
+
+        if self._pre_env_light_intensities is None:
+            self._pre_env_light_intensities = {
+                id(light): light.intensity for light in self.lights
+            }
+        for light in self.lights:
+            original = self._pre_env_light_intensities.get(id(light))
+            if original is not None:
+                light.intensity = original * factor
+
+    def _update_environment(self, objects=None):
+        """Apply the current environment to (new) mesh materials.
+
+        Called via `update_helper` whenever objects are added, so that
+        meshes added after `set_environment` are lit the same way.
+        """
+        if self._env_map is None:
+            return
+
+        from .shaders import MatcapMeshMaterial
+
+        settings = self._env_settings
+        for vis in self.visuals if objects is None else objects:
+            if not isinstance(vis, gfx.Mesh) or getattr(vis, "_pinned", False):
+                continue
+            mat = vis.material
+            if isinstance(mat, MatcapMeshMaterial):
+                continue  # a matcap deliberately ignores the scene's lighting
+            if isinstance(mat, gfx.MeshStandardMaterial):
+                # Takes the environment straight off the scene. If it is one
+                # we made, keep it in step with the current settings - a
+                # material the user brought themselves is left alone.
+                created = getattr(vis, "_pre_env_material", (None, None))[0]
+                if mat is created:
+                    mat.roughness = settings["roughness"]
+                    mat.metalness = settings["metalness"]
+                continue
+
+            if settings["pbr"] and type(mat) is gfx.MeshPhongMaterial:
+                # Only *plain* Phong materials are converted: the silhouette
+                # and subsurface materials derive from it, and swapping them
+                # out would throw their effect away.
+                props = {
+                    p: getattr(mat, p)
+                    for p in (
+                        "color",
+                        "color_mode",
+                        "map",
+                        "opacity",
+                        "pick_write",
+                        "side",
+                        "flat_shading",
+                        "emissive",
+                        "alpha_test",
+                        "alpha_mode",
+                        "wireframe",
+                    )
+                    if getattr(mat, p, None) is not None
+                }
+                new_mat = gfx.MeshStandardMaterial(
+                    roughness=settings["roughness"],
+                    metalness=settings["metalness"],
+                    **props,
+                )
+                # Both the material we made and the one it replaced: the
+                # first tells `_clear_environment` whether ours is still the
+                # one in place, the second is what it puts back
+                vis._pre_env_material = (new_mat, mat)
+                vis.material = new_mat
+                continue
+
+            # Not physically based: pygfx can still give it a plain
+            # reflection of the environment on top of its own shading
+            if hasattr(mat, "env_map"):
+                mat.env_map = self._env_map
+                mat.env_combine_mode = "ADD"
+                mat.reflectivity = settings["reflectivity"]
+
+    def _clear_environment(self):
+        """Undo everything `set_environment` did."""
+        env_map, self._env_map = self._env_map, None
+        self.scene.environment = None
+
+        for vis in self.visuals:
+            if not isinstance(vis, gfx.Mesh):
+                continue
+            saved = getattr(vis, "_pre_env_material", None)
+            if saved is not None:
+                created, original = saved
+                if vis.material is created:
+                    vis.material = original
+                elif getattr(vis, "_pre_matcap_material", None) is created:
+                    # A matcap was applied on top of the material we made, so
+                    # ours is not the one to swap out - but taking the matcap
+                    # off later must not put it back either
+                    vis._pre_matcap_material = original
+                del vis._pre_env_material
+            elif getattr(vis.material, "env_map", None) is env_map:
+                # Only ours - an env_map the user assigned themselves stays
+                vis.material.env_map = None
+
+        if self._pre_env_light_intensities is not None:
+            for light in self.lights:
+                original = self._pre_env_light_intensities.get(id(light))
+                if original is not None:
+                    light.intensity = original
+            self._pre_env_light_intensities = None
+
+        if getattr(self, "_env_background", False):
+            self.set_bgcolor(self._bgcolor)
+            self._env_background = False
+
+    @property
+    def environment(self):
+        """The environment map lighting the scene, if any (read-only).
+
+        Set it with `Viewer.set_environment`.
+        """
+        return self._env_map
+
+    @update_viewer(legend=False, bounds=False)
     def set_depth_of_field(
         self, enabled=True, *, focus=None, aperture=100.0, max_radius=16.0,
         smooth=False, snap_radius=0,
@@ -3339,11 +3850,9 @@ class Viewer:
                 smooth=smooth,
                 snap_radius=snap_radius,
             )
-            # Run before other effect passes (e.g. anti-aliasing)
-            self.renderer.effect_passes = [
-                self._dof_pass,
-                *self.renderer.effect_passes,
-            ]
+            # A lens effect: after the shading passes (occlusion, outlines),
+            # before the tone map
+            self._add_effect_pass(self._dof_pass)
         else:
             self._dof_pass.focus = focus
             self._dof_pass.aperture = aperture
@@ -3477,10 +3986,7 @@ class Viewer:
             )
             # Occlusion is part of the shading, so it has to run before the
             # anti-aliasing and any lens effects (e.g. depth of field)
-            self.renderer.effect_passes = [
-                self._ao_pass,
-                *self.renderer.effect_passes,
-            ]
+            self._add_effect_pass(self._ao_pass, EFFECT_STAGES["ao"])
         else:
             self._ao_pass.radius = radius
             self._ao_pass.intensity = intensity
@@ -3490,6 +3996,185 @@ class Viewer:
             self._ao_pass.blur = blur
             self._ao_pass.debug = debug
         self._ao_pass.enabled = True
+
+    @update_viewer(legend=False, bounds=False)
+    def set_outline(
+        self, enabled=True, *, color="#000", thickness=1.0,
+        depth_threshold=0.02, normal_threshold=0.3, debug=False,
+    ):
+        """Draw outlines around silhouettes and along creases.
+
+        This gives the scene the look of a technical illustration, and does
+        real work in a crowded one: objects of similar color that overlap
+        become individually readable, because each of them is bounded by a
+        line.
+
+        Note that this is a screen-space post-processing effect: it applies
+        to the entire rendered image (including overlay elements such as
+        messages), and objects that do not write depth (e.g. meshes with a
+        transparent alpha mode) are neither outlined nor occlude an outline.
+
+        Parameters
+        ----------
+        enabled :   bool
+                    Use `viewer.set_outline(False)` to turn the effect off
+                    again.
+        color :     str | tuple
+                    Color of the outline. Its alpha channel doubles as the
+                    strength of the effect, so e.g. "#0004" gives a subtle
+                    line rather than a hard one.
+        thickness : float
+                    Width of the outline in physical pixels. Values above
+                    about 4 start to look chunky rather than drawn.
+        depth_threshold : float
+                    How far a neighbouring pixel has to lie off the surface
+                    under the current one to count as a separate object,
+                    relative to its distance from the camera. Lower it to
+                    outline shallower steps, raise it if surfaces are
+                    outlined across their interior.
+        normal_threshold : float
+                    How sharply the surface has to fold to count as a
+                    crease, as `1 - cos(angle)`: 0.3 is roughly 45 degrees.
+                    0 switches creases off and outlines silhouettes only.
+        debug :     bool
+                    If True, render the detected edges as white on black
+                    instead of drawing them over the scene. Useful for
+                    tuning the two thresholds.
+
+        Examples
+        --------
+        >>> import octarine as oc
+        >>> v = oc.Viewer()
+        >>> v.set_outline()
+
+        A thicker, softer line - and silhouettes only:
+
+        >>> v.set_outline(color="#0008", thickness=2, normal_threshold=0)
+
+        """
+        if not enabled:
+            if getattr(self, "_outline_pass", None) is not None:
+                self._outline_pass.enabled = False
+            return
+
+        from .shaders import OutlinePass
+
+        if getattr(self, "_outline_pass", None) is None:
+            self._outline_pass = OutlinePass(
+                self.camera,
+                color=color,
+                thickness=thickness,
+                depth_threshold=depth_threshold,
+                normal_threshold=normal_threshold,
+                debug=debug,
+            )
+            # Outlines are part of the shading: they belong under a lens
+            # effect (and have to be blurred by it), not on top of it
+            self._add_effect_pass(self._outline_pass, EFFECT_STAGES["outline"])
+        else:
+            self._outline_pass.color = color
+            self._outline_pass.thickness = thickness
+            self._outline_pass.depth_threshold = depth_threshold
+            self._outline_pass.normal_threshold = normal_threshold
+            self._outline_pass.debug = debug
+        self._outline_pass.enabled = True
+
+    @update_viewer(legend=False, bounds=False)
+    def set_tonemapping(self, mode="aces", *, exposure=1.0, white_point=4.0):
+        """Set tone mapping (and exposure) for the viewer.
+
+        The scene is rendered into a floating point buffer, so colors are
+        not limited to [0, 1]: highlights, emissive surfaces and anything
+        lit by an environment map (see `Viewer.set_environment`) routinely
+        go well above white. Without tone mapping those values are simply
+        clipped, which turns bright regions into flat white blobs and skews
+        their color - a warm highlight reads as pure red once the red
+        channel clips and the others have not.
+
+        Tone mapping maps that open-ended range onto what the display can
+        show, rolling the highlights off gradually instead. `exposure`
+        scales the image before the curve is applied, i.e. it is the
+        photographic exposure control.
+
+        The pass runs last, after effects such as bloom (which want the
+        untouched high dynamic range values) and before pygfx's own
+        anti-aliasing and gamma handling.
+
+        Parameters
+        ----------
+        mode :      str | None
+                    The tone mapping curve:
+                     - "aces" (default): a fit to the ACES filmic response.
+                       Contrasty and saturated; the usual choice.
+                     - "filmic": Hable's "Uncharted 2" curve. Like ACES but
+                       holds on to more shadow detail.
+                     - "reinhard": the gentlest option. Stays closest to the
+                       original colors, at the cost of looking flatter.
+                     - "none": clip only, i.e. exposure control on its own.
+                    Use `None` to remove the tone mapping altogether.
+        exposure :  float
+                    Scales the image before the curve is applied: 2 is one
+                    stop brighter, 0.5 one stop darker. See also the
+                    `Viewer.exposure` property, which sets this on its own.
+        white_point : float
+                    The input value that maps to white. Only used by
+                    "reinhard" and "filmic"; raising it holds on to more
+                    highlight detail (and darkens the image overall).
+
+        Examples
+        --------
+        >>> import octarine as oc
+        >>> v = oc.Viewer()
+        >>> v.set_environment("studio")   # gives it something to roll off
+        >>> v.set_tonemapping("aces")
+        >>> v.exposure = 1.5              # brighten by ~0.6 stops
+
+        Back to plain clipping:
+
+        >>> v.set_tonemapping(None)
+
+        """
+        if mode is None or mode is False:
+            if getattr(self, "_tonemap_pass", None) is not None:
+                self.renderer.effect_passes = tuple(
+                    e for e in self.renderer.effect_passes if e is not self._tonemap_pass
+                )
+                self._tonemap_pass = None
+            return
+
+        from .shaders import ToneMappingPass
+
+        if getattr(self, "_tonemap_pass", None) is None:
+            self._tonemap_pass = ToneMappingPass(
+                mode=mode, exposure=exposure, white_point=white_point
+            )
+            # Has to see the finished image, so it goes last
+            self._add_effect_pass(self._tonemap_pass, EFFECT_STAGES["tonemap"])
+        else:
+            self._tonemap_pass.mode = mode
+            self._tonemap_pass.exposure = exposure
+            self._tonemap_pass.white_point = white_point
+        self._tonemap_pass.enabled = True
+
+    @property
+    def exposure(self):
+        """Exposure of the rendered image; 1 leaves it unchanged.
+
+        Setting this switches tone mapping on if it is not already (see
+        `Viewer.set_tonemapping`) - without a curve to roll the highlights
+        off, raising the exposure would only clip them.
+
+        """
+        pass_ = getattr(self, "_tonemap_pass", None)
+        return 1.0 if pass_ is None else pass_.exposure
+
+    @exposure.setter
+    def exposure(self, value):
+        if getattr(self, "_tonemap_pass", None) is None:
+            self.set_tonemapping(exposure=value)
+        else:
+            self._tonemap_pass.exposure = value
+            self._render_stale = True
 
     @update_viewer(legend=True, bounds=False)
     def set_colors(self, c, alpha_mode="auto"):
