@@ -221,10 +221,18 @@ def update_helper(viewer, legend=True, bounds=True):
     if bounds:
         if getattr(viewer, "show_bounds", False):
             viewer.update_bounds()
-        # New visuals have to pick up the shadow state, and the lights and their
-        # shadow cameras have to be re-fitted to the new extents of the scene
-        if getattr(viewer, "_shadows", False):
-            viewer._update_shadows()
+        # New visuals have to pick up the shadow state, and both the lights
+        # (with their shadow cameras) and the ambient occlusion radius have to
+        # be re-fitted to the new extents of the scene. Walking those extents
+        # is O(number of objects), so do it once and share.
+        fit_shadows = getattr(viewer, "_shadows", False)
+        fit_ao = getattr(viewer, "_ao_pass", None) is not None
+        if fit_shadows or fit_ao:
+            world_bounds = viewer.bounds
+            if fit_shadows:
+                viewer._update_shadows(bounds=world_bounds)
+            if fit_ao:
+                viewer._update_ao_radius(bounds=world_bounds)
 
     # Any time we update the viewer, we should set it to stale
     viewer._render_stale = True
@@ -252,11 +260,18 @@ class Viewer:
     control :   "trackball" | "panzoom" | "fly" | "orbit"
                 Controller type to use. Defaults to "trackball".
     headlight : bool
-                If True, objects are lit by a single light source that is linked
-                to the camera - i.e. they are always lit from the front. If False
-                (default), we use two fixed light sources which means the lighting
+                If True (default), objects are lit by a single light source that
+                is linked to the camera - i.e. they are always lit from the front.
+                If False, we use two fixed light sources which means the lighting
                 changes as you move the camera. Can also be changed at any time via
                 the `Viewer.headlight` property.
+    shadows :   bool
+                Whether objects cast shadows onto each other. On by default; see
+                the `Viewer.shadows` property for details.
+    ambient_occlusion : bool
+                Whether to darken creases, cavities and the points where objects
+                touch. On by default with settings derived from the scene; use
+                `Viewer.set_ambient_occlusion` to tune them.
     show :      "auto" (default) | bool
                 Whether to immediately show the viewer. When set to "auto" (default),
                 will immmediately show the viewer if:
@@ -284,7 +299,9 @@ class Viewer:
         control="trackball",
         size=None,
         show=True,
-        headlight=False,
+        headlight=True,
+        shadows=True,
+        ambient_occlusion=True,
         **kwargs,
     ):
         # We need to import WgpuCanvas before we (potentially) start the event loop
@@ -460,6 +477,8 @@ class Viewer:
         self._show_bounds = False
         self._shadows = False
         self._shadow_fit = None  # (center, radius) of the scene; see `_fit_shadows`
+        self._ao_pass = None
+        self._ao_auto_radius = True  # see `Viewer._update_ao_radius`
         self._animations = {}
         self._animations_flagged_for_removal = []
         self._animations_frame_counter = 0
@@ -473,6 +492,12 @@ class Viewer:
         self._linked = []
         self._link_filter = (None, None)
         self._last_camera_sig = None
+
+        # Effects that are on by default. These have to come last because they
+        # need the variables above (plus the scene, camera and renderer)
+        self.shadows = shadows
+        if ambient_occlusion:
+            self.set_ambient_occlusion()
 
         viewers.append(self)
 
@@ -733,9 +758,9 @@ class Viewer:
     def headlight(self):
         """Whether the scene is lit by a light linked to the camera.
 
-        If True, a single light source is parented to the camera which means
-        objects are always lit from the front, no matter where you move the
-        camera. If False (default), we use two point lights that are fixed in
+        If True (default), a single light source is parented to the camera
+        which means objects are always lit from the front, no matter where you
+        move the camera. If False, we use two point lights that are fixed in
         world space, i.e. the lighting changes as the camera moves. Providing
         either a float or a tuple of 2 or 3 floats will switch the headlight on
         and set the light's offset from the camera's axis: a single float `x`
@@ -786,7 +811,7 @@ class Viewer:
 
     @property
     def shadows(self):
-        """Whether objects cast shadows onto each other.
+        """Whether objects cast shadows onto each other (on by default).
 
         Note that only meshes can *receive* shadows - lines and points can cast
         them but are never shaded themselves. Volumes and text take no part in
@@ -815,13 +840,14 @@ class Viewer:
 
         self._render_stale = True
 
-    def _update_shadows(self):
+    def _update_shadows(self, bounds=None):
         """Apply the current shadow state to the scene.
 
         This is called whenever shadows are toggled and - via `update_helper` -
         whenever objects are added to or removed from the scene, so that new
         visuals pick up the shadow state and the lights stay fitted to the
-        scene as it grows.
+        scene as it grows. `bounds` is the scene's extents if the caller has
+        them at hand already (see `Viewer.bounds`).
 
         """
         state = self._shadows
@@ -852,9 +878,9 @@ class Viewer:
             if isinstance(light, (gfx.PointLight, gfx.DirectionalLight, gfx.SpotLight)):
                 light.cast_shadow = state
 
-        self._fit_shadows()
+        self._fit_shadows(bounds=bounds)
 
-    def _fit_shadows(self):
+    def _fit_shadows(self, bounds=None):
         """Fit the lights and their shadow cameras to the scene.
 
         Shadow maps are rendered from the light's point of view, through a
@@ -869,6 +895,9 @@ class Viewer:
         scene and size all the frusta to match. Switching shadows off parks the
         lights back where they were, which keeps their light parallel.
 
+        `bounds` is the scene's extents if the caller has them at hand already
+        (see `Viewer.bounds`).
+
         """
         if not self._shadows:
             self._shadow_fit = None
@@ -876,7 +905,8 @@ class Viewer:
                 light.local.position = position
             return
 
-        bounds = self.bounds
+        if bounds is None:
+            bounds = self.bounds
         if bounds is None:  # nothing on the canvas to fit to
             self._shadow_fit = None
             return
@@ -1380,6 +1410,9 @@ class Viewer:
 
             effect_cls = AmbientOcclusionPass
             kwargs.setdefault("camera", self.camera)
+            # An explicit radius pins the effect to it, otherwise we keep
+            # deriving it from the scene (see `Viewer._update_ao_radius`)
+            self._ao_auto_radius = "radius" not in kwargs
             kwargs.setdefault("radius", self._default_ao_radius())
 
         # Check if we already have this effect
@@ -3328,13 +3361,39 @@ class Viewer:
         if dof_pass is not None and dof_pass.enabled and not dof_pass._smooth_settled:
             self._render_stale = True
 
-    def _default_ao_radius(self, fraction=0.04):
+    def _default_ao_radius(self, fraction=0.04, bounds=None):
         """A sensible ambient occlusion radius for the current scene."""
-        bounds = self.bounds
+        if bounds is None:
+            bounds = self.bounds
         if bounds is None:  # nothing on the canvas (yet)
             return 1.0
         diagonal = float(np.linalg.norm(bounds[:, 1] - bounds[:, 0]))
         return (diagonal * fraction) or 1.0
+
+    def _update_ao_radius(self, bounds=None):
+        """Re-derive the ambient occlusion radius from the scene.
+
+        Unlike the other occlusion parameters the radius is in world units and
+        hence has to match the scene - which we only know once there is
+        something on the canvas. This is called via `update_helper` whenever
+        objects are added or removed, unless the user has pinned a radius by
+        passing one explicitly (see `Viewer.set_ambient_occlusion`). `bounds`
+        is the scene's extents if the caller has them at hand already.
+
+        """
+        if self._ao_pass is None or not self._ao_auto_radius:
+            return
+
+        radius = self._default_ao_radius(bounds=bounds)
+        if radius == self._ao_pass.radius:
+            return
+
+        self._ao_pass.radius = radius
+        self._render_stale = True
+
+        # Keep the GUI's radius slider in step with it
+        if self.controls is not None:
+            self.controls.sync_ao_radius()
 
     @update_viewer(legend=False, bounds=False)
     def set_ambient_occlusion(
@@ -3362,11 +3421,10 @@ class Viewer:
                     How far to look for occluders, in world units. This is
                     the one parameter that has to match the scene: too
                     small and the effect disappears, too large and it turns
-                    into a dark haze. If None (default), 4% of the
-                    diagonal of the current scene bounds is used - note
-                    that this is *not* updated as objects are added or
-                    removed, so pass a value explicitly if the automatic
-                    one does not suit.
+                    into a dark haze. If None (default), 4% of the diagonal
+                    of the scene bounds is used and kept up-to-date as
+                    objects are added or removed; passing a value pins the
+                    radius to it.
         intensity : float
                     Strength of the darkening, from 0 (no effect) to 1
                     (fully occluded pixels turn black).
@@ -3400,6 +3458,9 @@ class Viewer:
 
         from .shaders import AmbientOcclusionPass
 
+        # Without an explicit radius we keep deriving it from the scene
+        # (see `Viewer._update_ao_radius`)
+        self._ao_auto_radius = radius is None
         if radius is None:
             radius = self._default_ao_radius()
 

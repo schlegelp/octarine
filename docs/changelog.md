@@ -16,7 +16,13 @@ _Date: ongoing_
   costs well under a millisecond per frame at the default 16 samples. `radius` (defaulting to
   4% of the scene's diagonal) is the parameter that has to match the scene; `intensity`, `bias`,
   `samples`, `power` and `blur` tune the look, and `debug=True` renders the raw occlusion
-  (see [Ambient occlusion](effects.md#ambient-occlusion))
+  (see [Ambient occlusion](effects.md#ambient-occlusion)). With an automatic radius the effect
+  now also tracks the scene, i.e. the radius is re-derived as objects are added or removed
+- control panel: the "Effects" tab now has one collapsible section per effect (the checkbox
+  switches the effect on, the arrow expands its parameters) and gained controls for
+  [`Viewer.shadows`][octarine.Viewer.shadows] and
+  [`Viewer.set_ambient_occlusion`][octarine.Viewer.set_ambient_occlusion]
+  (see [GUI Controls](controls.md#gui-controls))
 - new [`Viewer.link`][octarine.Viewer.link] / [`Viewer.unlink`][octarine.Viewer.unlink] methods
   (plus a [`Viewer.linked`][octarine.Viewer.linked] property): keep the camera synchronised
   between two or more viewers, so that panning, rotating or zooming in one of them does the
@@ -84,6 +90,14 @@ _Date: ongoing_
   and sparse volumes
 
 #### Breaking
+- shadows, the camera-linked headlight and ambient occlusion are now **on by default**, i.e.
+  scenes look different out of the box: objects cast shadows onto each other, are always lit
+  from the front and get contact shadows in their creases and cavities. Each can be switched
+  off individually via the new `shadows` / `ambient_occlusion` parameters and the existing
+  `headlight` parameter (or the matching properties/methods), e.g.
+  `oc.Viewer(shadows=False, headlight=False, ambient_occlusion=False)` gets you the previous
+  look. Note that fitting the shadows and the occlusion radius to the scene costs an extra
+  pass over the objects whenever one is added or removed
 - `opacity` no longer scales the extinction per voxel in `add_sparse_volume(mode="density")`;
   it is now a plain global opacity in all modes and `density` takes its place
 

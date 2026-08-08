@@ -238,24 +238,24 @@ To remove it again:
 
 ## Lighting
 
-By default, the scene is lit by two point lights (plus a weak ambient light)
-that are fixed in space: a strong one from the front/top/left and a weaker one
-from the back. As a consequence, the lighting changes as you move the camera
-around - which side of an object is lit depends on where you're looking from.
+By default, the scene is lit by a single "headlight" (plus a weak ambient
+light) that is linked to the camera, i.e. objects are always lit from the
+front no matter how you rotate the scene.
 
-Set [`octarine.Viewer.headlight`][] to `True` to instead use a single light
-that is linked to the camera. Objects are then always lit from the front, no
-matter how you rotate the scene:
+Set [`octarine.Viewer.headlight`][] to `False` to instead use two point lights
+that are fixed in space: a strong one from the front/top/left and a weaker one
+from the back. The lighting then changes as you move the camera around - which
+side of an object is lit depends on where you're looking from:
 
 ```python
 >>> v = oc.Viewer()
->>> v.headlight = True
+>>> v.headlight = False
 ```
 
 You can also set this when initializing the viewer:
 
 ```python
->>> v = oc.Viewer(headlight=True)
+>>> v = oc.Viewer(headlight=False)
 ```
 
 The headlight is not exactly head-on but offset slightly to the top-left of the
@@ -285,13 +285,17 @@ all light sources (including the headlight) if you want to fine-tune them:
 
 ### Shadows
 
-Set [`octarine.Viewer.shadows`][] to `True` to have objects cast shadows onto
-each other:
+Objects cast shadows onto each other by default. Use
+[`octarine.Viewer.shadows`][] (or the `shadows` parameter) to switch that off
+and on again:
 
 ```python
 >>> v = oc.Viewer()
 >>> v.add_mesh(mesh)
->>> v.shadows = True
+>>> v.shadows = False
+
+>>> # ... or right from the start
+>>> v = oc.Viewer(shadows=False)
 ```
 
 Shadows have to be rendered from each light's point of view, so the lights and
@@ -323,8 +327,12 @@ The control panel is organized into four tabs:
   [Lighting](#lighting)) and the [render trigger](triggers.md).
 - **Screenshot**: save a screenshot to file (with options for size and a
   transparent background) or copy it straight to the clipboard.
-- **Effects**: toggle [silhouette rendering](effects.md#silhouette-rendering)
-  and [depth of field](effects.md#depth-of-field) - see
+- **Effects**: one collapsible section per effect - [shadows](#shadows),
+  eye-dome lighting, [ambient occlusion](effects.md#ambient-occlusion),
+  [silhouette rendering](effects.md#silhouette-rendering),
+  [subsurface scattering](effects.md#subsurface-scattering) and
+  [depth of field](effects.md#depth-of-field). The checkbox switches an
+  effect on, the arrow next to it expands its parameters - see
   [Effects & Shading](effects.md).
 
 ### Shell/IPython

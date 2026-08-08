@@ -168,6 +168,11 @@ class Controls(QtWidgets.QWidget):
 
         self.color_picker = self._get_shared_color_picker()
 
+        # Register as the viewer's panel (unless it already has one) so it can
+        # push updates - the legend, the occlusion radius - to us
+        if viewer.controls is None:
+            viewer._controls = self
+
     def showEvent(self, event):
         """Re-layout legend rows whenever the window is (re)shown.
 
@@ -637,11 +642,55 @@ class Controls(QtWidgets.QWidget):
 
         QtCore.QTimer.singleShot(timeout, clear)
 
+    def add_effect_section(self, title, tooltip, checked=False, collapsible=True):
+        """Add a collapsible section with an on/off checkbox to the effects tab.
+
+        The effect's parameters (if any) go into `section.content_layout`.
+        """
+        if self.effects_layout.count():
+            self.effects_layout.addWidget(QHLine())
+        # N.B. the initial state goes through the constructor so that it
+        # neither expands the section nor reaches the caller's own handler
+        section = CollapsibleSection(title, checked=checked, collapsible=collapsible)
+        section.checkbox.setToolTip(tooltip)
+        self.effects_layout.addWidget(section)
+        return section
+
     def build_effects_gui(self):
-        """Build the GUI for the effects tab."""
+        """Build the GUI for the effects tab.
+
+        Every effect gets its own collapsible section: the header carries the
+        on/off checkbox and the parameters live in the (initially collapsed)
+        body, so the tab stays a short list of effects.
+        """
+        # Expanded sections quickly add up to more than fits the window
+        scroll_area = QtWidgets.QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        effects_widget = QtWidgets.QWidget()
+        self.effects_layout = QtWidgets.QVBoxLayout(effects_widget)
+        self.effects_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_area.setWidget(effects_widget)
+        self.tab4_layout.addWidget(scroll_area)
+
+        # --- Shadows ---
+        # Like the eye-dome lighting below this comes straight from pygfx,
+        # i.e. it does not require octarine's custom shaders.
+        self.shadows_section = self.add_effect_section(
+            "Shadows",
+            "Let objects cast shadows onto each other. Note that only meshes "
+            "can receive shadows - lines and points cast them but are never "
+            "shaded themselves.",
+            checked=self.viewer.shadows,
+            collapsible=False,  # nothing to tune
+        )
+        self.shadows_checkbox = self.shadows_section.checkbox
+        self.shadows_checkbox.toggled.connect(
+            lambda checked: setattr(self.viewer, "shadows", checked)
+        )
+
         # --- Eye-Dome Lighting ---
-        # This comes straight from pygfx, i.e. unlike the effects further
-        # down it does not require octarine's custom shaders.
         # If EDL was already enabled via the API, reflect that here
         from pygfx.renderers.wgpu.engine.edl import EDLPass
 
@@ -651,13 +700,13 @@ class Controls(QtWidgets.QWidget):
                 edl_pass = e
                 break
 
-        self.edl_checkbox = QtWidgets.QCheckBox("Eye-Dome Lighting")
-        self.edl_checkbox.setToolTip(
+        self.edl_section = self.add_effect_section(
+            "Eye-Dome Lighting",
             "Enhance depth perception for complex geometries by darkening "
-            "edges based on depth differences between neighboring pixels."
+            "edges based on depth differences between neighboring pixels.",
+            checked=edl_pass is not None,
         )
-        self.edl_checkbox.setChecked(edl_pass is not None)
-        self.tab4_layout.addWidget(self.edl_checkbox)
+        self.edl_checkbox = self.edl_section.checkbox
 
         def update_edl(*args):
             if not self.edl_checkbox.isChecked():
@@ -674,10 +723,10 @@ class Controls(QtWidgets.QWidget):
         self.edl_strength_slider = self.create_effect_slider(
             "Strength",
             min=0.0,
-            max=400.0,
+            max=200.0,
             step=0.1,
             value=edl_pass.strength if edl_pass else 5.0,
-            parent_layout=self.tab4_layout,
+            parent_layout=self.edl_section.content_layout,
             callback=update_edl,
         )
         self.edl_radius_slider = self.create_effect_slider(
@@ -686,7 +735,7 @@ class Controls(QtWidgets.QWidget):
             max=10.0,
             step=0.1,
             value=edl_pass.radius if edl_pass else 1.5,
-            parent_layout=self.tab4_layout,
+            parent_layout=self.edl_section.content_layout,
             callback=update_edl,
         )
         self.edl_radius_slider.setToolTip("Sampling radius in pixels.")
@@ -704,9 +753,6 @@ class Controls(QtWidgets.QWidget):
 
         self.edl_checkbox.toggled.connect(toggle_edl)
 
-        # Horizontal divider
-        self.tab4_layout.addWidget(QHLine())
-
         # The effects below require octarine's custom shaders (pygfx >=
         # 0.16); if those are unavailable we show the controls greyed-out.
         try:
@@ -715,6 +761,171 @@ class Controls(QtWidgets.QWidget):
             shaders_available = True
         except ImportError:
             shaders_available = False
+
+        # --- Ambient occlusion ---
+        # If AO was already enabled via the API, reflect that here
+        ao_pass = getattr(self.viewer, "_ao_pass", None)
+        ao_on = ao_pass is not None and ao_pass.enabled
+
+        self.ao_section = self.add_effect_section(
+            "Ambient Occlusion",
+            "Darken creases, cavities and the points where objects touch by "
+            "estimating how much of the surrounding hemisphere is blocked at "
+            "each pixel.",
+            checked=ao_on,
+        )
+        self.ao_checkbox = self.ao_section.checkbox
+
+        def ao_kwargs():
+            def value(slider):
+                return slider.value() * slider._step
+
+            return dict(
+                # `None` lets the viewer keep deriving the radius from the
+                # scene; we only pin it once the user has picked one
+                radius=value(self.ao_radius_slider)
+                if self._ao_radius_touched
+                else None,
+                intensity=value(self.ao_intensity_slider),
+                bias=value(self.ao_bias_slider),
+                samples=int(value(self.ao_samples_slider)),
+                power=value(self.ao_power_slider),
+                blur=self.ao_blur_checkbox.isChecked(),
+                debug=self.ao_debug_checkbox.isChecked(),
+            )
+
+        def update_ao(*args):
+            # While the radius slider is being re-ranged its value is
+            # meaningless; the caller applies the settings afterwards
+            if not self.ao_checkbox.isChecked() or self._updating_ao_radius:
+                return
+            self.viewer.set_ambient_occlusion(**ao_kwargs())
+
+        def update_ao_radius(value):
+            # Once the user has dialled in a radius we stop overriding it
+            # with the scene-derived default (see `update_ao_radius_range`)
+            if not self._updating_ao_radius:
+                self._ao_radius_touched = True
+            update_ao()
+
+        # The radius is in world units, so - unlike the other parameters - its
+        # slider has to be scaled to the scene; see `_fit_ao_radius_slider`
+        self._updating_ao_radius = False
+        self._ao_radius_touched = ao_pass is not None and not self.viewer._ao_auto_radius
+        ao_radius = ao_pass.radius if ao_pass else self.viewer._default_ao_radius()
+
+        self.ao_radius_slider = self.create_effect_slider(
+            "Radius",
+            # Tick 0 would be a radius of 0, which is not a thing
+            min=ao_radius * 4 / 200,
+            max=ao_radius * 4,
+            step=ao_radius * 4 / 200,
+            value=ao_radius,
+            parent_layout=self.ao_section.content_layout,
+            callback=update_ao_radius,
+        )
+        self.ao_radius_slider.setToolTip(
+            "How far to look for occluders, in world units. Too small and the "
+            "effect disappears, too large and it turns into a dark haze."
+        )
+        self.ao_intensity_slider = self.create_effect_slider(
+            "Intensity",
+            min=0.0,
+            max=2.0,
+            step=0.05,
+            value=ao_pass.intensity if ao_pass else 1.0,
+            parent_layout=self.ao_section.content_layout,
+            callback=update_ao,
+        )
+        self.ao_intensity_slider.setToolTip(
+            "Strength of the darkening, from 0 (no effect) to 1 (fully "
+            "occluded pixels turn black)."
+        )
+        self.ao_bias_slider = self.create_effect_slider(
+            "Bias",
+            min=0.0,
+            max=0.1,
+            step=0.005,
+            value=ao_pass.bias if ao_pass else 0.01,
+            parent_layout=self.ao_section.content_layout,
+            callback=update_ao,
+        )
+        self.ao_bias_slider.setToolTip(
+            "Occluders closer to the surface than this - as a fraction of the "
+            "radius - are ignored. Raise it if flat surfaces occlude "
+            "themselves, lower it for more contrast in tight creases."
+        )
+        self.ao_samples_slider = self.create_effect_slider(
+            "Samples",
+            min=4,
+            max=64,
+            step=4,
+            value=ao_pass.samples if ao_pass else 16,
+            parent_layout=self.ao_section.content_layout,
+            callback=update_ao,
+        )
+        self.ao_samples_slider.setToolTip(
+            "Number of hemisphere samples per pixel. More samples mean less "
+            "noise at a higher rendering cost (and a shader recompile)."
+        )
+        self.ao_power_slider = self.create_effect_slider(
+            "Power",
+            min=0.2,
+            max=4.0,
+            step=0.1,
+            value=ao_pass.power if ao_pass else 1.0,
+            parent_layout=self.ao_section.content_layout,
+            callback=update_ao,
+        )
+        self.ao_power_slider.setToolTip(
+            "Values > 1 restrict the effect to the darkest areas, values < 1 "
+            "spread it out."
+        )
+
+        # Blur + debug side by side - they are just two switches
+        ao_checkbox_row = QtWidgets.QHBoxLayout()
+        self.ao_blur_checkbox = QtWidgets.QCheckBox("Blur")
+        self.ao_blur_checkbox.setToolTip(
+            "Blur the occlusion to remove the sampling noise. Turning this "
+            "off is mostly useful for debugging."
+        )
+        self.ao_blur_checkbox.setChecked(bool(ao_pass.blur) if ao_pass else True)
+        self.ao_blur_checkbox.toggled.connect(update_ao)
+        ao_checkbox_row.addWidget(self.ao_blur_checkbox)
+        self.ao_debug_checkbox = QtWidgets.QCheckBox("Debug")
+        self.ao_debug_checkbox.setToolTip(
+            "Render the occlusion itself as greyscale instead of darkening "
+            "the scene. Useful for finding a radius that suits the scene."
+        )
+        self.ao_debug_checkbox.setChecked(ao_pass.debug if ao_pass else False)
+        self.ao_debug_checkbox.toggled.connect(update_ao)
+        ao_checkbox_row.addWidget(self.ao_debug_checkbox)
+        ao_checkbox_row.addStretch(1)
+        self.ao_section.content_layout.addLayout(ao_checkbox_row)
+
+        ao_widgets = (
+            self.ao_radius_slider,
+            self.ao_intensity_slider,
+            self.ao_bias_slider,
+            self.ao_samples_slider,
+            self.ao_power_slider,
+            self.ao_blur_checkbox,
+            self.ao_debug_checkbox,
+        )
+        for widget in ao_widgets:
+            widget.setEnabled(ao_on)
+
+        def toggle_ao(checked):
+            if checked:
+                # The scene may well have grown since we built the slider
+                self._fit_ao_radius_slider()
+                self.viewer.set_ambient_occlusion(**ao_kwargs())
+            else:
+                self.viewer.set_ambient_occlusion(False)
+            for widget in ao_widgets:
+                widget.setEnabled(checked)
+
+        self.ao_checkbox.toggled.connect(toggle_ao)
 
         # --- Silhouette ---
         # If silhouette was already enabled via the API, reflect that here
@@ -728,14 +939,14 @@ class Controls(QtWidgets.QWidget):
                 ):
                     sil_power = max(sil_power, vis.material.silhouette)
 
-        self.silhouette_checkbox = QtWidgets.QCheckBox("Silhouette")
-        self.silhouette_checkbox.setToolTip(
+        self.silhouette_section = self.add_effect_section(
+            "Silhouette",
             "Emphasize the edges/creases of meshes and make face-on regions "
             "transparent, giving an x-ray-like view of their outlines "
-            "(same effect as Neuroglancer's 'silhouette' setting)."
+            "(same effect as Neuroglancer's 'silhouette' setting).",
+            checked=sil_power > 0,
         )
-        self.silhouette_checkbox.setChecked(sil_power > 0)
-        self.tab4_layout.addWidget(self.silhouette_checkbox)
+        self.silhouette_checkbox = self.silhouette_section.checkbox
 
         self.silhouette_slider = self.create_effect_slider(
             "Power",
@@ -743,7 +954,7 @@ class Controls(QtWidgets.QWidget):
             max=8.0,
             step=0.1,
             value=sil_power if sil_power > 0 else 2.0,
-            parent_layout=self.tab4_layout,
+            parent_layout=self.silhouette_section.content_layout,
             callback=lambda v: self.silhouette_checkbox.isChecked()
             and self.viewer.set_silhouette(v),
         )
@@ -758,9 +969,6 @@ class Controls(QtWidgets.QWidget):
 
         self.silhouette_checkbox.toggled.connect(toggle_silhouette)
 
-        # Horizontal divider
-        self.tab4_layout.addWidget(QHLine())
-
         # --- Subsurface scattering ---
         # If scattering was already enabled via the API, reflect that here
         sss_strength = 0.0
@@ -773,14 +981,14 @@ class Controls(QtWidgets.QWidget):
                 ):
                     sss_strength = max(sss_strength, vis.material.subsurface)
 
-        self.subsurface_checkbox = QtWidgets.QCheckBox("Subsurface")
-        self.subsurface_checkbox.setToolTip(
+        self.subsurface_section = self.add_effect_section(
+            "Subsurface",
             "Let light bleed through meshes instead of stopping at the "
             "surface, so that backlit regions glow and shading eases into "
-            "shadow - the look of skin, wax or thin neurites."
+            "shadow - the look of skin, wax or thin neurites.",
+            checked=sss_strength > 0,
         )
-        self.subsurface_checkbox.setChecked(sss_strength > 0)
-        self.tab4_layout.addWidget(self.subsurface_checkbox)
+        self.subsurface_checkbox = self.subsurface_section.checkbox
 
         self.subsurface_slider = self.create_effect_slider(
             "Strength",
@@ -788,7 +996,7 @@ class Controls(QtWidgets.QWidget):
             max=3.0,
             step=0.1,
             value=sss_strength if sss_strength > 0 else 1.0,
-            parent_layout=self.tab4_layout,
+            parent_layout=self.subsurface_section.content_layout,
             callback=lambda v: self.subsurface_checkbox.isChecked()
             and self.viewer.set_subsurface(v),
         )
@@ -803,21 +1011,18 @@ class Controls(QtWidgets.QWidget):
 
         self.subsurface_checkbox.toggled.connect(toggle_subsurface)
 
-        # Horizontal divider
-        self.tab4_layout.addWidget(QHLine())
-
         # --- Depth of field ---
         # If depth of field was already enabled via the API, reflect that here
         dof_pass = getattr(self.viewer, "_dof_pass", None)
         dof_on = dof_pass is not None and dof_pass.enabled
 
-        self.dof_checkbox = QtWidgets.QCheckBox("Depth of Field")
-        self.dof_checkbox.setToolTip(
+        self.dof_section = self.add_effect_section(
+            "Depth of Field",
             "Blur objects that are closer or farther than the focal plane, "
-            "similar to a photographic lens."
+            "similar to a photographic lens.",
+            checked=dof_on,
         )
-        self.dof_checkbox.setChecked(dof_on)
-        self.tab4_layout.addWidget(self.dof_checkbox)
+        self.dof_checkbox = self.dof_section.checkbox
 
         def update_dof_params(*args):
             dof_pass = getattr(self.viewer, "_dof_pass", None)
@@ -835,7 +1040,7 @@ class Controls(QtWidgets.QWidget):
             max=300,
             step=1,
             value=dof_pass.aperture if dof_pass else 100,
-            parent_layout=self.tab4_layout,
+            parent_layout=self.dof_section.content_layout,
             callback=update_dof_params,
         )
         self.dof_radius_slider = self.create_effect_slider(
@@ -844,7 +1049,7 @@ class Controls(QtWidgets.QWidget):
             max=40,
             step=1,
             value=dof_pass.max_radius if dof_pass else 16,
-            parent_layout=self.tab4_layout,
+            parent_layout=self.dof_section.content_layout,
             callback=update_dof_params,
         )
         # Focus mode: autofocus or a fixed distance
@@ -863,7 +1068,7 @@ class Controls(QtWidgets.QWidget):
             1, "Focus at a fixed distance from the camera.", QtCore.Qt.ToolTipRole
         )
         focus_layout.addWidget(self.dof_focus_dropdown)
-        self.tab4_layout.addLayout(focus_layout)
+        self.dof_section.content_layout.addLayout(focus_layout)
 
         # In "Fix" mode: a slider to set the focal distance
         def apply_fixed_focus(value):
@@ -891,7 +1096,7 @@ class Controls(QtWidgets.QWidget):
             parent_layout=focus_row_layout,
             callback=apply_fixed_focus,
         )
-        self.tab4_layout.addWidget(self.dof_focus_row)
+        self.dof_section.content_layout.addWidget(self.dof_focus_row)
 
         def update_focus_range():
             """(Re-)fit the focus slider range to the scene and camera.
@@ -956,14 +1161,14 @@ class Controls(QtWidgets.QWidget):
             "Focus on the closest object within this many pixels of the "
             "view center (0 = exact center only)."
         )
-        self.tab4_layout.addWidget(self.dof_snap_row)
+        self.dof_section.content_layout.addWidget(self.dof_snap_row)
 
         # ... a checkbox to ease re-focusing over time...
         self.dof_smooth_checkbox = QtWidgets.QCheckBox("Smooth")
         self.dof_smooth_checkbox.setToolTip(
             "Re-focus gradually (over ~200 ms) instead of instantly."
         )
-        self.tab4_layout.addWidget(self.dof_smooth_checkbox)
+        self.dof_section.content_layout.addWidget(self.dof_smooth_checkbox)
 
         def toggle_smooth(checked):
             if (
@@ -988,7 +1193,7 @@ class Controls(QtWidgets.QWidget):
         self.dof_focus_marker_checkbox.setToolTip(
             "Show a marker that tracks the point the camera is focused on."
         )
-        self.tab4_layout.addWidget(self.dof_focus_marker_checkbox)
+        self.dof_section.content_layout.addWidget(self.dof_focus_marker_checkbox)
 
         def switch_focus_mode(*args):
             fix = self.dof_focus_dropdown.currentText() == "Fix"
@@ -1077,17 +1282,54 @@ class Controls(QtWidgets.QWidget):
                 "Effects require pygfx >= 0.16 "
                 f"(you have {pygfx.__version__}). Please update pygfx."
             )
-            for widget in (
-                self.silhouette_checkbox,
-                self.silhouette_slider,
-                self.subsurface_checkbox,
-                self.subsurface_slider,
-                self.dof_checkbox,
-            ) + dof_widgets:
-                widget.setEnabled(False)
-                widget.setToolTip(msg)
+            # Disabling the sections takes their contents with them
+            for section in (
+                self.ao_section,
+                self.silhouette_section,
+                self.subsurface_section,
+                self.dof_section,
+            ):
+                section.setEnabled(False)
+                section.setToolTip(msg)
+                section.checkbox.setToolTip(msg)
 
-        self.tab4_layout.addStretch(1)
+        self.effects_layout.addStretch(1)
+
+    def _fit_ao_radius_slider(self):
+        """(Re-)fit the ambient occlusion radius slider to the scene.
+
+        The radius is in world units, so a fixed range is useless - it has to
+        track the scene. Whatever the user dialled in is kept; otherwise we
+        snap to the same default the viewer derives.
+        """
+        slider = self.ao_radius_slider
+        default = self.viewer._default_ao_radius()
+        current = slider.value() * slider._step if self._ao_radius_touched else default
+        # Cover a good range around the default without ever cutting off the
+        # value that is currently set
+        hi = max(default * 4, current)
+
+        self._updating_ao_radius = True
+        try:
+            slider._step = hi / 200
+            # Tick 0 would be a radius of 0, which is not a thing
+            slider.setMinimum(1)
+            slider.setMaximum(200)
+            slider.setValue(max(1, round(current / slider._step)))
+            # Force a label update even if the tick did not change
+            slider.valueChanged.emit(slider.value())
+        finally:
+            self._updating_ao_radius = False
+
+    def sync_ao_radius(self):
+        """Follow the viewer's occlusion radius after it re-derived one.
+
+        The viewer keeps the radius in step with the scene unless the user
+        pinned one (see `Viewer._update_ao_radius`) - this keeps the slider
+        from going stale as objects are added or removed.
+        """
+        if not self._ao_radius_touched:
+            self._fit_ao_radius_slider()
 
     def _set_dof_focus_marker(self, visible):
         """Show/hide a marker tracking the depth-of-field focal point."""
@@ -2460,6 +2702,103 @@ class ElidedLabel(QtWidgets.QLabel):
         ):
             self.clicked.emit()
         super().mouseReleaseEvent(event)
+
+
+class CollapsibleSection(QtWidgets.QWidget):
+    """A checkbox header with a collapsible body of settings.
+
+    Used for the effects tab: the header carries the effect's on/off switch
+    while its parameters live in `content_layout` and stay hidden until the
+    section is expanded. Switching an effect on expands it, i.e. shows what
+    there is to tune.
+
+    Parameters
+    ----------
+    title :         str
+                    Label for the header checkbox.
+    checked :       bool
+                    Initial state of the header checkbox. Unlike a later
+                    (user) toggle this neither expands the section nor emits
+                    a signal, so it can be used to reflect the state of an
+                    effect that is already on.
+    collapsible :   bool
+                    If False, no arrow is shown - use this for effects that
+                    have no parameters.
+
+    """
+
+    def __init__(self, title, checked=False, collapsible=True, parent=None):
+        super().__init__(parent)
+        self._collapsible = collapsible
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        header = QtWidgets.QWidget()
+        header_layout = QtWidgets.QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(0)
+
+        # Arrow-only toggle button (same look as the legend's group headers)
+        self.arrow = QtWidgets.QToolButton()
+        self.arrow.setArrowType(QtCore.Qt.RightArrow)
+        self.arrow.setCheckable(True)
+        self.arrow.setStyleSheet(
+            "QToolButton {"
+            " background: transparent;"
+            " border: none;"
+            " padding: 0px;"
+            " }"
+            "QToolButton:checked { background: transparent; border: none; }"
+            "QToolButton:pressed { background: transparent; border: none; }"
+            "QToolButton:hover { background: transparent; border: none; }"
+        )
+        self.arrow.setAutoRaise(True)
+        self.arrow.setIconSize(QtCore.QSize(8, 8))
+        self.arrow.setFixedWidth(16)
+        self.arrow.setToolTip("Click to show/hide this effect's settings")
+        self.arrow.setVisible(collapsible)
+        header_layout.addWidget(self.arrow)
+        if not collapsible:
+            # Keep the checkbox in line with the collapsible sections'
+            header_layout.addSpacing(16)
+
+        self.checkbox = QtWidgets.QCheckBox(title)
+        # Set before anything is connected below: reflecting an effect that is
+        # already on must not look like the user just switched it on
+        self.checkbox.setChecked(checked)
+        header_layout.addWidget(self.checkbox)
+        header_layout.addStretch(1)
+        layout.addWidget(header)
+
+        # Wrapped in a QWidget so the whole body can be hidden in one go
+        self.content = QtWidgets.QWidget()
+        self.content_layout = QtWidgets.QVBoxLayout(self.content)
+        # Indent so the settings read as belonging to the header above
+        self.content_layout.setContentsMargins(16, 0, 0, 0)
+        self.content.setVisible(False)
+        layout.addWidget(self.content)
+
+        self.arrow.toggled.connect(self.setExpanded)
+        self.checkbox.toggled.connect(
+            lambda checked: self.setExpanded(True) if checked else None
+        )
+
+    def setExpanded(self, expanded):
+        """Show/hide the section's body."""
+        expanded = bool(expanded) and self._collapsible
+        # This may re-enter via the arrow's `toggled` signal - which is fine,
+        # the second pass finds everything already in place and stops there.
+        self.arrow.setChecked(expanded)
+        self.arrow.setArrowType(
+            QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow
+        )
+        self.content.setVisible(expanded)
+
+    def isExpanded(self):
+        """Whether the section's body is currently shown."""
+        return self.arrow.isChecked()
 
 
 class QHLine(QtWidgets.QFrame):

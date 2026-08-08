@@ -609,7 +609,9 @@ def _srgb_to_linear(img):
 
 def _crease_scene(size=(400, 400)):
     """A floor and a wall meeting at a right angle, seen from above."""
-    v = oc.Viewer(offscreen=True, size=size)
+    # The occlusion (and the shadows, which darken the same crease) are what
+    # these tests switch on themselves, so start from a plain render
+    v = oc.Viewer(offscreen=True, size=size, ambient_occlusion=False, shadows=False)
     # Anti-aliasing runs after the occlusion and reshuffles silhouette
     # pixels, which would muddy the comparisons below
     v.renderer.ppaa = "none"
@@ -734,6 +736,57 @@ def test_ambient_occlusion_toggle(mesh):
     v.close()
 
 
+def test_default_effects(mesh):
+    """Shadows, headlight and ambient occlusion are on out of the box."""
+    from octarine.shaders import AmbientOcclusionPass
+
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    assert v.shadows is True
+    assert v.headlight is True
+    assert isinstance(v._ao_pass, AmbientOcclusionPass)
+    assert v._ao_pass.enabled
+    assert v.renderer.effect_passes[0] is v._ao_pass
+
+    # There is nothing on the canvas yet, so the occlusion radius has to catch
+    # up with the scene as it fills (and shrink back again)
+    assert v._ao_pass.radius == 1.0
+    v.add_mesh(mesh, name="small")
+    assert v._ao_pass.radius == pytest.approx(v._default_ao_radius())
+    big = mesh.copy()
+    big.apply_scale(100)
+    v.add_mesh(big, name="big")
+    assert v._ao_pass.radius == pytest.approx(v._default_ao_radius())
+    assert v._ao_pass.radius > 10
+    v.pop()
+    assert v._ao_pass.radius == pytest.approx(v._default_ao_radius())
+    v.canvas.draw()
+
+    # An explicit radius pins it, i.e. the scene no longer overrides it
+    v.set_ambient_occlusion(radius=7.0)
+    v.add_mesh(big, name="big2")
+    assert v._ao_pass.radius == 7.0
+    v.close()
+
+    # ... and all three can be switched off right from the start
+    v = oc.Viewer(
+        offscreen=True,
+        size=(200, 200),
+        shadows=False,
+        headlight=False,
+        ambient_occlusion=False,
+    )
+    assert v.shadows is False
+    assert v.headlight is False
+    assert v._ao_pass is None
+    assert not any(
+        isinstance(p, AmbientOcclusionPass) for p in v.renderer.effect_passes
+    )
+    v.add_mesh(mesh)
+    assert not any(vis.cast_shadow for vis in v.visuals)
+    v.canvas.draw()
+    v.close()
+
+
 def test_ambient_occlusion_default_radius(mesh):
     """The default radius must scale with the scene."""
     v = oc.Viewer(offscreen=True, size=(200, 200))
@@ -748,6 +801,113 @@ def test_ambient_occlusion_default_radius(mesh):
     big.apply_scale(10)
     v.add_mesh(big, color="blue", name="big")
     assert v._default_ao_radius() > 5 * small
+    v.close()
+
+
+def test_effects_controls_qt(mesh):
+    """The shadow + ambient occlusion controls in the (Qt) controls panel."""
+    # Note that the import can also fail if PySide6 *is* installed but clashes
+    # with another Qt binding in the same environment - skip either way
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    from octarine.controls import Controls
+
+    v = oc.Viewer(offscreen=True, size=(200, 200), shadows=False,
+                  ambient_occlusion=False)
+    v.add_mesh(mesh, color="red")
+
+    ctrl = Controls(v)
+
+    # Shadows are a plain on/off switch
+    assert not ctrl.shadows_checkbox.isChecked()
+    ctrl.shadows_checkbox.setChecked(True)
+    assert v.shadows
+    ctrl.shadows_checkbox.setChecked(False)
+    assert not v.shadows
+
+    # Ambient occlusion: settings are disabled (and the section collapsed)
+    # until the effect is switched on
+    assert not ctrl.ao_section.isExpanded()
+    assert not ctrl.ao_radius_slider.isEnabled()
+
+    ctrl.ao_checkbox.setChecked(True)
+    assert ctrl.ao_section.isExpanded()
+    assert ctrl.ao_radius_slider.isEnabled()
+    ao = v._ao_pass
+    assert ao is not None and ao.enabled
+    # The radius is in world units, so it must be fitted to the scene
+    assert ao.radius == pytest.approx(v._default_ao_radius(), rel=0.02)
+
+    # ... and it must follow the scene as long as the slider is untouched
+    slider = ctrl.ao_radius_slider
+    big = mesh.copy()
+    big.apply_scale(100)
+    v.add_mesh(big, name="big")
+    assert ao.radius == pytest.approx(v._default_ao_radius())
+    assert slider.value() * slider._step == pytest.approx(ao.radius, rel=0.02)
+    v.pop()  # ... and shrink back with it
+    assert ao.radius == pytest.approx(v._default_ao_radius())
+
+    ctrl.ao_intensity_slider.setValue(
+        round(0.5 / ctrl.ao_intensity_slider._step)
+    )
+    assert ao.intensity == pytest.approx(0.5)
+    ctrl.ao_samples_slider.setValue(round(32 / ctrl.ao_samples_slider._step))
+    assert ao.samples == 32
+    ctrl.ao_blur_checkbox.setChecked(False)
+    assert ao.blur == 0
+    ctrl.ao_debug_checkbox.setChecked(True)
+    assert ao.debug
+    v.canvas.draw()
+
+    # The extremes of the radius slider must both be usable (a radius of 0
+    # is not a thing)
+    slider = ctrl.ao_radius_slider
+    slider.setValue(slider.minimum())
+    assert ao.radius > 0
+    slider.setValue(slider.maximum())
+    assert ao.radius == pytest.approx(slider.maximum() * slider._step)
+    radius = ao.radius
+
+    # A hand-picked radius must survive an off/on cycle
+    ctrl.ao_checkbox.setChecked(False)
+    assert not ao.enabled
+    assert not ctrl.ao_radius_slider.isEnabled()
+    ctrl.ao_checkbox.setChecked(True)
+    assert ao.enabled and ao.radius == pytest.approx(radius, rel=0.02)
+    v.canvas.draw()
+
+    # A panel built while the effects are active must reflect that
+    v.shadows = True
+    ctrl2 = Controls(v)
+    assert ctrl2.shadows_checkbox.isChecked()
+    assert ctrl2.ao_checkbox.isChecked()
+    assert ctrl2.ao_radius_slider.isEnabled()
+    assert ctrl2.ao_samples_slider.value() * ctrl2.ao_samples_slider._step == 32
+    assert not ctrl2.ao_blur_checkbox.isChecked()
+    assert ctrl2.ao_debug_checkbox.isChecked()
+    # The radius was hand-picked, so it must not be overwritten from the scene
+    assert ctrl2._ao_radius_touched
+    assert ao.radius == pytest.approx(radius, rel=0.02)
+
+    v.close()
+
+    # With the effects on by default the panel comes up switched on - but
+    # still collapsed, i.e. the state of an effect must not expand its section
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh, color="red")
+    ctrl = Controls(v)
+    assert ctrl.shadows_checkbox.isChecked()
+    assert ctrl.ao_checkbox.isChecked()
+    assert not ctrl.ao_section.isExpanded()
+    assert ctrl.ao_radius_slider.isEnabled()
+    # The viewer derives the radius itself, so the panel must not pin it
+    assert not ctrl._ao_radius_touched
+    slider = ctrl.ao_radius_slider
+    assert slider.value() * slider._step == pytest.approx(
+        v._ao_pass.radius, rel=0.02
+    )
     v.close()
 
 
@@ -1182,32 +1342,40 @@ def test_headlight_toggle(mesh):
     v = oc.Viewer(offscreen=True, size=(200, 200))
     v.add_mesh(mesh)
 
-    # By default the static lights are on and the headlight is off
-    assert v.headlight is False
-    assert v._headlight.visible is False
-    assert all(light.visible for light in v._static_lights)
+    # The headlight is on by default, which switches the static lights off
+    assert v.headlight is True
+    assert v._headlight.visible is True
+    assert not any(light.visible for light in v._static_lights)
 
     # The headlight lives on the camera, so the camera must be part of the scene
     assert v._headlight.parent is v.camera
     assert v.camera in v.scene.children
     assert v._headlight in v.lights
 
-    v.headlight = True
-    assert v._headlight.visible is True
-    assert not any(light.visible for light in v._static_lights)
+    v.headlight = False
+    assert v._headlight.visible is False
+    assert all(light.visible for light in v._static_lights)
 
     # Shadows must reach the camera-parented light, too
+    v.shadows = False
+    assert not v._headlight.cast_shadow
     v.shadows = True
     assert v._headlight.cast_shadow is True
     assert all(light.cast_shadow for light in v._static_lights)
 
     v.toggle_headlight()
-    assert v.headlight is False
-    assert v._headlight.visible is False
-    assert all(light.visible for light in v._static_lights)
+    assert v.headlight is True
+    assert v._headlight.visible is True
+    assert not any(light.visible for light in v._static_lights)
 
     with pytest.raises(TypeError):
         v.headlight = "yes"
+
+    # ... and it can be switched off right from the start
+    v2 = oc.Viewer(offscreen=True, size=(200, 200), headlight=False)
+    assert v2.headlight is False
+    assert all(light.visible for light in v2._static_lights)
+    v2.close()
 
     v.close()
 
@@ -1263,7 +1431,7 @@ def test_shadow_render(scale, headlight, camera):
 
 
 def test_shadow_flags(mesh, points, line_single):
-    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v = oc.Viewer(offscreen=True, size=(200, 200), shadows=False)
     v.add_mesh(mesh)
     v.add_points(points)
     v.add_lines(line_single)
@@ -1297,10 +1465,20 @@ def test_shadow_flags(mesh, points, line_single):
 
     v.close()
 
+    # Shadows are on by default, and objects have to pick that up as they are
+    # added rather than only when the flag is flipped
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    assert v.shadows is True
+    v.add_mesh(mesh)
+    (vis,) = v.visuals
+    assert vis.cast_shadow is True
+    assert vis.receive_shadow is True
+    v.close()
+
 
 def test_shadow_lights_track_the_scene(mesh):
     """The lights must be re-fitted as objects come and go."""
-    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v = oc.Viewer(offscreen=True, size=(200, 200), shadows=False)
     v.add_mesh(mesh)  # unit sphere at the origin
 
     # While shadows are off the static lights stay parked far away, which is

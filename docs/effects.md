@@ -194,12 +194,12 @@ points where objects touch looking flat.
 surrounding hemisphere is blocked at each pixel and darkens the image
 accordingly:
 
+This is on by default (with a radius derived from the scene) - use
+`set_ambient_occlusion` to tune or disable it:
+
 ```python
 >>> v = oc.Viewer()
 >>> v.add_mesh(mesh)
-
->>> # Enable with a radius derived from the scene bounds
->>> v.set_ambient_occlusion()
 
 >>> # The radius is what makes or breaks the effect - set it explicitly
 >>> # if the automatic one does not suit
@@ -207,6 +207,9 @@ accordingly:
 
 >>> # Disable again
 >>> v.set_ambient_occlusion(False)
+
+>>> # ... or start without it in the first place
+>>> v = oc.Viewer(ambient_occlusion=False)
 ```
 
 ![no effect](_static/effects_baseline.png){ width="49%" }
@@ -216,8 +219,9 @@ The parameters:
 
 - `radius`: how far to look for occluders, in world units. This is the one
   parameter that has to match the scene - too small and the effect
-  disappears, too large and it turns into a dark haze. Defaults to 4% of
-  the diagonal of the scene bounds at the time you call the method
+  disappears, too large and it turns into a dark haze. Defaults to 4% of the
+  diagonal of the scene bounds, kept up-to-date as objects are added or
+  removed; passing a value pins the radius to it
 - `intensity`: strength of the darkening, from 0 to 1
 - `bias`: occluders closer to the surface than this fraction of `radius`
   are ignored; raise it if flat surfaces darken themselves, lower it (down
@@ -306,8 +310,11 @@ The most important parameters:
 
 ## Effects in the GUI
 
-Silhouette and depth of field can also be toggled and tuned interactively
-from the "Effects" tab of the [control panel](controls.md#gui-controls).
+All of the above - plus [shadows](controls.md#shadows) and eye-dome lighting
+(see [post-processing effects](#post-processing-effects)) - can also be
+toggled and tuned interactively from the "Effects" tab of the
+[control panel](controls.md#gui-controls). Each effect gets its own section:
+the checkbox switches it on, the arrow next to it expands the parameters.
 
 ## Under the hood
 
