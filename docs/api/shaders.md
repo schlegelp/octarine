@@ -120,3 +120,10 @@ typically employed via the respective [octarine.Viewer][] methods
       filters:
        - "!^_"
        - "^__init__$"
+
+::: octarine.shaders.AmbientOcclusionPass
+    options:
+      show_root_heading: true
+      filters:
+       - "!^_"
+       - "^__init__$"

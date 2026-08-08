@@ -6,7 +6,8 @@ They roughly fall into two categories:
 1. Per-object material settings: [transparency](#transparency-alpha-modes)
    and [silhouette rendering](#silhouette-rendering)
 2. Screen-space post-processing passes applied to the rendered image:
-   [`add_effect`](#post-processing-effects) and
+   [`add_effect`](#post-processing-effects),
+   [ambient occlusion](#ambient-occlusion) and
    [depth of field](#depth-of-field)
 
 Most of what follows requires `pygfx>=0.16` (which is what recent versions
@@ -168,6 +169,7 @@ Currently supported effects:
 | `"noise"`  | Adds noise to the image.                                       | `noise` (default 0.1) |
 | `"fog"`    | Adds fog based on the depth buffer.                            | `color` (default `"#fff"`), `power` (default 1) |
 | `"depth"`  | Renders scene depth as shades of grey (near = dark, far = light), normalized to the visible geometry. With `overlay=True` the objects' own colors are kept and darkened with distance instead (depth cueing). | `overlay` (default False), `strength` (default 0.9) |
+| `"ao"`     | Screen-space ambient occlusion: darkens creases, cavities and contact points. See [below](#ambient-occlusion). | `radius`, `intensity`, `bias`, `samples`, `power`, `blur`, `debug` |
 | `"normal"` | Renders normals reconstructed from the depth buffer.           | - |
 | `"bloom"`  | Physically-based bloom: makes bright regions glow.             | `bloom_strength`, `max_mip_levels`, `filter_radius`, `use_karis_average` |
 
@@ -183,6 +185,76 @@ uses `bloom_strength=0.5` to make the effect more obvious):
 ![fog](_static/effects_fog.png){ width="49%" }
 ![depth](_static/effects_depth.png){ width="49%" }
 ![bloom](_static/effects_bloom.png){ width="49%" }
+
+## Ambient occlusion
+
+Ambient light is applied uniformly, which leaves creases, cavities and the
+points where objects touch looking flat.
+[`octarine.Viewer.set_ambient_occlusion`][] estimates how much of the
+surrounding hemisphere is blocked at each pixel and darkens the image
+accordingly:
+
+```python
+>>> v = oc.Viewer()
+>>> v.add_mesh(mesh)
+
+>>> # Enable with a radius derived from the scene bounds
+>>> v.set_ambient_occlusion()
+
+>>> # The radius is what makes or breaks the effect - set it explicitly
+>>> # if the automatic one does not suit
+>>> v.set_ambient_occlusion(radius=500, intensity=0.8)
+
+>>> # Disable again
+>>> v.set_ambient_occlusion(False)
+```
+
+![no effect](_static/effects_baseline.png){ width="49%" }
+![ambient occlusion](_static/effects_ao.png){ width="49%" }
+
+The parameters:
+
+- `radius`: how far to look for occluders, in world units. This is the one
+  parameter that has to match the scene - too small and the effect
+  disappears, too large and it turns into a dark haze. Defaults to 4% of
+  the diagonal of the scene bounds at the time you call the method
+- `intensity`: strength of the darkening, from 0 to 1
+- `bias`: occluders closer to the surface than this fraction of `radius`
+  are ignored; raise it if flat surfaces darken themselves, lower it (down
+  to 0) for more contrast in tight creases
+- `samples`: hemisphere samples per pixel (default 16); more samples mean
+  less noise at a higher cost
+- `power`: exponent applied to the occlusion; `> 1` restricts the effect to
+  the darkest areas, `< 1` spreads it out
+- `blur`: radius of the bilateral blur that removes the sampling noise
+- `debug`: render the occlusion itself as greyscale - the quickest way to
+  find a `radius` that suits the scene
+
+```python
+>>> # What is the effect actually seeing?
+>>> v.set_ambient_occlusion(debug=True)
+```
+
+Occlusion is reconstructed from the depth buffer, which has two
+consequences worth knowing:
+
+!!! note
+
+    Like the other post-processing effects this is a screen-space effect:
+    it applies to the whole rendered image (including overlay elements such
+    as messages), and objects that don't write depth (e.g. meshes with a
+    transparent alpha mode) neither cast nor receive occlusion.
+
+!!! note
+
+    Surface orientation is reconstructed from neighbouring depth values,
+    which works well for meshes and volumes but not for thin structures -
+    points, lines and skeletons have no meaningful surface to occlude. For
+    those, [`add_effect('edl')`](#post-processing-effects) is the better
+    tool: it darkens by depth difference alone and needs no normals.
+
+The pass costs well under a millisecond per frame at the default sample
+count, and runs before the anti-aliasing and any depth of field.
 
 ## Depth of field
 

@@ -601,6 +601,156 @@ def test_depth_of_field_snap():
     v.close()
 
 
+def _srgb_to_linear(img):
+    """Screenshots are sRGB-encoded; occlusion is a linear-light factor."""
+    c = np.asarray(img, dtype=float)[..., :3] / 255
+    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4).mean(axis=-1)
+
+
+def _crease_scene(size=(400, 400)):
+    """A floor and a wall meeting at a right angle, seen from above."""
+    v = oc.Viewer(offscreen=True, size=size)
+    # Anti-aliasing runs after the occlusion and reshuffles silhouette
+    # pixels, which would muddy the comparisons below
+    v.renderer.ppaa = "none"
+    floor = tm.creation.box(extents=(20, 0.5, 20))
+    floor.apply_translation((0, -0.25, 0))
+    v.add_mesh(floor, color="w", name="floor")
+    wall = tm.creation.box(extents=(20, 10, 0.5))
+    wall.apply_translation((0, 5, -5))
+    v.add_mesh(wall, color="w", name="wall")
+    v.camera.show_object(v.scene, view_dir=(0, -0.6, -1), up=(0, 1, 0))
+    return v
+
+
+def test_ambient_occlusion_render():
+    """AO must darken a right-angle crease and leave flat surfaces alone."""
+    v = _crease_scene()
+    plain = np.asarray(v.screenshot(filename=None))[..., :3]
+
+    # `debug` renders the occlusion itself: 1 = unoccluded
+    v.set_ambient_occlusion(radius=3.0, samples=32, debug=True)
+    ao = _srgb_to_linear(np.asarray(v.screenshot(filename=None)))
+
+    column = ao[:, ao.shape[1] // 2]
+    # Half the hemisphere is blocked at a right-angle crease, so the
+    # occlusion there tends to 0.5 (a finite radius keeps it above that)
+    assert 0.45 < column.min() < 0.75
+    # The open floor in the foreground must not occlude itself at all
+    assert column[-60:].min() > 0.99
+
+    # Without `debug` the scene is darkened but never brightened
+    v.set_ambient_occlusion(radius=3.0, samples=32)
+    shot = np.asarray(v.screenshot(filename=None))[..., :3]
+    delta = _srgb_to_linear(plain) - _srgb_to_linear(shot)
+    assert delta.max() > 0.1  # the crease is visibly darker ...
+    assert delta.min() >= 0  # ... and nothing got brighter
+
+    # Disabling restores the original render
+    v.set_ambient_occlusion(False)
+    assert np.allclose(
+        np.asarray(v.screenshot(filename=None))[..., :3], plain, atol=2
+    )
+    v.close()
+
+
+def test_ambient_occlusion_intensity():
+    """More intensity (and more `power`) must mean more darkening."""
+    v = _crease_scene(size=(200, 200))
+    plain = _srgb_to_linear(np.asarray(v.screenshot(filename=None)))
+
+    darkening = []
+    for intensity in (0.0, 0.5, 1.0):
+        v.set_ambient_occlusion(radius=3.0, intensity=intensity)
+        shot = _srgb_to_linear(np.asarray(v.screenshot(filename=None)))
+        darkening.append((plain - shot).sum())
+    assert darkening[0] == pytest.approx(0, abs=1e-6)
+    assert darkening[0] < darkening[1] < darkening[2]
+
+    # `power` > 1 restricts the effect to the areas that are darkest anyway
+    v.set_ambient_occlusion(radius=3.0, power=3.0)
+    strong = _srgb_to_linear(np.asarray(v.screenshot(filename=None)))
+    assert (plain - strong).sum() > darkening[2]
+    v.close()
+
+
+def test_ambient_occlusion_toggle(mesh):
+    from octarine.shaders import AmbientOcclusionPass
+
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh, color="red")
+
+    v.set_ambient_occlusion(radius=0.5, intensity=0.8, samples=8, blur=False)
+    passes = [
+        p for p in v.renderer.effect_passes if isinstance(p, AmbientOcclusionPass)
+    ]
+    assert len(passes) == 1
+    ao = passes[0]
+    assert ao.enabled
+    assert ao.radius == 0.5
+    assert ao.intensity == 0.8
+    assert ao.samples == 8
+    assert ao.blur == 0
+    # Occlusion is part of the shading, so it has to run before the
+    # anti-aliasing and any lens effects
+    assert v.renderer.effect_passes[0] is ao
+    v.canvas.draw()
+
+    # Re-enabling updates the existing pass instead of adding a second one
+    v.set_ambient_occlusion(radius=0.25)
+    assert [
+        p for p in v.renderer.effect_passes if isinstance(p, AmbientOcclusionPass)
+    ] == [ao]
+    assert ao.radius == 0.25
+    assert ao.blur == 2  # back to the default
+
+    # Disabling keeps the pass around but turns it off
+    v.set_ambient_occlusion(False)
+    assert not ao.enabled
+    v.canvas.draw()
+
+    # `add_effect` shares the pass with `set_ambient_occlusion`
+    v.add_effect("ao", intensity=0.4)
+    assert v._ao_pass is ao
+    assert ao.enabled and ao.intensity == 0.4
+    v.canvas.draw()
+
+    v.add_effect("ao", disable=True)
+    assert v._ao_pass is None
+    assert not [
+        p for p in v.renderer.effect_passes if isinstance(p, AmbientOcclusionPass)
+    ]
+
+    # ... and can create it, too (with a radius derived from the scene)
+    v.add_effect("ao")
+    ao = v.renderer.effect_passes[0]
+    assert isinstance(ao, AmbientOcclusionPass)
+    assert ao.radius == pytest.approx(v._default_ao_radius())
+    v.canvas.draw()
+
+    for kwargs in ({"radius": 0}, {"intensity": -1}, {"samples": 0}, {"power": 0}):
+        with pytest.raises(ValueError):
+            v.set_ambient_occlusion(**kwargs)
+    v.close()
+
+
+def test_ambient_occlusion_default_radius(mesh):
+    """The default radius must scale with the scene."""
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    assert v._default_ao_radius() == 1.0  # nothing on the canvas yet
+
+    v.add_mesh(mesh, color="red", name="small")
+    small = v._default_ao_radius()
+    diagonal = float(np.linalg.norm(v.bounds[:, 1] - v.bounds[:, 0]))
+    assert small == pytest.approx(diagonal * 0.04)
+
+    big = mesh.copy()
+    big.apply_scale(10)
+    v.add_mesh(big, color="blue", name="big")
+    assert v._default_ao_radius() > 5 * small
+    v.close()
+
+
 def _render_point_view(v, cam_height):
     """Render with an ortho camera showing `cam_height` world units.
 

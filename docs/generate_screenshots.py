@@ -125,6 +125,13 @@ if __name__ == "__main__":
         finalize(grab(v), window, eff, f"effects_{eff}")
         v.close()
 
+    # Ambient occlusion: the automatic radius is subtle on isolated convex
+    # objects, so lean on `power` to deepen the creases it does find
+    v = make_scene()
+    v.set_ambient_occlusion(power=2)
+    finalize(grab(v), window, "ambient occlusion", "effects_ao")
+    v.close()
+
     # Depth of field: autofocus snaps to the object nearest the view center;
     # extra pre-draws give the autofocus a depth frame to sample from
     v = make_scene()

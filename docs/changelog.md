@@ -8,6 +8,15 @@ on the Github repository.
 _Date: ongoing_
 
 #### Improvements
+- new [`Viewer.set_ambient_occlusion`][octarine.Viewer.set_ambient_occlusion] method (also
+  available as `add_effect('ao')`): screen-space ambient occlusion, i.e. the shadowing that
+  ambient light would produce in creases, cavities and where objects touch - `pygfx` has no
+  ambient occlusion of its own beyond baked `ao_map` textures. Occlusion is estimated from the
+  depth buffer, so no preprocessing and no extra geometry pass is needed, and the whole thing
+  costs well under a millisecond per frame at the default 16 samples. `radius` (defaulting to
+  4% of the scene's diagonal) is the parameter that has to match the scene; `intensity`, `bias`,
+  `samples`, `power` and `blur` tune the look, and `debug=True` renders the raw occlusion
+  (see [Ambient occlusion](effects.md#ambient-occlusion))
 - new [`Viewer.link`][octarine.Viewer.link] / [`Viewer.unlink`][octarine.Viewer.unlink] methods
   (plus a [`Viewer.linked`][octarine.Viewer.linked] property): keep the camera synchronised
   between two or more viewers, so that panning, rotating or zooming in one of them does the

@@ -45,6 +45,7 @@ from .background import (  # noqa: E402
 )
 from .dof import DepthOfFieldPass  # noqa: E402
 from .depth import NormalizedDepthPass  # noqa: E402
+from .ao import AmbientOcclusionPass  # noqa: E402
 from .points import FlexPointsMaterial  # noqa: E402
 from .lines import FlexLineMaterial  # noqa: E402
 
@@ -73,6 +74,7 @@ __all__ = [
     "BACKGROUND_PRESETS",
     "DepthOfFieldPass",
     "NormalizedDepthPass",
+    "AmbientOcclusionPass",
     "FlexPointsMaterial",
     "FlexLineMaterial",
 ]

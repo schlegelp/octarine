@@ -41,11 +41,17 @@ EFFECT_CLASSES = {
     "noise": NoisePass,
     "fog": FogPass,
     # `None` = resolved lazily inside `add_effect` (octarine's own
-    # NormalizedDepthPass; avoids importing .shaders at module load)
+    # NormalizedDepthPass and AmbientOcclusionPass; avoids importing
+    # .shaders at module load)
     "depth": None,
+    "ao": None,
     "normal": NormalPass,
     "bloom": PhysicalBasedBloomPass,
 }
+
+# Effects that must run before the others (in particular before the
+# anti-aliasing pass, which pygfx always keeps last)
+EFFECTS_RUN_FIRST = {"ao"}
 
 # TODO
 # - add styles for viewer (lights, background, etc.) - e.g. .set_style(dark)
@@ -1306,6 +1312,10 @@ class Viewer:
                        visible geometry; the background stays white. With
                        `overlay=True` the objects' own colors are kept and
                        darkened with distance instead (depth cueing).
+                     - "ao"
+                       Screen-space ambient occlusion: darkens creases,
+                       cavities and the contact points between objects.
+                       See also `Viewer.set_ambient_occlusion`.
                      - "normal"
                        Renders normals reconstructed from the depth buffer.
                      - "bloom"
@@ -1335,6 +1345,16 @@ class Viewer:
                       - strength (default 0.9): how dark the farthest
                         geometry gets, from 0 (not at all) to 1 (black /
                         fully darkened)
+                    - ao:
+                      - radius (default: 4% of the scene's diagonal): how
+                        far to look for occluders, in world units
+                      - intensity (default 1): strength of the darkening
+                      - bias (default 0.01): fraction of `radius` below
+                        which occluders are ignored
+                      - samples (default 16): samples per pixel
+                      - power (default 1): exponent applied to the occlusion
+                      - blur (default True): radius of the bilateral blur
+                      - debug (default False): render the occlusion itself
                     - normal: no parameters
                     - bloom:
                       - bloom_strength (default 0.04): strength of the bloom
@@ -1355,6 +1375,12 @@ class Viewer:
 
             effect_cls = NormalizedDepthPass
             kwargs.setdefault("camera", self.camera)
+        elif effect == "ao":
+            from .shaders import AmbientOcclusionPass
+
+            effect_cls = AmbientOcclusionPass
+            kwargs.setdefault("camera", self.camera)
+            kwargs.setdefault("radius", self._default_ao_radius())
 
         # Check if we already have this effect
         p = None
@@ -1368,6 +1394,8 @@ class Viewer:
                 self.renderer.effect_passes = tuple(
                     e for e in self.renderer.effect_passes if e is not p
                 )
+                if p is getattr(self, "_ao_pass", None):
+                    self._ao_pass = None
             return
 
         if p is None:
@@ -1376,7 +1404,18 @@ class Viewer:
                 kwargs["strength"] = 5.0
 
             p = effect_cls(**kwargs)
-            self.renderer.effect_passes = tuple(list(self.renderer.effect_passes) + [p])
+            passes = list(self.renderer.effect_passes)
+            if effect in EFFECTS_RUN_FIRST:
+                # Occlusion is part of the shading, so it has to run before
+                # the anti-aliasing and any lens effects
+                passes.insert(0, p)
+            else:
+                passes.append(p)
+            self.renderer.effect_passes = tuple(passes)
+            if effect == "ao":
+                # Keep `set_ambient_occlusion` and `add_effect` on the same
+                # pass instead of each adding one of their own
+                self._ao_pass = p
         else:
             # Update parameters
             for k, v in kwargs.items():
@@ -1384,6 +1423,9 @@ class Viewer:
                     setattr(p, k, v)
                 else:
                     raise ValueError(f"Effect '{effect}' has no parameter '{k}'")
+            if effect == "ao":
+                # May have been switched off via `set_ambient_occlusion(False)`
+                p.enabled = True
 
     def show(self, use_sidecar=False, toolbar=False, start_loop=False):
         """Show viewer.
@@ -3285,6 +3327,108 @@ class Viewer:
         dof_pass = getattr(self, "_dof_pass", None)
         if dof_pass is not None and dof_pass.enabled and not dof_pass._smooth_settled:
             self._render_stale = True
+
+    def _default_ao_radius(self, fraction=0.04):
+        """A sensible ambient occlusion radius for the current scene."""
+        bounds = self.bounds
+        if bounds is None:  # nothing on the canvas (yet)
+            return 1.0
+        diagonal = float(np.linalg.norm(bounds[:, 1] - bounds[:, 0]))
+        return (diagonal * fraction) or 1.0
+
+    @update_viewer(legend=False, bounds=False)
+    def set_ambient_occlusion(
+        self, enabled=True, *, radius=None, intensity=1.0, bias=0.01,
+        samples=16, power=1.0, blur=True, debug=False,
+    ):
+        """Set a screen-space ambient occlusion (SSAO) effect for the viewer.
+
+        Ambient light is otherwise applied uniformly, which leaves creases,
+        cavities and the points where objects touch looking flat. This
+        estimates how much of the surrounding hemisphere is blocked at each
+        pixel and darkens the image accordingly.
+
+        Note that this is a screen-space post-processing effect: it applies
+        to the entire rendered image (including overlay elements such as
+        messages), and objects that do not write depth (e.g. meshes with a
+        transparent alpha mode) neither cast nor receive occlusion.
+
+        Parameters
+        ----------
+        enabled :   bool
+                    Use `viewer.set_ambient_occlusion(False)` to turn the
+                    effect off again.
+        radius :    float, optional
+                    How far to look for occluders, in world units. This is
+                    the one parameter that has to match the scene: too
+                    small and the effect disappears, too large and it turns
+                    into a dark haze. If None (default), 4% of the
+                    diagonal of the current scene bounds is used - note
+                    that this is *not* updated as objects are added or
+                    removed, so pass a value explicitly if the automatic
+                    one does not suit.
+        intensity : float
+                    Strength of the darkening, from 0 (no effect) to 1
+                    (fully occluded pixels turn black).
+        bias :      float
+                    Occluders closer to the surface than this - as a
+                    fraction of `radius` - are ignored. Raise it if flat
+                    surfaces show occlusion of their own, lower it (down to
+                    0) for more contrast in tight creases.
+        samples :   int
+                    Number of hemisphere samples per pixel. More samples
+                    mean less noise at a higher rendering cost.
+        power :     float
+                    Exponent applied to the occlusion; values > 1 restrict
+                    the effect to the darkest areas, values < 1 spread it
+                    out.
+        blur :      bool | int
+                    Radius (in pixels) of the bilateral blur that removes
+                    the sampling noise. True (default) uses 2, which is
+                    exactly one tile of the sampling pattern; False (or 0)
+                    disables it.
+        debug :     bool
+                    If True, render the occlusion itself as greyscale
+                    instead of darkening the scene. Useful for finding a
+                    `radius` that suits the scene.
+
+        """
+        if not enabled:
+            if getattr(self, "_ao_pass", None) is not None:
+                self._ao_pass.enabled = False
+            return
+
+        from .shaders import AmbientOcclusionPass
+
+        if radius is None:
+            radius = self._default_ao_radius()
+
+        if getattr(self, "_ao_pass", None) is None:
+            self._ao_pass = AmbientOcclusionPass(
+                self.camera,
+                radius=radius,
+                intensity=intensity,
+                bias=bias,
+                samples=samples,
+                power=power,
+                blur=blur,
+                debug=debug,
+            )
+            # Occlusion is part of the shading, so it has to run before the
+            # anti-aliasing and any lens effects (e.g. depth of field)
+            self.renderer.effect_passes = [
+                self._ao_pass,
+                *self.renderer.effect_passes,
+            ]
+        else:
+            self._ao_pass.radius = radius
+            self._ao_pass.intensity = intensity
+            self._ao_pass.bias = bias
+            self._ao_pass.samples = samples
+            self._ao_pass.power = power
+            self._ao_pass.blur = blur
+            self._ao_pass.debug = debug
+        self._ao_pass.enabled = True
 
     @update_viewer(legend=True, bounds=False)
     def set_colors(self, c, alpha_mode="auto"):
