@@ -283,6 +283,28 @@ all light sources (including the headlight) if you want to fine-tune them:
 [0.5, 4.0, 1.0, 4.0]
 ```
 
+### Shadows
+
+Set [`octarine.Viewer.shadows`][] to `True` to have objects cast shadows onto
+each other:
+
+```python
+>>> v = oc.Viewer()
+>>> v.add_mesh(mesh)
+>>> v.shadows = True
+```
+
+Shadows have to be rendered from each light's point of view, so the lights and
+their shadow cameras are automatically fitted to the scene - and re-fitted
+whenever you add or remove objects. That means the two static lights move in
+much closer than they normally sit, which slightly changes the shading. The
+headlight is unaffected.
+
+!!! note
+
+    Only meshes can *receive* shadows. Lines and points do cast them but are
+    never shaded themselves, and volumes take no part in shadows at all.
+
 ## GUI Controls
 
 The control panel is organized into four tabs:

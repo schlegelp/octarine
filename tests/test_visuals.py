@@ -45,6 +45,40 @@ def test_adding_generic_objects(mesh, line_single, line_stack, points, points_co
     v.close()
 
 
+def test_bounds(points):
+    v = oc.Viewer(offscreen=True)
+
+    # Nothing on the canvas
+    assert v.bounds is None
+
+    # A box of (2, 4, 6) centered on the origin
+    v.add_mesh(tm.creation.box((2, 4, 6)), name="box")
+    assert v.bounds.shape == (3, 2)
+    assert v.bounds == pytest.approx(np.array([[-1, 1], [-2, 2], [-3, 3]]))
+
+    # Bounds are the union over all visuals...
+    v.add_points(np.array([[10.0, 0, 0], [0, -20, 0]]), name="points")
+    assert v.bounds == pytest.approx(np.array([[-1, 10], [-20, 2], [-3, 3]]))
+
+    # ... in world space, i.e. transforms count
+    v.objects["box"][0].local.position = (100, 0, 0)
+    assert v.bounds == pytest.approx(np.array([[0, 101], [-20, 2], [-3, 3]]))
+
+    # Invisible visuals still count
+    v.objects["box"][0].visible = False
+    assert v.bounds == pytest.approx(np.array([[0, 101], [-20, 2], [-3, 3]]))
+
+    # The bounding box visual is viewer chrome and must not count itself
+    before = v.bounds.copy()
+    v.show_bounds = True
+    assert v.bounds == pytest.approx(before)
+
+    v.clear()
+    assert v.bounds is None
+
+    v.close()
+
+
 @pytest.mark.parametrize("color", [None, "red", np.random.rand(3)])
 def test_adding_mesh(mesh, color):
     v = oc.Viewer(offscreen=True)
@@ -1024,6 +1058,146 @@ def test_headlight_toggle(mesh):
 
     with pytest.raises(TypeError):
         v.headlight = "yes"
+
+    v.close()
+
+
+def _shadow_scene(scale=1.0):
+    """A ground plane with a sphere floating above it."""
+    plane = tm.creation.box((20 * scale, 0.2 * scale, 20 * scale))
+    plane.apply_translation((0, -3 * scale, 0))
+    sphere = tm.creation.icosphere(radius=2 * scale, subdivisions=3)
+    sphere.apply_translation((0, 2 * scale, 0))
+    return plane, sphere
+
+
+def _render_shadow_scene(shadows, scale=1.0, headlight=False, camera="ortho"):
+    """Render the scene above and return the greyscale image."""
+    plane, sphere = _shadow_scene(scale)
+    v = oc.Viewer(offscreen=True, size=(200, 200), camera=camera)
+    v.headlight = headlight
+    v.add_mesh(plane, color="white")
+    v.add_mesh(sphere, color="red")
+    v.shadows = shadows
+    # Look at the plane at a slant so the sphere's shadow falls into view
+    v.camera.show_object(v.scene, view_dir=(0, -0.6, -1), up=(0, 1, 0))
+    img = np.asarray(v.screenshot(filename=None, size=(200, 200)))[..., :3]
+    v.close()
+    return img.astype(float).mean(axis=-1)
+
+
+@pytest.mark.parametrize("camera", ["ortho", "perspective"])
+@pytest.mark.parametrize("headlight", [False, True])
+# The scene scale matters: pygfx sizes neither the lights nor their shadow
+# cameras to the scene, so without our own fitting the shadow map is empty
+@pytest.mark.parametrize("scale", [0.01, 1.0, 1000.0])
+def test_shadow_render(scale, headlight, camera):
+    """Switching shadows on must actually darken part of the plane."""
+    without = _render_shadow_scene(False, scale, headlight, camera)
+    with_ = _render_shadow_scene(True, scale, headlight, camera)
+
+    # The sphere's shadow has to show up as a decent patch of the plane going
+    # properly dark - the generous threshold keeps the faint (<10/255) banding
+    # you get from PCF on a plane lit edge-on out of the mask
+    darkened = (without - with_) > 20
+    assert darkened.sum() > 100
+
+    # ... and it has to be a solid patch rather than the speckle you get from
+    # shadow acne, so it has to survive an erosion. A solid blob only loses its
+    # perimeter here (~20%), while acne - which is a checkerboard - loses
+    # basically all of itself.
+    eroded = darkened.copy()
+    for shift, axis in ((1, 0), (-1, 0), (1, 1), (-1, 1)):
+        eroded &= np.roll(darkened, shift, axis=axis)
+    assert eroded.sum() > darkened.sum() * 0.6
+
+
+def test_shadow_flags(mesh, points, line_single):
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh)
+    v.add_points(points)
+    v.add_lines(line_single)
+    # pygfx cannot render a volume into a shadow map and raises if we ask it to
+    v.add_volume(np.random.rand(10, 10, 10).astype(np.float32))
+
+    assert v.shadows is False
+    assert not any(vis.cast_shadow for vis in v.visuals)
+
+    v.shadows = True
+    by_type = {type(vis).__name__: vis for vis in v.visuals}
+    assert by_type["Mesh"].cast_shadow is True
+    assert by_type["Points"].cast_shadow is True
+    assert by_type["Line"].cast_shadow is True
+    assert by_type["Volume"].cast_shadow is False
+
+    # Only meshes ever receive shadows
+    assert by_type["Mesh"].receive_shadow is True
+    assert not any(
+        vis.receive_shadow for name, vis in by_type.items() if name != "Mesh"
+    )
+
+    # This must not raise (it does if a volume ends up in the shadow pass)
+    v.screenshot(filename=None, size=(200, 200))
+
+    v.shadows = False
+    assert not any(vis.cast_shadow or vis.receive_shadow for vis in v.visuals)
+
+    with pytest.raises(TypeError):
+        v.shadows = "yes"
+
+    v.close()
+
+
+def test_shadow_lights_track_the_scene(mesh):
+    """The lights must be re-fitted as objects come and go."""
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh)  # unit sphere at the origin
+
+    # While shadows are off the static lights stay parked far away, which is
+    # what makes their light effectively parallel
+    parked = np.array([tuple(light.local.position) for light in v._static_lights])
+    assert np.abs(parked).min() == pytest.approx(1e6)
+
+    v.shadows = True
+    near = np.array([tuple(light.local.position) for light in v._static_lights])
+    radius = np.linalg.norm(np.ptp(v.scene.get_bounding_box(), axis=0)) / 2
+    assert np.linalg.norm(near, axis=1) == pytest.approx(
+        [radius * oc.viewer.SHADOW_LIGHT_DISTANCE] * 2
+    )
+
+    # Growing the scene has to move the lights out with it...
+    big = tm.creation.icosphere(radius=1000)
+    big.apply_translation((5000, 0, 0))
+    v.add_mesh(big)
+    grown = np.array([tuple(light.local.position) for light in v._static_lights])
+    assert np.linalg.norm(grown, axis=1).min() > np.linalg.norm(near, axis=1).max()
+    # ... and the lights have to follow the scene's center, not sit at the origin
+    center = np.asarray(v.scene.get_bounding_box(), dtype=float).mean(axis=0)
+    assert grown.mean(axis=0) == pytest.approx(center)
+
+    # ... and shrinking it again has to bring them back
+    v.pop()
+    shrunk = np.array([tuple(light.local.position) for light in v._static_lights])
+    assert shrunk == pytest.approx(near)
+
+    # Switching shadows off parks them where they started
+    v.shadows = False
+    assert np.array(
+        [tuple(light.local.position) for light in v._static_lights]
+    ) == pytest.approx(parked)
+
+    v.close()
+
+
+def test_shadow_applies_to_objects_added_later(mesh):
+    """Visuals added after the toggle must pick up the shadow state."""
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.shadows = True
+
+    v.add_mesh(mesh)
+    (vis,) = v.visuals
+    assert vis.cast_shadow is True
+    assert vis.receive_shadow is True
 
     v.close()
 

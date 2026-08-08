@@ -10,6 +10,7 @@ import warnings
 
 import numpy as np
 import pygfx as gfx
+import pylinalg as la
 import trimesh as tm
 
 from pathlib import Path
@@ -54,8 +55,25 @@ EFFECT_CLASSES = {
 # - make Viewer reactive (see reactive_rendering.py) to save
 #   resources when not actively using the viewer - might help in Jupyter?
 # [/] add specialised methods for adding neurons, volumes, etc. to the viewer
-# - move lights to just outside the scene's bounding box (maybe use decorator?)
-#   whenever we add/remove objects
+
+# Positions of the two static lights (see `Viewer.__init__`). They are parked
+# far away from the scene so that their light arrives virtually parallel, no
+# matter how large the scene is. See `Viewer._fit_shadows` for what happens to
+# them when shadows are switched on.
+STATIC_LIGHT_POSITIONS = np.array([(-1, -1, -1), (1, 1, 1)], dtype=float) * 1e6
+
+# How far (in scene radii) from the scene's center the static lights are placed
+# when shadows are on. Anything much larger costs depth precision in the shadow
+# map; anything much smaller makes the light noticeably divergent.
+SHADOW_LIGHT_DISTANCE = 3
+
+# Slack (in scene radii) left around the scene when sizing a shadow camera's
+# frustum. Keeps the scene off the very edge of the shadow map.
+SHADOW_MARGIN = 1.1
+
+# pygfx can only render meshes, lines and points into a shadow map; it raises
+# a `RuntimeError` for anything else (volumes, text, images, ...)
+SHADOW_CASTERS = (gfx.Mesh, gfx.Line, gfx.Points)
 
 
 def update_viewer(legend=True, bounds=True):
@@ -197,6 +215,10 @@ def update_helper(viewer, legend=True, bounds=True):
     if bounds:
         if getattr(viewer, "show_bounds", False):
             viewer.update_bounds()
+        # New visuals have to pick up the shadow state, and the lights and their
+        # shadow cameras have to be re-fitted to the new extents of the scene
+        if getattr(viewer, "_shadows", False):
+            viewer._update_shadows()
 
     # Any time we update the viewer, we should set it to stale
     viewer._render_stale = True
@@ -333,16 +355,12 @@ class Viewer:
         # A strong point light form front/top/left
         key_light = gfx.PointLight(intensity=4)
         key_light.shadow.bias = 0.0000005  # this helps with shadow acne
-        key_light.local.x = -1000000  # move to the left
-        key_light.local.y = -1000000  # move up
-        key_light.local.z = -1000000  # move light forward
+        key_light.local.position = STATIC_LIGHT_POSITIONS[0]  # left, up, forward
 
         # A weaker point light from the back
         back_light = gfx.PointLight(intensity=1)
         back_light.shadow.bias = 0.0000005  # this helps with shadow acne
-        back_light.local.x = 1000000  # move to the right
-        back_light.local.y = 1000000  # move down
-        back_light.local.z = 1000000  # move light backwards
+        back_light.local.position = STATIC_LIGHT_POSITIONS[1]  # right, down, back
 
         # These two lights are fixed in world space, i.e. the lighting changes as
         # the camera moves. They are switched off when the (camera-linked)
@@ -435,6 +453,7 @@ class Viewer:
         # Finally, setting some variables
         self._show_bounds = False
         self._shadows = False
+        self._shadow_fit = None  # (center, radius) of the scene; see `_fit_shadows`
         self._animations = {}
         self._animations_flagged_for_removal = []
         self._animations_frame_counter = 0
@@ -513,6 +532,11 @@ class Viewer:
             if not getattr(self, "_render_stale", False):
                 self.canvas.request_draw()
                 return
+
+        # The headlight rides on the camera, so its shadow camera has to be
+        # re-fitted whenever we've moved (see `_fit_headlight_shadow`)
+        if self._shadows and self._headlight_enabled:
+            self._fit_headlight_shadow()
 
         # Now render the scene
         if self._show_fps:
@@ -756,7 +780,19 @@ class Viewer:
 
     @property
     def shadows(self):
-        """Return shadow state."""
+        """Whether objects cast shadows onto each other.
+
+        Note that only meshes can *receive* shadows - lines and points can cast
+        them but are never shaded themselves. Volumes and text take no part in
+        shadows at all.
+
+        The lights and their shadow cameras are automatically fitted to the
+        scene while this is on, and re-fitted whenever objects are added or
+        removed (see `Viewer._fit_shadows`). Because that moves the static
+        lights in much closer than they normally sit, expect the shading to
+        change slightly as well.
+
+        """
         return self._shadows
 
     @shadows.setter
@@ -765,26 +801,147 @@ class Viewer:
         if not isinstance(v, bool):
             raise TypeError(f"Expected bool, got {type(v)}")
 
-        def set_shadow(obj, state):
-            if hasattr(obj, "cast_shadow"):
-                obj.cast_shadow = state
-            if hasattr(obj, "receive_shadow"):
-                obj.receive_shadow = state
+        if v == self._shadows:
+            return
 
-        if v != self._shadows:
-            self._shadows = v
-            for vis in self.visuals:
-                set_shadow(vis, v)
+        self._shadows = v
+        self._update_shadows()
 
-            # N.B. we have to iterate over all lights (not just the scene's
-            # children) because the headlight is parented to the camera
-            for light in self.lights:
-                if isinstance(
-                    light, (gfx.PointLight, gfx.DirectionalLight, gfx.SpotLight)
-                ):
-                    light.cast_shadow = v
+        self._render_stale = True
 
-            # self.scene.traverse(lambda x: set_shadow(x, v))
+    def _update_shadows(self):
+        """Apply the current shadow state to the scene.
+
+        This is called whenever shadows are toggled and - via `update_helper` -
+        whenever objects are added to or removed from the scene, so that new
+        visuals pick up the shadow state and the lights stay fitted to the
+        scene as it grows.
+
+        """
+        state = self._shadows
+
+        for vis in self.visuals:
+            # pygfx can only render some object types into a shadow map (and
+            # raises for the rest). The bounding box is viewer chrome and has no
+            # business casting shadows either.
+            casts = (
+                state
+                and isinstance(vis, SHADOW_CASTERS)
+                and getattr(vis, "_object_type", None) != "boundingbox"
+            )
+            # Only meshes ever receive shadows - for everything else pygfx
+            # ignores the flag
+            receives = state and isinstance(vis, gfx.Mesh)
+
+            # N.B. `receive_shadow` recompiles the object's shader, so don't
+            # touch either flag unless it actually changes
+            if vis.cast_shadow != casts:
+                vis.cast_shadow = casts
+            if vis.receive_shadow != receives:
+                vis.receive_shadow = receives
+
+        # N.B. we have to iterate over all lights (not just the scene's
+        # children) because the headlight is parented to the camera
+        for light in self.lights:
+            if isinstance(light, (gfx.PointLight, gfx.DirectionalLight, gfx.SpotLight)):
+                light.cast_shadow = state
+
+        self._fit_shadows()
+
+    def _fit_shadows(self):
+        """Fit the lights and their shadow cameras to the scene.
+
+        Shadow maps are rendered from the light's point of view, through a
+        camera whose frustum pygfx sizes neither to the scene nor to the light's
+        position: point lights get a fixed far plane of 1e5 units and the
+        directional (head)light a fixed 1000x1000 ortho box. Our static lights
+        sit a million units out, so out of the box the entire scene falls behind
+        their shadow camera's far plane and nothing is ever drawn into the map -
+        i.e. no shadows, at any scene scale.
+
+        So while shadows are on we pull the static lights in to just outside the
+        scene and size all the frusta to match. Switching shadows off parks the
+        lights back where they were, which keeps their light parallel.
+
+        """
+        if not self._shadows:
+            self._shadow_fit = None
+            for light, position in zip(self._static_lights, STATIC_LIGHT_POSITIONS):
+                light.local.position = position
+            return
+
+        bounds = self.bounds
+        if bounds is None:  # nothing on the canvas to fit to
+            self._shadow_fit = None
+            return
+
+        center = bounds.mean(axis=1)
+        # Radius of the scene's bounding sphere. The fallback catches scenes
+        # without any extent, e.g. a single point.
+        radius = float(np.linalg.norm(bounds[:, 1] - bounds[:, 0])) / 2
+        if not radius:
+            radius = 1.0
+
+        # Cache this: the headlight's shadow camera has to be re-fitted on every
+        # frame (see `_fit_headlight_shadow`) and we don't want to walk the whole
+        # scene graph for its bounding box each time
+        self._shadow_fit = (center, radius)
+
+        # The static lights: move them to just outside the scene and clip their
+        # shadow camera (a 90 degree perspective camera) to the slab the scene
+        # actually occupies. A tight near/far range is what keeps the depth map
+        # precise enough to not produce shadow acne.
+        distance = radius * SHADOW_LIGHT_DISTANCE
+        for light, position in zip(self._static_lights, STATIC_LIGHT_POSITIONS):
+            direction = position / np.linalg.norm(position)
+            light.local.position = center + direction * distance
+            light.shadow.camera.depth_range = (
+                (distance - radius) / 2,
+                distance + radius * 2,
+            )
+
+        self._fit_headlight_shadow()
+
+    def _fit_headlight_shadow(self):
+        """Fit the headlight's shadow camera to the scene.
+
+        Unlike the static lights, the headlight rides on the camera: pygfx aims
+        it at a point one unit in front of the camera, which turns the light's
+        offset from the camera's axis (see `Viewer.headlight`) into a tilt. The
+        scene can therefore sit well off to the side of the light's axis - and
+        hence off the axis of its shadow camera - so this has to be redone
+        whenever the camera moves, not just when the scene changes.
+
+        """
+        if self._shadow_fit is None:
+            return
+
+        center, radius = self._shadow_fit
+
+        position = self._headlight.world.position
+        # This is the point pygfx makes the headlight look at - see pygfx's
+        # `get_pos_from_camera_parent_or_target`
+        target = la.vec_transform((0, 0, -1), self.camera.world.matrix)
+
+        direction = target - position
+        length = np.linalg.norm(direction)
+        if not length:  # ill-defined; pygfx falls back to the -z axis
+            return
+        direction = direction / length
+
+        # Split the vector to the scene's center into how far along the light's
+        # axis the scene is and how far off to the side of it
+        to_center = center - position
+        depth = float(np.dot(to_center, direction))
+        lateral = float(np.linalg.norm(to_center - depth * direction))
+
+        # The shadow camera is an ortho camera sitting at the light, so it has
+        # to be wide enough to cover the scene *including* that lateral offset,
+        # and deep enough to bridge the gap between the light and the scene
+        margin = radius * SHADOW_MARGIN
+        camera = self._headlight.shadow.camera
+        camera.width = camera.height = 2 * (lateral + margin)
+        camera.depth_range = (depth - margin, depth + margin)
 
     @property
     def visuals(self):
@@ -793,25 +950,33 @@ class Viewer:
 
     @property
     def bounds(self):
-        """Bounds of all currently visuals (visible and invisible)."""
+        """Bounds of all current visuals (visible and invisible).
+
+        Returns
+        -------
+        bounds :    (3, 2) array | None
+                    ``[[xmin, xmax], [ymin, ymax], [zmin, zmax]]`` in world
+                    space, or ``None`` if there is nothing on the canvas.
+
+        """
         bounds = []
         for vis in self.visuals:
             # Skip the bounding box itself
-            if getattr(vis, "_object_id", "") == "boundingbox":
+            if getattr(vis, "_object_type", None) == "boundingbox":
                 continue
 
-            try:
-                bounds.append(vis._bounds)
-            except BaseException:
-                pass
+            # N.B. this is `None` for visuals that don't take up any space
+            aabb = vis.get_world_bounding_box()
+            if aabb is not None:
+                bounds.append(aabb)
 
         if not bounds:
             return None
 
-        bounds = np.dstack(bounds)
+        bounds = np.stack(bounds)  # (N, 2, 3)
 
-        mn = bounds[:, 0, :].min(axis=1)
-        mx = bounds[:, 1, :].max(axis=1)
+        mn = bounds[:, 0, :].min(axis=0)
+        mx = bounds[:, 1, :].max(axis=0)
 
         return np.vstack((mn, mx)).T
 
