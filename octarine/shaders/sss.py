@@ -224,7 +224,7 @@ struct SssParams {
 fn sss_contribution(
     light: IncidentLight,
     geometry: GeometricContext,
-    albeido: vec3<f32>,
+    albedo: vec3<f32>,
     p: SssParams,
 ) -> vec3<f32> {
     // Transmission: light that entered the far side and scattered through
@@ -242,7 +242,7 @@ fn sss_contribution(
     let wrapped = saturate((dot_nl + p.wrap) / (1.0 + p.wrap)) - saturate(dot_nl);
 
     return light.color * p.tint * (
-        albeido * transmitted + BRDF_Lambert(albeido) * wrapped
+        albedo * transmitted + BRDF_Lambert(albedo) * wrapped
     );
 }
 
@@ -274,7 +274,7 @@ _SSS_LIGHTS_WGSL = """\
             for (var i = 0; i < {{num_point_lights}}; i ++ ) {
                 let sss_light = getPointLightInfo(u_point_lights[i], geometry);
                 if (sss_light.visible) {
-                    sss_color += sss_contribution(sss_light, geometry, physical_albeido, sss_params);
+                    sss_color += sss_contribution(sss_light, geometry, physical_albedo, sss_params);
                 }
             }
             $$ endif
@@ -283,7 +283,7 @@ _SSS_LIGHTS_WGSL = """\
             for (var i = 0; i < {{num_spot_lights}}; i ++ ) {
                 let sss_light = getSpotLightInfo(u_spot_lights[i], geometry);
                 if (sss_light.visible) {
-                    sss_color += sss_contribution(sss_light, geometry, physical_albeido, sss_params);
+                    sss_color += sss_contribution(sss_light, geometry, physical_albedo, sss_params);
                 }
             }
             $$ endif
@@ -292,7 +292,7 @@ _SSS_LIGHTS_WGSL = """\
             for (var i = 0; i < {{num_dir_lights}}; i ++ ) {
                 let sss_light = getDirectionalLightInfo(u_directional_lights[i], geometry);
                 if (sss_light.visible) {
-                    sss_color += sss_contribution(sss_light, geometry, physical_albeido, sss_params);
+                    sss_color += sss_contribution(sss_light, geometry, physical_albedo, sss_params);
                 }
             }
             $$ endif

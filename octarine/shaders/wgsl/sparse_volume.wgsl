@@ -428,10 +428,11 @@ fn fs_main(varyings: Varyings) -> FragmentOutput {
             let physical_color = color.rgb;
         $$ endif
 
-        // `grad` points *into* the volume; lighting_phong() re-orients it
-        // (same convention as pygfx's own iso volume shader).
+        // `grad` points *into* the volume, so re-orient it against the view
+        // direction (same convention as pygfx's own iso volume shader).
         let is_front = dot(normal, view_dir) > 0.0;
-        let lit_color = lighting_phong(is_front, normal, view_dir, physical_color);
+        let reoriented_normal = select(-normal, normal, is_front);
+        let lit_color = lighting_phong(reoriented_normal, view_dir, physical_color);
         let out_color = vec4<f32>(lit_color, color.a * u_material.opacity);
     $$ else
         if (the_t < 0.0 || acc_a <= 0.0) { discard; }

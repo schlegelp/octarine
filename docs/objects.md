@@ -99,7 +99,7 @@ A couple notes on the above:
 
 Some of these options (e.g. `min_size`/`max_size` or an edge width in units
 different from the marker size) are powered by a custom shader which requires
-`pygfx>=0.16`; unless one of them is used, `Octarine` sticks with the stock
+`pygfx>=0.17`; unless one of them is used, `Octarine` sticks with the stock
 `pygfx` materials.
 
 See [octarine.Viewer.add_points][]`()` for details!
@@ -328,7 +328,7 @@ points):
 >>> v.add(VoxelRuns(runs))
 ```
 
-Note that sparse volumes require `pygfx>=0.16`.
+Note that sparse volumes require `pygfx>=0.17`.
 
 See [octarine.Viewer.add_sparse_volume][]`()` for details!
 
@@ -447,7 +447,7 @@ which case the coefficients and edges are pulled off the object - and
 >>> v.add(profile)
 ```
 
-Note that tubes require `pygfx>=0.16`.
+Note that tubes require `pygfx>=0.17`.
 
 See [octarine.Viewer.add_tubes][]`()` for details!
 

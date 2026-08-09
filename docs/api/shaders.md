@@ -3,7 +3,7 @@
 The `octarine.shaders` module contains the custom materials and
 post-processing passes powering some of `Octarine`'s features - see
 [Effects & Shading](../effects.md) for an introduction. Requires
-`pygfx>=0.16`.
+`pygfx>=0.17`.
 
 Note that you will rarely have to touch these directly: they are
 typically employed via the respective [octarine.Viewer][] methods

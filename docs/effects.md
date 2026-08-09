@@ -15,7 +15,7 @@ They roughly fall into three categories:
    [depth of field](#depth-of-field) and
    [tone mapping](#tone-mapping-and-exposure)
 
-Most of what follows requires `pygfx>=0.16` (which is what recent versions
+Most of what follows requires `pygfx>=0.17` (which is what recent versions
 of `Octarine` install anyway).
 
 ## Transparency (alpha modes)
@@ -660,4 +660,4 @@ the checkbox switches it on, the arrow next to it expands the parameters.
 
 The custom shaders and render passes powering these features live in the
 `octarine.shaders` module - see the [API reference](api/shaders.md). The
-module is imported lazily and requires `pygfx>=0.16`.
+module is imported lazily and requires `pygfx>=0.17`.

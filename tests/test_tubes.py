@@ -63,7 +63,7 @@ def srgb2linear(u8):
 def lit_luminance(coefs, edges, width=16.0, **kwargs):
     """Linear luminance of every lit fragment, with the specular term off.
 
-    `lighting_phong` reduces to `albeido * (ambient + diffuse * lambert)` once
+    `lighting_phong` reduces to `albedo * (ambient + diffuse * lambert)` once
     `shininess` is 0, so in linear space the image is an affine function of
     lambert = |dot(view, normal)| - which lets the tests below read the normal
     off the render without depending on the light constants.

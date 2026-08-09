@@ -289,8 +289,9 @@ fn fs_main(varyings: Varyings) -> FragmentOutput {
         let normal = normalize((transpose(u_wobject.world_transform_inv) * vec4<f32>(grad, 0.0)).xyz);
         let view_dir = normalize((u_wobject.world_transform * vec4<f32>(ray, 0.0)).xyz);
         let is_front = dot(normal, view_dir) > 0.0;
+        let reoriented_normal = select(-normal, normal, is_front);
         let out_color = vec4<f32>(
-            lighting_phong(is_front, normal, view_dir, base_rgb),
+            lighting_phong(reoriented_normal, view_dir, base_rgb),
             u_material.color.a * u_material.opacity,
         );
     $$ elif mode == 'density'

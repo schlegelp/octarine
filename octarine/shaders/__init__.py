@@ -12,9 +12,9 @@ def _check_pygfx_version():
     import pygfx
 
     version = tuple(int(x) for x in pygfx.__version__.split(".")[:2] if x.isdigit())
-    if version < (0, 16):
+    if version < (0, 17):
         raise ImportError(
-            "octarine's custom shaders require pygfx>=0.16.0, you have "
+            "octarine's custom shaders require pygfx>=0.17.0, you have "
             f"{pygfx.__version__}. Please update: pip install -U pygfx"
         )
 

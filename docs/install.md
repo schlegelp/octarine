@@ -7,7 +7,7 @@
 !!! info "Requirements"
 
     `Octarine` requires Python `3.10` or later. Its main dependency,
-    [`pygfx`](https://github.com/pygfx/pygfx) (`>=0.16`), is installed
+    [`pygfx`](https://github.com/pygfx/pygfx) (`>=0.17`), is installed
     automatically.
 
 === "Full Install"

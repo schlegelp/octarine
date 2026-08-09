@@ -1525,7 +1525,7 @@ class Viewer:
         effect_cls = EFFECT_CLASSES[effect]
         if effect == "depth":
             # Our own normalized-depth shader; imported lazily because
-            # custom shaders require pygfx>=0.16
+            # custom shaders require pygfx>=0.17
             from .shaders import NormalizedDepthPass
 
             effect_cls = NormalizedDepthPass

@@ -675,7 +675,7 @@ class Controls(QtWidgets.QWidget):
         self.tab4_layout.addWidget(scroll_area)
 
         # Most of the effects require octarine's custom shaders (pygfx >=
-        # 0.16); if those are unavailable we show their controls greyed-out.
+        # 0.17); if those are unavailable we show their controls greyed-out.
         try:
             from . import shaders  # noqa: F401
 
@@ -1690,7 +1690,7 @@ class Controls(QtWidgets.QWidget):
             import pygfx
 
             msg = (
-                "Effects require pygfx >= 0.16 "
+                "Effects require pygfx >= 0.17 "
                 f"(you have {pygfx.__version__}). Please update pygfx."
             )
             # Disabling the sections takes their contents with them

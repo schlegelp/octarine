@@ -7,6 +7,11 @@ on the Github repository.
 ## dev
 _Date: ongoing_
 
+#### Breaking
+- `Octarine` now requires `pygfx>=0.17` - `0.17` renamed two symbols in the shader API that
+  `octarine`'s custom shaders build on (`lighting_phong()` no longer takes `is_front`, and
+  `physical_albeido` is now spelled `physical_albedo`)
+
 #### Improvements
 - new [`Viewer.set_ambient_occlusion`][octarine.Viewer.set_ambient_occlusion] method (also
   available as `add_effect('ao')`): screen-space ambient occlusion, i.e. the shadowing that

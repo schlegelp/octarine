@@ -278,11 +278,12 @@ fn fs_main(varyings: Varyings, @builtin(front_facing) is_front: bool) -> Fragmen
     );
 
     // The normal is analytic and points outward; `is_front` comes from the
-    // winding, so lighting_phong()'s reorientation gives the interior of the
-    // tube (visible through an open end) two-sided shading rather than a
-    // black hole - and an inverted normal shows up immediately.
+    // winding, so flipping it on back faces gives the interior of the tube
+    // (visible through an open end) two-sided shading rather than a black
+    // hole - and an inverted normal shows up immediately.
     let normal = normalize(varyings.normal);
-    let physical_color = lighting_phong(is_front, normal, view, diffuse_color.rgb);
+    let reoriented_normal = select(-normal, normal, is_front);
+    let physical_color = lighting_phong(reoriented_normal, view, diffuse_color.rgb);
 
     let out_color = vec4<f32>(physical_color, diffuse_color.a);
 

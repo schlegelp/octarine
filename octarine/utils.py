@@ -149,7 +149,7 @@ def background_options(viewer):
     """
     labels, values = ["Plain"], [None]
 
-    # The gradients require octarine's custom shaders (pygfx >= 0.16)
+    # The gradients require octarine's custom shaders (pygfx >= 0.17)
     try:
         from .shaders import BACKGROUND_PRESETS, GradientBackgroundMaterial
     except ImportError:
