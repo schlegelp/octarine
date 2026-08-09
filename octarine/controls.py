@@ -1271,7 +1271,9 @@ class Controls(QtWidgets.QWidget):
         matcap_row = QtWidgets.QHBoxLayout()
         matcap_row.addWidget(QtWidgets.QLabel("Preset"))
         self.matcap_dropdown = QtWidgets.QComboBox()
-        self.matcap_dropdown.addItems([name.title() for name in matcap_presets])
+        self.matcap_dropdown.addItems(
+            [name.replace("_", " ").title() for name in matcap_presets]
+        )
         if shaders_available:
             for i, name in enumerate(matcap_presets):
                 self.matcap_dropdown.setItemData(

@@ -15,8 +15,10 @@ shipped with the package:
    what produces the smooth top-lit-to-bottom-shaded falloff, and
  - a handful of **softboxes**: bright discs at a given direction, angular
    size and softness, standing in for studio lights, a sun, or the window
-   of a room. These are what produce the highlights and the crisp
-   reflections.
+   of a room. Giving one a `length` stretches it into a tube - a strip
+   light or a fluorescent fixture - which is what produces the long, drawn
+   out streaks a glossy surface shows. These are what produce the
+   highlights and the crisp reflections.
 
 `ENVIRONMENT_PRESETS` holds a few ready-made lighting setups built from
 those two ingredients. The result is uploaded as a `rgba16float` cube map,
@@ -36,7 +38,10 @@ import pygfx as gfx
 from ..utils import as_color_list
 
 # Ready-made lighting setups. `sky`/`horizon`/`ground` define the background
-# gradient, `lights` the softboxes on top of it. Directions are in world
+# gradient, `lights` the softboxes on top of it. A softbox is a disc of
+# angular radius `angle` degrees, fading out over the outer `softness`
+# fraction of it; `length` (also degrees, default 0) stretches it into a
+# tube and `roll` turns that tube about its own axis. Directions are in world
 # space (+y is up, +z towards the default camera), and do not need to be
 # normalized. `description` is what the GUI shows as tooltip.
 #
@@ -240,6 +245,31 @@ def _rgb(color):
     return _srgb2physical(as_color_list(color)[0].rgb).astype(np.float32)
 
 
+def _light_tangent(direction, roll):
+    """The axis a tube light is stretched along.
+
+    Perpendicular to the light's direction, horizontal at `roll` = 0 and
+    turning about the direction from there.
+    """
+    up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    if abs(float(direction @ up)) > 0.999:  # pointing straight up or down
+        up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    tangent = np.cross(up, direction)
+    tangent /= np.linalg.norm(tangent)
+    roll = np.radians(float(roll))
+    return np.cos(roll) * tangent + np.sin(roll) * np.cross(direction, tangent)
+
+
+def _light_solid_angle(light):
+    """How much of the sky a softbox covers, in steradians."""
+    angle = np.radians(float(light.get("angle", 25.0)))
+    # Past a full turn a tube just laps itself, and so does the arc that
+    # `environment_radiance` clamps against - keep the two in agreement
+    length = min(np.radians(float(light.get("length", 0.0))), 2 * np.pi)
+    # A disc, plus the band swept out when it is stretched into a tube
+    return 2 * np.pi * (1 - np.cos(angle)) + 2 * np.sin(angle) * length
+
+
 def environment_radiance(directions, preset="studio", *, rotation=0.0, **overrides):
     """Evaluate the analytic environment model in the given directions.
 
@@ -310,7 +340,24 @@ def environment_radiance(directions, preset="studio", *, rotation=0.0, **overrid
         # edge is the *lower* cosine.
         cos_outer = np.cos(angle)
         cos_inner = np.cos(angle * (1 - softness))
-        cos_angle = directions @ direction
+
+        length = np.radians(float(light.get("length", 0.0)))
+        if length < 0:
+            raise ValueError(f"light length must be >= 0, got {light['length']}")
+        if length:
+            # A tube: the disc is swept along an arc of `length` centered on
+            # the light direction, so the distance to measure is the one to
+            # the *nearest point of that arc*. Finding it is a matter of
+            # projecting into the plane the arc lies in and clamping the
+            # angle to the arc's extent.
+            tangent = _light_tangent(direction, light.get("roll", 0.0))
+            axis = directions @ direction
+            along = directions @ tangent
+            nearest = np.clip(np.arctan2(along, axis), -length / 2, length / 2)
+            cos_angle = axis * np.cos(nearest) + along * np.sin(nearest)
+        else:
+            cos_angle = directions @ direction
+
         if cos_inner - cos_outer < 1e-6:  # a hard-edged disc
             falloff = (cos_angle >= cos_outer).astype(np.float32)
         else:

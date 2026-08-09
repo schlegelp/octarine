@@ -24,9 +24,10 @@ scene, and it casts and receives nothing.
 matcap lookup into pygfx's stock ``mesh.wgsl``. The matcap images themselves
 are generated procedurally - `MATCAP_PRESETS` are recipes, not pictures - by
 lighting a virtual sphere with the same analytic environment model that
-`octarine.shaders.environment` uses for image-based lighting. A matcap and an
-environment built from the same preset therefore agree on where the light is
-coming from.
+`octarine.shaders.environment` uses for image-based lighting, so a matcap and
+an environment built from the same preset agree on where the light is coming
+from. A preset can equally carry a lighting rig of its own, which is what the
+ones reproducing Blender's matcaps do.
 
 Importing this module registers the shader with pygfx.
 """
@@ -38,11 +39,19 @@ from pygfx.renderers.wgpu import register_wgpu_render_function
 from pygfx.renderers.wgpu.shaders.meshshader import MeshShader
 
 from ..utils import as_color_list
-from .environment import environment_radiance, _physical2srgb, _rgb, _resolve_params
+from .environment import (
+    environment_radiance,
+    _light_solid_angle,
+    _physical2srgb,
+    _srgb2physical,
+    _rgb,
+    _resolve_params,
+)
 
-# Ready-made matcaps. `environment` names the lighting setup (see
-# `octarine.shaders.environment.ENVIRONMENT_PRESETS`) the sphere is lit with;
-# everything else describes the surface. `tint` is how much of an object's own
+# Ready-made matcaps. `environment` is the lighting setup the sphere is lit
+# with - either the name of one of
+# `octarine.shaders.environment.ENVIRONMENT_PRESETS` or a rig of its own -
+# and everything else describes the surface. `tint` is how much of an object's
 # color survives - 1 keeps it (so a scene of differently colored objects still
 # reads as such), 0 lets the matcap's own color take over, which is what the
 # strongly colored presets want. `description` is the GUI's tooltip.
@@ -113,6 +122,127 @@ MATCAP_PRESETS = {
         rim_power=2.5,
         tint=0.4,
     ),
+    # The five below are reproductions of matcaps from Blender's Workbench
+    # renderer (basic_side, ceramic_lightbulb, ceramic_dark, toon_dark and
+    # toon_light). Nothing is copied - the parameters were fitted to the
+    # originals, so these are the closest this model gets to them rather than
+    # pixel-exact matches. They bring their own lighting rig instead of naming
+    # one of the shared environments, because a rig built to light a single
+    # sphere is not necessarily a good environment to light a scene with.
+    "sidelit": dict(
+        description="Plain grey under one big side light; unfussy and very readable",
+        environment=dict(
+            sky="#8a8a8a",
+            horizon="#535353",
+            ground="#010101",
+            gradient=2.3,
+            lights=(
+                dict(direction=(0.6, 0.72, 0.36), color="#ffffff", intensity=12.5,
+                     angle=22, softness=0.95),
+            ),
+        ),
+        base_color="#e3e3e3",
+        specular=0.1,
+        shininess=8,
+        rim=0.0,
+        tint=1.0,
+    ),
+    "ceramic": dict(
+        description="Cool glazed ceramic with long strip-light reflections",
+        environment=dict(
+            sky="#ebe8ff",
+            horizon="#52373a",
+            ground="#000000",
+            gradient=1.05,
+            lights=(
+                # The two strip lights whose reflections make the streaks
+                dict(direction=(0.59, 0.74, -0.33), color="#ffffff", intensity=5.9,
+                     angle=15, length=38, roll=78, softness=1.0),
+                dict(direction=(-0.6, 0.79, -0.17), color="#ffffff", intensity=10.2,
+                     angle=1.5, length=10, roll=66, softness=1.0),
+                # Bounce off the floor in front, for the bright lower edge
+                dict(direction=(0.17, -0.48, 0.86), color="#ffffff", intensity=0.4,
+                     angle=72, softness=1.0),
+            ),
+        ),
+        base_color="#beccce",
+        specular=0.16,
+        shininess=280,
+        rim=0.0,
+        tint=0.8,
+    ),
+    "slate": dict(
+        description="Muted blue-grey ceramic with a small warm key light",
+        environment=dict(
+            sky="#766350",
+            horizon="#49535c",
+            ground="#4e463c",
+            gradient=1.15,
+            lights=(
+                dict(direction=(-0.54, 0.59, 0.59), color="#a3a3ad", intensity=6.2,
+                     angle=16, softness=0.3),
+                dict(direction=(-0.71, 0.22, 0.66), color="#a9b2c3", intensity=3.4,
+                     angle=50, softness=1.0),
+                # The warm highlight, from behind the shoulder
+                dict(direction=(-0.54, 0.83, -0.13), color="#fac587", intensity=14.7,
+                     angle=11, softness=0.75),
+            ),
+        ),
+        base_color="#aeb1b4",
+        specular=0.09,
+        shininess=80,
+        rim=0.0,
+        tint=0.5,
+    ),
+    "toon": dict(
+        description="Cel shading: flat tones, hard terminators and an ink outline",
+        environment=dict(
+            sky="#2a2a2a",
+            horizon="#2a2a2a",
+            ground="#111111",
+            gradient=0.4,
+            # One small, hard light: with the tones quantized it is where the
+            # terminators land that matters, not how smooth the falloff is
+            lights=(
+                dict(direction=(-0.34, 0.5, 0.79), color="#ffffff", intensity=65.0,
+                     angle=7.0, softness=0.2),
+            ),
+        ),
+        base_color="#dedede",
+        specular=0.01,
+        shininess=300,
+        rim=0.35,
+        rim_color="#3fe3ee",
+        rim_power=9.0,
+        bands=3,
+        band_softness=0.03,
+        edge=0.95,
+        edge_width=0.03,
+        tint=1.0,
+    ),
+    "toon_light": dict(
+        description="Pale cel shading, for light backgrounds",
+        environment=dict(
+            sky="#999999",
+            horizon="#999999",
+            ground="#3d3d3d",
+            gradient=3.0,
+            lights=(
+                dict(direction=(0.53, 0.11, 0.84), color="#ffffff", intensity=0.8,
+                     angle=85, softness=0.05),
+            ),
+        ),
+        base_color="#e6e6e6",
+        specular=0.0,
+        rim=0.0,
+        # High-key lighting only covers the top of the range, so ten bands
+        # show up as the three barely separated tones this one lives on
+        bands=10,
+        band_softness=0.03,
+        edge=0.2,
+        edge_width=0.03,
+        tint=1.0,
+    ),
 }
 
 #: The properties of a matcap recipe, i.e. what `make_matcap` accepts as
@@ -126,6 +256,10 @@ MATCAP_PROPERTIES = (
     "rim",
     "rim_color",
     "rim_power",
+    "bands",
+    "band_softness",
+    "edge",
+    "edge_width",
     "tint",
 )
 
@@ -178,6 +312,109 @@ def _sky_irradiance(elevations, environment, samples=2048):
     return (cos_weights @ radiance) * solid_angle
 
 
+def _softbox_irradiance(light, cos_theta, samples=512):
+    """Irradiance from one softbox, per cosine of the angle to its axis.
+
+    Treating a softbox as a point light and multiplying by the cosine is
+    only right for a small one. A big source keeps lighting a surface after
+    its center has dropped below the horizon, which is exactly what makes
+    the terminator of a studio-lit sphere so much softer than a Lambert
+    falloff - so we integrate over the source instead.
+
+    The result depends only on the angle between the normal and the light's
+    axis, which makes this a one-dimensional table, the same trick
+    `_sky_irradiance` uses.
+
+    Parameters
+    ----------
+    light :     dict
+                A softbox; see `octarine.shaders.environment`.
+    cos_theta : (N,) array
+                Cosines of the angle between normal and light axis.
+    samples :   int
+                Number of directions used for the integration.
+
+    Returns
+    -------
+    (N,) array
+                Irradiance per unit radiance, i.e. multiply by the light's
+                color and intensity to get the contribution.
+
+    """
+    # Tubes are treated as the round softbox that covers the same amount of
+    # sky. The shape of an area source barely shows in its diffuse falloff -
+    # only its size does - and it does show in the reflection, which is
+    # handled by the environment model itself.
+    angle = float(np.arccos(np.clip(1 - _light_solid_angle(light) / (2 * np.pi), -1, 1)))
+    softness = float(np.clip(light.get("softness", 0.8), 0, 1))
+
+    # Directions covering the cap, each carrying the same solid angle
+    i = np.arange(samples, dtype=np.float64) + 0.5
+    cos_a = 1 - (i / samples) * (1 - np.cos(angle))
+    sin_a = np.sqrt(np.maximum(1 - cos_a * cos_a, 0))
+    phi = np.pi * (1 + 5**0.5) * i
+    directions = np.stack([sin_a * np.cos(phi), sin_a * np.sin(phi), cos_a], axis=-1)
+
+    # The same soft edge `environment_radiance` gives the disc
+    cos_outer, cos_inner = np.cos(angle), np.cos(angle * (1 - softness))
+    if cos_inner - cos_outer < 1e-6:
+        falloff = np.ones(samples)
+    else:
+        t = np.clip((cos_a - cos_outer) / (cos_inner - cos_outer), 0, 1)
+        falloff = t * t * (3 - 2 * t)
+    weights = falloff * (2 * np.pi * (1 - np.cos(angle)) / samples)
+
+    cos_theta = np.clip(np.asarray(cos_theta, dtype=np.float64), -1, 1)
+    sin_theta = np.sqrt(np.maximum(1 - cos_theta * cos_theta, 0))
+    normals = np.stack([sin_theta, np.zeros_like(cos_theta), cos_theta], axis=-1)
+    return np.clip(normals @ directions.T, 0, None) @ weights
+
+
+#: Rec. 709 luminance weights; used to posterize without shifting hues.
+_LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+
+
+def _smoothstep(x):
+    x = np.clip(x, 0, 1)
+    return x * x * (3 - 2 * x)
+
+
+def _posterize(shading, bands, softness):
+    """Quantize the shading into `bands` flat tones - the cel-shading step.
+
+    This runs on the *shading* rather than on the finished color, because
+    that is what a cel painter quantizes: the light, not the paint. The
+    surface keeps its own color and the top tone is whatever that color is,
+    instead of always being white.
+
+    The quantization itself happens on the luminance (so hues survive) and
+    in display space rather than in linear space, because equal steps of the
+    sRGB value are what read as equally spaced tones. `softness` is the
+    width of the transition as a fraction of a band: 0 gives the hard
+    terminator of a cartoon, 1 blurs the steps into each other.
+    """
+    bands = int(bands)
+    if bands < 2:
+        raise ValueError(f"bands must be >= 2 (or 0 for smooth), got {bands}")
+
+    lum = shading @ _LUMA
+    encoded = _physical2srgb(lum) * (bands - 1)
+    step = np.floor(encoded)
+    frac = encoded - step
+
+    half = np.clip(float(softness), 0, 1) * 0.5
+    if half <= 0:
+        frac = (frac >= 0.5).astype(np.float32)
+    else:
+        frac = _smoothstep((frac - (0.5 - half)) / (2 * half))
+
+    # Clamped, so that `bands` really does mean that many tones however
+    # bright the lighting is. The highlight and the rim are added afterwards
+    # and stay open-ended, which is where the dynamic range lives.
+    quantized = _srgb2physical(np.clip(step + frac, 0, bands - 1) / (bands - 1))
+    return shading * (quantized / np.maximum(lum, 1e-6))[..., None]
+
+
 def make_matcap(preset="pearl", *, size=256, environment=None, **overrides):
     """Render a matcap image by lighting a virtual sphere.
 
@@ -196,8 +433,8 @@ def make_matcap(preset="pearl", *, size=256, environment=None, **overrides):
                 to whatever the matcap preset asks for.
     **overrides
                 Individual `base_color`, `specular`, `shininess`, `rim`,
-                `rim_color`, `rim_power` or `tint` values overriding the
-                preset's.
+                `rim_color`, `rim_power`, `bands`, `band_softness`, `edge`,
+                `edge_width` or `tint` values overriding the preset's.
 
     Returns
     -------
@@ -237,31 +474,40 @@ def make_matcap(preset="pearl", *, size=256, environment=None, **overrides):
     env_intensity = float(env.get("intensity", 1.0))
 
     # --- Diffuse -----------------------------------------------------------
-    # The sky gradient is integrated numerically (once per elevation, see
-    # `_sky_irradiance`); the softboxes are small enough to treat as
-    # directional lights, whose irradiance is radiance x solid angle x cosine.
-    table_elevations = np.linspace(-1, 1, 257, dtype=np.float32)
-    table = _sky_irradiance(table_elevations, env)
+    # Both halves of the environment are integrated numerically, but each
+    # along the one axis it actually varies over: the sky gradient by
+    # elevation, a softbox by the angle to its own axis.
+    cosines = np.linspace(-1, 1, 257, dtype=np.float32)
+    table = _sky_irradiance(cosines, env)
     irradiance = np.stack(
-        [np.interp(normals[..., 1], table_elevations, table[:, c]) for c in range(3)],
+        [np.interp(normals[..., 1], cosines, table[:, c]) for c in range(3)],
         axis=-1,
     ).astype(np.float32)
 
     for light in lights:
         direction = np.asarray(light["direction"], dtype=np.float32)
         direction = direction / np.linalg.norm(direction)
-        # Solid angle of a disc of angular radius `angle`
-        solid_angle = 2 * np.pi * (1 - np.cos(np.radians(float(light.get("angle", 25.0)))))
         radiance = (
             _rgb(light.get("color", "#ffffff"))
             * float(light.get("intensity", 1.0))
             * env_intensity
         )
-        cos_nl = np.clip(normals @ direction, 0, None)[..., None]
-        irradiance = irradiance + radiance * solid_angle * cos_nl
+        shading = np.interp(
+            normals @ direction, cosines, _softbox_irradiance(light, cosines)
+        )
+        irradiance = irradiance + radiance * shading[..., None]
 
-    base_color = _rgb(params.get("base_color", "#e6e7ea"))
-    color = base_color * irradiance / np.pi
+    shading = irradiance / np.pi
+
+    # --- Cel shading -------------------------------------------------------
+    # Posterizing the diffuse (and only the diffuse - the highlight and the
+    # rim stay smooth, as they do in a hand-painted cel) turns the gradient
+    # into the flat tones with hard terminators of a cartoon.
+    bands = params.get("bands", 0)
+    if bands:
+        shading = _posterize(shading, bands, params.get("band_softness", 0.1))
+
+    color = _rgb(params.get("base_color", "#e6e7ea")) * shading
 
     # --- Specular ----------------------------------------------------------
     # Rather than adding a Blinn-Phong dot per light, we reflect the
@@ -282,14 +528,14 @@ def make_matcap(preset="pearl", *, size=256, environment=None, **overrides):
             angle = np.radians(float(light.get("angle", 25.0)))
             # Combine source size and lobe width in quadrature
             wide = float(np.hypot(angle, blur))
+            spread = dict(light, angle=np.degrees(wide))
             blurred["lights"].append(
                 dict(
-                    light,
-                    angle=np.degrees(wide),
-                    # Spreading the same light over a larger disc dims it
+                    spread,
+                    # Spreading the same light over more sky dims it
                     intensity=float(light.get("intensity", 1.0))
-                    * (1 - np.cos(angle))
-                    / (1 - np.cos(wide)),
+                    * _light_solid_angle(light)
+                    / _light_solid_angle(spread),
                     softness=float(
                         np.clip(max(light.get("softness", 0.8), blur / wide), 0, 1)
                     ),
@@ -309,6 +555,19 @@ def make_matcap(preset="pearl", *, size=256, environment=None, **overrides):
         rim_power = max(float(params.get("rim_power", 4.0)), 0.1)
         facing = np.clip(normals @ view_dir, 0, 1)[..., None]
         color = color + rim_color * rim * (1 - facing) ** rim_power
+
+    # --- Ink line ----------------------------------------------------------
+    # A dark band right at the silhouette, where the normals turn away from
+    # the camera. It reads as a drawn outline around the object - the classic
+    # companion to cel shading, and useful on its own to separate pale
+    # objects from a pale background.
+    edge = float(params.get("edge", 0.0))
+    if edge:
+        edge_width = float(params.get("edge_width", 0.05))
+        if not 0 < edge_width <= 1:
+            raise ValueError(f"edge_width must be in (0, 1], got {edge_width}")
+        ink = _smoothstep((np.sqrt(r2) - (1 - edge_width)) / edge_width)
+        color = color * (1 - edge * ink)[..., None]
 
     out = np.ones((size, size, 4), dtype=np.float32)
     out[..., :3] = color

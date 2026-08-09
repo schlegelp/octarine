@@ -3396,14 +3396,23 @@ class Viewer:
         Octarine generates its matcaps procedurally, so they are recipes
         rather than images - see `octarine.shaders.matcap.MATCAP_PRESETS`:
 
-        | Preset  | Description                                            |
-        |---------|--------------------------------------------------------|
-        | `pearl` | Neutral glossy white; shape without a color (default)  |
-        | `clay`  | Matte modelling clay; no highlights, pure form         |
-        | `metal` | Brushed steel; hard highlight and a strong rim         |
-        | `gold`  | Warm polished metal, lit by a low sun                  |
-        | `jade`  | Deep green stone with a translucent glowing rim        |
-        | `neon`  | Near-black with magenta/cyan edges; for dark scenes    |
+        | Preset       | Description                                       |
+        |--------------|---------------------------------------------------|
+        | `pearl`      | Neutral glossy white; the default                 |
+        | `clay`       | Matte modelling clay; no highlights, pure form    |
+        | `metal`      | Brushed steel; hard highlight and a strong rim    |
+        | `gold`       | Warm polished metal, lit by a low sun             |
+        | `jade`       | Deep green stone with a translucent glowing rim   |
+        | `neon`       | Near-black with magenta/cyan edges; dark scenes   |
+        | `sidelit`    | Plain grey under one big side light; readable     |
+        | `ceramic`    | Cool glaze with long strip-light reflections      |
+        | `slate`      | Muted blue-grey ceramic with a small warm key     |
+        | `toon`       | Cel shading: flat tones and an ink outline        |
+        | `toon_light` | Pale cel shading, for light backgrounds           |
+
+        The last five reproduce matcaps that ship with Blender's Workbench
+        renderer; their parameters were fitted to the originals rather than
+        copied from them.
 
         Parameters
         ----------
@@ -3427,10 +3436,12 @@ class Viewer:
                     to whatever the preset asks for.
         **overrides
                     Individual properties of the recipe to override:
-                    `environment` (which lighting setup the sphere is lit
-                    with, see `Viewer.set_environment`), `base_color`,
-                    `specular`, `shininess`, `rim`, `rim_color` and
-                    `rim_power`.
+                    `environment` (the lighting setup the sphere is lit
+                    with - the name of one of `Viewer.set_environment`'s, or
+                    a rig of its own), `base_color`, `specular`,
+                    `shininess`, `rim`, `rim_color`, `rim_power`, and
+                    `bands` / `band_softness` / `edge` / `edge_width` for
+                    cel shading.
 
         Examples
         --------
@@ -3442,6 +3453,12 @@ class Viewer:
 
         >>> v.set_matcap("pearl", base_color="#b0c4de", rim=0.6)
         >>> v.set_matcap("metal", environment="sunset")
+
+        `bands` quantizes the shading into that many flat tones and `edge`
+        draws an ink line around the silhouette, which turns any preset
+        into a cel-shaded one:
+
+        >>> v.set_matcap("jade", bands=4, band_softness=0, edge=0.8)
 
         Back to the regular lit materials:
 

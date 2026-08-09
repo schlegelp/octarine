@@ -173,7 +173,11 @@ if __name__ == "__main__":
         v = oc.Viewer(offscreen=True, size=(RW, RH))
         v.add_mesh(bunny.copy(), name="bunny", color="#4e79a7")
         v.center_camera()
-        mc_window = crop_window(grab(v))
+        mc_window = crop_window(grab(v))  # needs the black background to find the mesh
+        # This one is built for light backgrounds - on black it would only
+        # show a pale blob, which is not what it looks like in use
+        if preset == "toon_light":
+            v.set_bgcolor("#e8e8e8")
         v.set_matcap(preset)
         finalize(grab(v), mc_window, f"matcap = {preset}", f"effects_matcap_{preset}")
         v.close()

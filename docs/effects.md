@@ -181,21 +181,40 @@ rather than images:
 ![gold](_static/effects_matcap_gold.png){ width="32%" }
 ![jade](_static/effects_matcap_jade.png){ width="32%" }
 ![neon](_static/effects_matcap_neon.png){ width="32%" }
+![sidelit](_static/effects_matcap_sidelit.png){ width="32%" }
+![ceramic](_static/effects_matcap_ceramic.png){ width="32%" }
+![slate](_static/effects_matcap_slate.png){ width="32%" }
+![toon](_static/effects_matcap_toon.png){ width="32%" }
+![toon_light](_static/effects_matcap_toon_light.png){ width="32%" }
 
-| Preset    | Description                                             |
-|-----------|---------------------------------------------------------|
-| `pearl`   | Neutral glossy white; shape without a color (default)   |
-| `clay`    | Matte modelling clay; no highlights, pure form          |
-| `metal`   | Brushed steel; hard highlight and a strong rim          |
-| `gold`    | Warm polished metal, lit by a low sun                   |
-| `jade`    | Deep green stone with a translucent glowing rim         |
-| `neon`    | Near-black with magenta/cyan edges; for dark scenes     |
+| Preset       | Description                                             |
+|--------------|---------------------------------------------------------|
+| `pearl`      | Neutral glossy white; shape without a color (default)   |
+| `clay`       | Matte modelling clay; no highlights, pure form          |
+| `metal`      | Brushed steel; hard highlight and a strong rim          |
+| `gold`       | Warm polished metal, lit by a low sun                   |
+| `jade`       | Deep green stone with a translucent glowing rim         |
+| `neon`       | Near-black with magenta/cyan edges; for dark scenes     |
+| `sidelit`    | Plain grey under one big side light; very readable      |
+| `ceramic`    | Cool glaze with long strip-light reflections            |
+| `slate`      | Muted blue-grey ceramic with a small warm key           |
+| `toon`       | Cel shading: flat tones and an ink outline              |
+| `toon_light` | Pale cel shading, for light backgrounds                 |
 
-Each is a surface description (`base_color`, `specular`, `shininess`,
-`rim`, `rim_color`, `rim_power`) plus the name of the
-[environment](#environment-lighting-ibl) its sphere is lit with - so a
-matcap and an environment built from the same preset agree on where the
-light comes from. Every property can be overridden:
+The last five are reproductions of matcaps that ship with Blender's
+Workbench renderer (`basic_side`, `ceramic_lightbulb`, `ceramic_dark`,
+`toon_dark` and `toon_light`). Their parameters were fitted to the
+originals rather than copied from them, so they are as close as this model
+gets, not pixel-exact matches.
+
+Each preset is a surface description (`base_color`, `specular`,
+`shininess`, `rim`, `rim_color`, `rim_power`, and `bands` / `band_softness`
+/ `edge` / `edge_width` for the cel-shaded ones) plus the
+[environment](#environment-lighting-ibl) its sphere is lit with. That is
+usually the *name* of a shared environment - so a matcap and an environment
+built from the same preset agree on where the light comes from - but it can
+equally be a lighting rig of its own, which is what the Blender-derived
+presets use. Every property can be overridden:
 
 ```python
 >>> v.set_matcap('pearl', base_color='#b0c4de', rim=0.6)
@@ -209,6 +228,14 @@ neutral presets ask for it and the strongly colored ones don't:
 ```python
 >>> v.set_matcap('pearl', tint=1)   # objects keep their colors
 >>> v.set_matcap('pearl', tint=0)   # everything takes the matcap's color
+```
+
+`bands` quantizes the shading into that many flat tones, which is what
+turns a smooth gradient into cel shading, and `edge` draws an ink line
+around the silhouette. Both work on any preset:
+
+```python
+>>> v.set_matcap('jade', bands=4, band_softness=0, edge=0.8)
 ```
 
 You can also hand it an image directly - an `(N, M, 3)` or `(N, M, 4)`
@@ -299,6 +326,19 @@ Presets are starting points - `sky`, `horizon`, `ground`, `gradient` and the
 >>> v.set_environment('studio', rotation=90, intensity=1.5)
 >>> v.set_environment('neon', roughness=0.15, metalness=0.9)
 >>> v.set_environment('soft', ground='#402010')
+```
+
+A light is a disc of angular radius `angle` degrees that fades out over the
+outer `softness` fraction of itself. Giving it a `length` (also in degrees)
+stretches it into a tube - a strip light - and `roll` turns that tube about
+its own axis; a glossy surface then shows the long drawn-out streak a real
+fixture leaves rather than a round dot:
+
+```python
+>>> v.set_environment('studio', roughness=0.15, lights=[
+...     dict(direction=(-0.3, 0.9, 0.3), color='#ffffff', intensity=20,
+...          angle=3, length=90, roll=0, softness=0.4),
+... ])
 ```
 
 !!! note

@@ -7,6 +7,8 @@ import pygfx as gfx
 import trimesh as tm
 import octarine as oc
 
+from octarine.shaders.environment import _light_solid_angle
+from octarine.shaders.matcap import _softbox_irradiance
 from octarine.shaders import (
     ENVIRONMENT_PRESETS,
     MATCAP_PRESETS,
@@ -98,6 +100,80 @@ def test_environment_gradient():
         np.array([(0, 1, 0), (0, 0, 1), (0, -1, 0)], dtype=np.float32), env
     )
     assert radiance[0].mean() > radiance[1].mean() > radiance[2].mean()
+
+
+def _sphere_directions(n=200_000):
+    """Roughly evenly spaced directions, each covering 4*pi/n steradians."""
+    i = np.arange(n) + 0.5
+    y = 1 - 2 * i / n
+    radius = np.sqrt(1 - y * y)
+    theta = np.pi * (1 + 5**0.5) * i
+    return np.stack(
+        [np.cos(theta) * radius, y, np.sin(theta) * radius], axis=-1
+    ).astype(np.float32)
+
+
+@pytest.mark.parametrize(
+    "light",
+    [
+        dict(direction=(0, 0, 1), angle=20),
+        dict(direction=(0, 0, 1), angle=10, length=60),
+        dict(direction=(0, 1, 0), angle=15, length=90, roll=30),
+    ],
+)
+def test_light_solid_angle(light):
+    """`_light_solid_angle` must agree with integrating the light out."""
+    directions = _sphere_directions()
+    radiance = environment_radiance(
+        directions,
+        dict(sky="#000", horizon="#000", ground="#000",
+             lights=[dict(light, color="#fff", intensity=1.0, softness=0.0)]),
+    )
+    integrated = radiance[:, 0].sum() * 4 * np.pi / len(directions)
+    assert integrated == pytest.approx(_light_solid_angle(light), rel=1e-2)
+
+
+def test_tube_light_is_elongated():
+    """`length` stretches a softbox along its axis; `roll` turns that axis."""
+    disc = dict(direction=(0, 0, 1), color="#fff", intensity=1.0, angle=5,
+                softness=0.0)
+    tube = dict(disc, length=60)
+
+    def lit(light, direction):
+        env = dict(sky="#000", horizon="#000", ground="#000", lights=[light])
+        return float(environment_radiance(np.array([direction], np.float32), env)[0, 0])
+
+    # 20 degrees to the side of straight ahead, horizontally and vertically
+    side = (np.sin(np.radians(20)), 0.0, np.cos(np.radians(20)))
+    above = (0.0, np.sin(np.radians(20)), np.cos(np.radians(20)))
+    assert lit(disc, side) == 0 and lit(disc, above) == 0
+    assert lit(tube, side) > 0 and lit(tube, above) == 0
+    # Rolling it a quarter turn swaps the two
+    rolled = dict(tube, roll=90)
+    assert lit(rolled, side) == 0 and lit(rolled, above) > 0
+
+
+def test_light_length_errors():
+    with pytest.raises(ValueError, match="length"):
+        environment_radiance(
+            np.array([(0, 0, 1)], np.float32),
+            dict(lights=[dict(direction=(0, 0, 1), length=-1)]),
+        )
+
+
+def test_big_softbox_wraps_around_the_terminator():
+    """A large source keeps lighting a surface past 90 degrees; a point does not."""
+    cosines = np.array([0.0, -0.15], dtype=np.float64)
+    small = _softbox_irradiance(dict(angle=3, softness=0.0), cosines)
+    big = _softbox_irradiance(dict(angle=60, softness=0.0), cosines)
+    assert small[0] < 1e-3 and small[1] == 0
+    assert big[0] > 0.2 and big[1] > 0.05
+    # ... and it must not invent energy: over the whole sphere both deliver
+    # the same total, namely solid angle x pi
+    fine = np.linspace(-1, 1, 20001)
+    for light in (dict(angle=3, softness=0.0), dict(angle=60, softness=0.0)):
+        total = np.trapezoid(_softbox_irradiance(light, fine), fine) * 2 * np.pi
+        assert total == pytest.approx(_light_solid_angle(light) * np.pi, rel=1e-2)
 
 
 @pytest.mark.parametrize("preset", list(ENVIRONMENT_PRESETS))
@@ -509,6 +585,105 @@ def test_set_matcap_skips_environment(scene_viewer):
     scene_viewer.set_environment("studio")
     assert isinstance(scene_viewer.objects["sphere"][0].material, MatcapMeshMaterial)
     assert isinstance(scene_viewer.objects["box"][0].material, gfx.MeshStandardMaterial)
+
+
+# --- Cel shading ------------------------------------------------------------
+
+
+def _radius(size):
+    t = (np.arange(size) + 0.5) / size * 2 - 1
+    x, y = np.meshgrid(t, -t)
+    return np.sqrt(x * x + y * y)
+
+
+def _tones(image, tolerance=3):
+    """The distinct flat tones of a matcap, brightest first.
+
+    The quantization runs on the luminance (so that hues survive), which is
+    therefore also where the tones come out flat.
+    """
+    inside = _radius(image.shape[0]) <= 0.95  # the rim is transitions, not tones
+    luminance = image[inside] @ [0.2126, 0.7152, 0.0722]
+    values, counts = np.unique(np.round(luminance, tolerance), return_counts=True)
+    # Only tones that cover real area: a hard terminator still leaves a
+    # handful of pixels part-way between two bands
+    return sorted(values[counts > 0.02 * inside.sum()].tolist(), reverse=True)
+
+
+def _cel(**overrides):
+    """A cel-shaded recipe on a neutral rig, so the tones come out grey.
+
+    The sky is nearly black and the key light bright, so that the shading
+    spans the full range and every band gets some of the sphere.
+    """
+    recipe = dict(
+        environment=dict(
+            sky="#141414", horizon="#141414", ground="#141414", gradient=1.0,
+            lights=(dict(direction=(-0.4, 0.6, 0.7), color="#ffffff",
+                         intensity=7.0, angle=30, softness=0.5),),
+        ),
+        base_color="#ffffff", specular=0.0, rim=0.0, band_softness=0.0,
+        tint=1.0,
+    )
+    recipe.update(overrides)
+    return recipe
+
+
+@pytest.mark.parametrize("bands", [2, 3, 5])
+def test_bands_quantize_the_shading(bands):
+    """`bands` must produce exactly that many flat tones."""
+    assert len(_tones(make_matcap(_cel(bands=bands), size=128)[..., :3])) == bands
+
+
+def test_bands_keep_the_surface_color():
+    """The top tone must be the base color, not white."""
+    image = make_matcap(_cel(bands=3, base_color="#808080"), size=64)[..., :3]
+    # #808080 is 0.2159 in linear light; the shading itself tops out at 1
+    assert max(_tones(image)) == pytest.approx(0.2159, abs=1e-3)
+
+
+def test_band_softness_blurs_the_terminator():
+    """Softening the steps must take the flat tones away again."""
+    hard = make_matcap(_cel(bands=3), size=96)[..., :3]
+    soft = make_matcap(_cel(bands=3, band_softness=1.0), size=96)[..., :3]
+    assert len(_tones(hard)) == 3
+    # Only the clamped top band survives; the terminators below it are gone
+    assert _tones(soft) == [pytest.approx(1.0)]
+
+
+def test_edge_darkens_the_silhouette():
+    plain = make_matcap("pearl", size=96)[..., :3]
+    inked = make_matcap("pearl", size=96, edge=0.9, edge_width=0.06)[..., :3]
+    radius = _radius(96)
+    rim = radius > 0.99
+    # `edge` = 0.9 leaves a tenth of the color at the very edge ...
+    assert inked[rim].mean() < 0.2 * plain[rim].mean()
+    # ... and nothing at all is touched further in than `edge_width`
+    assert np.allclose(inked[radius < 0.93], plain[radius < 0.93])
+
+
+def test_cel_shading_errors():
+    with pytest.raises(ValueError, match="bands must be"):
+        make_matcap("pearl", bands=1)
+    with pytest.raises(ValueError, match="edge_width"):
+        make_matcap("pearl", edge=0.5, edge_width=0)
+
+
+@pytest.mark.parametrize("preset", ["toon", "toon_light"])
+def test_blender_toon_presets(preset):
+    """Both cel-shaded presets must land on three clearly separated tones."""
+    recipe = dict(MATCAP_PRESETS[preset], specular=0.0, rim=0.0, edge=0.0)
+    tones = _tones(make_matcap(recipe, size=128)[..., :3])
+    assert len(tones) == 3
+    assert tones[0] > tones[1] > tones[2]
+
+
+def test_set_matcap_cel_shading(scene_viewer):
+    """Cel shading must be reachable as an override on any preset."""
+    scene_viewer.set_matcap("jade")
+    smooth = _render(scene_viewer)
+    scene_viewer.set_matcap("jade", bands=3, band_softness=0.0, edge=0.8)
+    assert not np.allclose(smooth, _render(scene_viewer))
 
 
 # --- Effect ordering --------------------------------------------------------
