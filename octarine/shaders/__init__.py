@@ -2,8 +2,9 @@
 
 This subpackage hooks into pygfx's (semi-public) shader API, which can change
 between pygfx releases — hence the version guard below. It is imported lazily
-(on first use of e.g. `Viewer.add_sparse_volume`) so that importing octarine
-itself does not depend on it.
+(from `Viewer.__init__`, which needs `pcf`, and on first use of e.g.
+`Viewer.add_sparse_volume`) so that importing octarine itself does not depend
+on it.
 """
 
 

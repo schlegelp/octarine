@@ -10,7 +10,6 @@ import warnings
 
 import numpy as np
 import pygfx as gfx
-import pylinalg as la
 import trimesh as tm
 
 from pathlib import Path
@@ -426,18 +425,21 @@ class Viewer:
         else:
             raise ValueError(f"Unknown camera type: {camera}")
 
-        # A light that is parented to the camera and hence always shines from
-        # wherever we are looking from (see `Viewer.headlight`). Note that pygfx
-        # collects lights by traversing the scene which means the camera itself
-        # has to be part of the scene graph for this light to be picked up.
+        # The headlight no longer hangs off the camera, but keep the camera in
+        # the scene graph so that anything a user parents to it still renders
         self.scene.add(self.camera)
+
+        # A light that follows the camera and hence always shines from wherever
+        # we are looking from (see `Viewer.headlight`). It is *not* parented to
+        # the camera but re-aimed on every frame from `_update_headlight` - see
+        # there for why.
         self._headlight = gfx.DirectionalLight(intensity=4)
         self._headlight.shadow.bias = 0.0000005  # this helps with shadow acne
         # Offsetting the light from the camera's axis (here: up and to the left)
         # keeps some variation in the shading - a light shining exactly along the
         # view direction makes objects look very flat
-        self._headlight.local.position = (-0.5, 0.5, 0)
-        self.camera.add(self._headlight)
+        self._set_headlight_offset((-0.5, 0.5, 0))
+        self.scene.add(self._headlight)
 
         # This also takes care of switching off the static lights (if required)
         self._headlight_enabled = False
@@ -521,6 +523,16 @@ class Viewer:
         self._link_filter = (None, None)
         self._last_camera_sig = None
 
+        # Widen the shadow filter. The kernel is baked into the shader, so this
+        # has to run before the first compile - see `octarine.shaders.pcf`,
+        # including for what happens without octarine's custom shaders.
+        try:
+            from .shaders.pcf import install as _install_pcf
+
+            _install_pcf()
+        except ImportError as e:
+            logger.warning(f"Shadow filtering left at pygfx' default: {e}")
+
         # Effects that are on by default. These have to come last because they
         # need the variables above (plus the scene, camera and renderer)
         self.shadows = shadows
@@ -592,10 +604,10 @@ class Viewer:
                 self.canvas.request_draw()
                 return
 
-        # The headlight rides on the camera, so its shadow camera has to be
-        # re-fitted whenever we've moved (see `_fit_headlight_shadow`)
-        if self._shadows and self._headlight_enabled:
-            self._fit_headlight_shadow()
+        # The headlight follows the camera but is not parented to it, so it has
+        # to be re-aimed whenever we've moved (see `_update_headlight`)
+        if self._headlight_enabled:
+            self._update_headlight()
 
         # Now render the scene
         if self._show_fps:
@@ -776,8 +788,8 @@ class Viewer:
     def lights(self):
         """List of all light sources illuminating the scene.
 
-        This includes the headlight which - unlike the other lights - is not a
-        direct child of the scene but of the camera (see `Viewer.headlight`).
+        This includes the headlight, which is a scene child like the others but
+        gets re-aimed from the camera on every frame (see `Viewer.headlight`).
 
         """
         return list(self.scene.iter(lambda x: isinstance(x, gfx.Light)))
@@ -786,9 +798,9 @@ class Viewer:
     def headlight(self):
         """Whether the scene is lit by a light linked to the camera.
 
-        If True (default), a single light source is parented to the camera
-        which means objects are always lit from the front, no matter where you
-        move the camera. If False, we use two point lights that are fixed in
+        If True (default), a single light source follows the camera, which means
+        objects are always lit from the front, no matter where you move the
+        camera. If False, we use two point lights that are fixed in
         world space, i.e. the lighting changes as the camera moves. Providing
         either a float or a tuple of 2 or 3 floats will switch the headlight on
         and set the light's offset from the camera's axis: a single float `x`
@@ -827,11 +839,27 @@ class Viewer:
         self._headlight_enabled = v
         self._headlight.visible = v
         if offset is not None:
-            self._headlight.local.position = offset
+            self._set_headlight_offset(offset)
         for light in self._static_lights:
             light.visible = not v
 
         self._render_stale = True
+
+    def _set_headlight_offset(self, offset):
+        """Set the headlight's offset from the camera's axis.
+
+        Also caches the direction it implies - from the offset towards the point
+        one unit in front of the camera, i.e. the light's own -z in camera space
+        - because `_update_headlight` needs it on every frame and it changes
+        only here.
+
+        """
+        self._headlight_offset = np.asarray(offset, dtype=float)
+
+        direction = np.array((0, 0, -1), dtype=float) - self._headlight_offset
+        norm = np.linalg.norm(direction)
+        # A degenerate offset (i.e. sitting on the target) - shine straight ahead
+        self._headlight_direction = direction / norm if norm else direction + (0, 0, -1)
 
     def toggle_headlight(self):
         """Toggle the camera-linked headlight."""
@@ -900,8 +928,6 @@ class Viewer:
             if vis.receive_shadow != receives:
                 vis.receive_shadow = receives
 
-        # N.B. we have to iterate over all lights (not just the scene's
-        # children) because the headlight is parented to the camera
         for light in self.lights:
             if isinstance(light, (gfx.PointLight, gfx.DirectionalLight, gfx.SpotLight)):
                 light.cast_shadow = state
@@ -946,9 +972,9 @@ class Viewer:
         if not radius:
             radius = 1.0
 
-        # Cache this: the headlight's shadow camera has to be re-fitted on every
-        # frame (see `_fit_headlight_shadow`) and we don't want to walk the whole
-        # scene graph for its bounding box each time
+        # Cache this: the headlight is re-aimed on every frame (see
+        # `_update_headlight`) and we don't want to walk the whole scene graph
+        # for its bounding box each time
         self._shadow_fit = (center, radius)
 
         # The static lights: move them to just outside the scene and clip their
@@ -964,48 +990,62 @@ class Viewer:
                 distance + radius * 2,
             )
 
-        self._fit_headlight_shadow()
-
-    def _fit_headlight_shadow(self):
-        """Fit the headlight's shadow camera to the scene.
-
-        Unlike the static lights, the headlight rides on the camera: pygfx aims
-        it at a point one unit in front of the camera, which turns the light's
-        offset from the camera's axis (see `Viewer.headlight`) into a tilt. The
-        scene can therefore sit well off to the side of the light's axis - and
-        hence off the axis of its shadow camera - so this has to be redone
-        whenever the camera moves, not just when the scene changes.
-
-        """
-        if self._shadow_fit is None:
-            return
-
-        center, radius = self._shadow_fit
-
-        position = self._headlight.world.position
-        # This is the point pygfx makes the headlight look at - see pygfx's
-        # `get_pos_from_camera_parent_or_target`
-        target = la.vec_transform((0, 0, -1), self.camera.world.matrix)
-
-        direction = target - position
-        length = np.linalg.norm(direction)
-        if not length:  # ill-defined; pygfx falls back to the -z axis
-            return
-        direction = direction / length
-
-        # Split the vector to the scene's center into how far along the light's
-        # axis the scene is and how far off to the side of it
-        to_center = center - position
-        depth = float(np.dot(to_center, direction))
-        lateral = float(np.linalg.norm(to_center - depth * direction))
-
-        # The shadow camera is an ortho camera sitting at the light, so it has
-        # to be wide enough to cover the scene *including* that lateral offset,
-        # and deep enough to bridge the gap between the light and the scene
+        # The headlight sits the same distance out, on the axis through the
+        # scene's center (see `_update_headlight`). A bounding *sphere* fit
+        # keeps its frustum the same size from every direction, so orbiting
+        # doesn't resize it either.
         margin = radius * SHADOW_MARGIN
         camera = self._headlight.shadow.camera
-        camera.width = camera.height = 2 * (lateral + margin)
-        camera.depth_range = (depth - margin, depth + margin)
+        camera.width = camera.height = 2 * margin
+        camera.depth_range = (distance - margin, distance + margin)
+
+        self._update_headlight()
+
+    def _update_headlight(self):
+        """Point the headlight at the scene from wherever the camera is.
+
+        The obvious way to have a light follow the camera is to parent it to the
+        camera, which is what we used to do. That works for the shading but not
+        for the shadows: pygfx puts a light's shadow camera *at the light* and
+        aims it at the light's target, and for a camera-parented light that
+        target is pinned to the point one unit in front of the camera. The
+        light's offset from the camera's axis (see `Viewer.headlight`) therefore
+        turns into a tilt of ~35 degrees, and the only way for the shadow camera
+        to still cover the scene is to grow its (ortho) frustum until it reaches
+        - a box several times larger than the scene, growing with the distance
+        to the camera. Aiming through the scene's center instead would mean no
+        offset at all, i.e. exactly the flat lighting the offset exists to avoid.
+
+        That is what made shadows flicker: the frustum was re-derived per frame,
+        so panning or zooming - neither of which changes the light's *direction*,
+        and so neither of which may change the shadows - changed the world size
+        of a shadow map texel and re-quantised the depth map onto a different
+        grid every frame.
+
+        So the light is a plain scene child instead and we aim it ourselves:
+        same direction as before (only that matters for a directional light, so
+        the shading is unchanged), but parked in front of the scene's center
+        rather than riding along with the camera. Its frustum is then sized once
+        per scene, in `_fit_shadows`, and camera movement leaves shadows alone.
+
+        """
+        # Rotating the cached camera-space direction by the camera gives what
+        # pygfx used to derive for us. N.B. this comes out of the camera's
+        # orientation alone, not of where it is - and the rotation matrix does
+        # it ~20x faster than `pylinalg.vec_transform_quat`.
+        direction = self.camera.world.rotation_matrix[:3, :3] @ self._headlight_direction
+
+        if self._shadow_fit is None:
+            # Nothing to fit to (an empty canvas, or shadows are off). Only the
+            # direction matters for the shading, so leave the light on the
+            # camera and its shadow camera alone.
+            anchor, distance = self.camera.world.position, 1.0
+        else:
+            center, radius = self._shadow_fit
+            anchor, distance = center, radius * SHADOW_LIGHT_DISTANCE
+
+        self._headlight.local.position = anchor - direction * distance
+        self._headlight.target.local.position = anchor
 
     @property
     def visuals(self):
@@ -4527,7 +4567,7 @@ class Viewer:
             self.camera.show_object(
                 self.scene, scale=1, view_dir=(1.0, 0.0, 0.0), up=(0.0, -1.0, 0.0)
             )
-        elif view == "YZ":
+        elif view == "-YZ":
             self.camera.show_object(
                 self.scene, scale=1, view_dir=(-1.0, 0.0, 0.0), up=(0.0, -1.0, 0.0)
             )

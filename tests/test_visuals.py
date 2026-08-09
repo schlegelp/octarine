@@ -4,6 +4,7 @@ import octarine as oc
 
 import trimesh as tm
 import numpy as np
+import pylinalg as la
 
 # Set random state
 np.random.seed(0)
@@ -1347,16 +1348,16 @@ def test_headlight_toggle(mesh):
     assert v._headlight.visible is True
     assert not any(light.visible for light in v._static_lights)
 
-    # The headlight lives on the camera, so the camera must be part of the scene
-    assert v._headlight.parent is v.camera
-    assert v.camera in v.scene.children
+    # The headlight follows the camera but is a plain scene child (see
+    # `Viewer._update_headlight`)
+    assert v._headlight.parent is v.scene
     assert v._headlight in v.lights
 
     v.headlight = False
     assert v._headlight.visible is False
     assert all(light.visible for light in v._static_lights)
 
-    # Shadows must reach the camera-parented light, too
+    # Shadows must reach the headlight, too
     v.shadows = False
     assert not v._headlight.cast_shadow
     v.shadows = True
@@ -1389,16 +1390,31 @@ def _shadow_scene(scale=1.0):
     return plane, sphere
 
 
-def _render_shadow_scene(shadows, scale=1.0, headlight=False, camera="ortho"):
-    """Render the scene above and return the greyscale image."""
+def _shadow_viewer(shadows=True, scale=1.0, headlight=False, camera="ortho",
+                   size=(200, 200), plain=False):
+    """An open viewer on the scene above, framed so the shadow is in view.
+
+    `plain` switches off the occlusion and the anti-aliasing, for tests that
+    measure the shadow itself rather than the whole picture.
+
+    """
     plane, sphere = _shadow_scene(scale)
-    v = oc.Viewer(offscreen=True, size=(200, 200), camera=camera)
+    v = oc.Viewer(offscreen=True, size=size, camera=camera,
+                  ambient_occlusion=not plain)
+    if plain:
+        v.renderer.ppaa = "none"
     v.headlight = headlight
     v.add_mesh(plane, color="white")
     v.add_mesh(sphere, color="red")
     v.shadows = shadows
     # Look at the plane at a slant so the sphere's shadow falls into view
     v.camera.show_object(v.scene, view_dir=(0, -0.6, -1), up=(0, 1, 0))
+    return v
+
+
+def _render_shadow_scene(shadows, scale=1.0, headlight=False, camera="ortho"):
+    """Render the scene above and return the greyscale image."""
+    v = _shadow_viewer(shadows, scale, headlight, camera)
     img = np.asarray(v.screenshot(filename=None, size=(200, 200)))[..., :3]
     v.close()
     return img.astype(float).mean(axis=-1)
@@ -1428,6 +1444,136 @@ def test_shadow_render(scale, headlight, camera):
     for shift, axis in ((1, 0), (-1, 0), (1, 1), (-1, 1)):
         eroded &= np.roll(darkened, shift, axis=axis)
     assert eroded.sum() > darkened.sum() * 0.6
+
+
+def _resolved_shadow_wgsl():
+    """What `{$ include 'pygfx.light_shadow.wgsl' $}` currently resolves to."""
+    from pygfx.renderers.wgpu.shader.templating import apply_templating
+
+    return apply_templating("{$ include 'pygfx.light_shadow.wgsl' $}")
+
+
+def test_shadow_pcf_installed():
+    """Creating a viewer must swap in our wider shadow filter."""
+    from octarine.shaders import pcf
+
+    v = oc.Viewer(offscreen=True, size=(50, 50))
+    code = _resolved_shadow_wgsl()
+    v.close()
+
+    # Both light paths now sample a disk of taps ...
+    assert f"const PCF_DISK = array<vec2<f32>, {pcf.PCF_TAPS}>" in code
+    assert f"const PCF_CUBE_DISK = array<vec2<f32>, {pcf.PCF_TAPS_CUBE}>" in code
+    # ... and none of pygfx' fixed texel offsets survive
+    assert "vec2<i32>" not in code
+
+    # Installing again must not stack another loader on top
+    pcf.install()
+    assert _resolved_shadow_wgsl() == code
+
+
+def test_shadow_pcf_patch_leaves_the_rest_of_pygfx_alone():
+    """We must swap the tap loops only, so upstream fixes still reach us."""
+    from pygfx.renderers.wgpu.wgsl import load_wgsl
+    from octarine.shaders import pcf
+
+    stock = load_wgsl(pcf._SNIPPET)
+    patched = pcf._patch(stock)
+
+    # Everything pygfx' light_punctual.wgsl calls into is still declared, and
+    # the projection/face-selection code around the taps is untouched
+    for line in stock.splitlines():
+        if line.startswith("fn ") or "proj_coords" in line or "faceIndex =" in line:
+            assert line in patched
+
+
+def test_shadow_pcf_rejects_unrecognised_pygfx():
+    """A shadow shader we can't find the tap loops in has to fail, not silently pass."""
+    from octarine.shaders import pcf
+
+    with pytest.raises(RuntimeError, match="directional tap kernel"):
+        pcf._patch("fn get_shadow() { return 1.0; }")
+
+
+def test_shadow_pcf_skips_incompatible_pygfx(monkeypatch, caplog):
+    """... and `install()` must degrade rather than break rendering."""
+    from octarine.shaders import pcf
+    from pygfx.renderers.wgpu.shader import templating
+
+    before = templating.root_loader.mapping[pcf._CONTEXT]
+    monkeypatch.setattr(pcf, "_installed", False)
+    monkeypatch.setattr(
+        "pygfx.renderers.wgpu.wgsl.load_wgsl", lambda *a, **kw: "fn something_else() {}"
+    )
+
+    with caplog.at_level("WARNING"):
+        pcf.install()
+
+    assert "shadow filtering" in caplog.text.lower()
+    # The loader must be left exactly as it was, and we must not try again
+    assert templating.root_loader.mapping[pcf._CONTEXT] is before
+    assert pcf._installed is True
+
+
+def test_shadow_pcf_configure_is_too_late_once_installed():
+    """A knob that silently does nothing is worse than no knob."""
+    from octarine.shaders import pcf
+
+    oc.Viewer(offscreen=True, size=(50, 50)).close()
+    with pytest.raises(RuntimeError, match="before the first Viewer"):
+        pcf.configure(taps=8)
+
+
+@pytest.mark.parametrize("headlight", [False, True])
+def test_shadow_edge_is_filtered(headlight):
+    """The shadow must fade over several pixels rather than step from lit to dark.
+
+    That gradient is the whole point of the wider PCF kernel: it is what keeps
+    the edge from crawling as the shadow map's texel grid turns with the light
+    (see `octarine.shaders.pcf`).
+
+    """
+    plane, sphere = _shadow_scene()
+    v = _shadow_viewer(headlight=headlight, size=(400, 400), plain=True)
+    v.camera.zoom = 4
+    v.screenshot(filename=None, size=(400, 400))  # settles the lights
+
+    # Follow the light from the sphere's centre down to the plane's top face to
+    # find where its shadow lands, then centre on that. Panning the camera does
+    # not turn it, so the lighting is untouched.
+    centre = sphere.bounds.mean(axis=0)
+    light = v._headlight if headlight else v._static_lights[0]
+    d = centre - np.asarray(light.world.position)
+    d /= np.linalg.norm(d)
+    target = centre + d * ((plane.bounds[1][1] - centre[1]) / d[1])
+    pos = np.asarray(v.camera.local.position, dtype=float)
+    fwd = np.asarray(v.camera.world.forward, dtype=float)
+    to_target = target - pos
+    v.camera.local.position = pos + (to_target - np.dot(to_target, fwd) * fwd)
+
+    img = np.asarray(v.screenshot(filename=None, size=(400, 400)))[..., :3]
+    img = img.astype(float).mean(axis=-1)
+    v.close()
+
+    # Walk out of the shadow: the row through the middle now starts inside it
+    row = img[img.shape[0] // 2][200:]
+    dark, lit = row.min(), row.max()
+    # There has to be a shadow to look at in the first place. The contrast is
+    # lower with the static lights because each one lights what the other
+    # shadows, so this threshold is deliberately modest.
+    assert lit - dark > 25
+    lo, hi = dark + 0.2 * (lit - dark), dark + 0.8 * (lit - dark)
+
+    outside = np.where(row >= hi)[0]
+    assert len(outside)
+    inside = np.where(row[: outside[0]] <= lo)[0]
+    assert len(inside)
+
+    # Unfiltered this transition is 1-2 px and pygfx' own kernel gives ~5 at
+    # this scale. Ours has to be clearly wider, without smearing the shadow
+    # away entirely.
+    width = outside[0] - inside[-1]
+    assert 8 < width < 40
 
 
 def test_shadow_flags(mesh, points, line_single):
@@ -1533,30 +1679,88 @@ def test_shadow_applies_to_objects_added_later(mesh):
 def test_headlight_offset():
     v = oc.Viewer(offscreen=True, size=(200, 200))
 
-    assert tuple(v._headlight.local.position) == (-0.5, 0.5, 0)
+    assert tuple(v._headlight_offset) == (-0.5, 0.5, 0)
 
     # A float/tuple switches the headlight on and sets the offset
     v.headlight = 1
     assert v.headlight is True
-    assert tuple(v._headlight.local.position) == (-1, 1, 0)
+    assert tuple(v._headlight_offset) == (-1, 1, 0)
 
     v.headlight = (0.2, 0.3)
     assert v.headlight is True
-    assert tuple(v._headlight.local.position) == (0.2, 0.3, 0)
+    assert tuple(v._headlight_offset) == (0.2, 0.3, 0)
 
     v.headlight = (0.2, 0.3, 0.4)
-    assert tuple(v._headlight.local.position) == (0.2, 0.3, 0.4)
+    assert tuple(v._headlight_offset) == (0.2, 0.3, 0.4)
 
     # Switching off and on again must keep the offset
     v.headlight = False
     assert v.headlight is False
     v.headlight = True
-    assert tuple(v._headlight.local.position) == (0.2, 0.3, 0.4)
+    assert tuple(v._headlight_offset) == (0.2, 0.3, 0.4)
 
     with pytest.raises(ValueError):
         v.headlight = (0.2, 0.3, 0.4, 0.5)
 
     v.close()
+
+
+def test_headlight_direction():
+    """The offset must translate into the light direction it always did."""
+    v = oc.Viewer(offscreen=True, size=(50, 50))
+    v.add_mesh(tm.creation.icosphere())
+
+    for offset in ((-0.5, 0.5, 0), (1, 0, 0), (0.2, 0.3, 0.4)):
+        v.headlight = offset
+        for view in ("XY", "XZ", "-YZ"):
+            v.set_view(view)
+            v.screenshot(filename=None, size=(50, 50))
+
+            # This is what pygfx derives for a camera-parented light: from the
+            # light's offset towards the point one unit in front of the camera
+            position = la.vec_transform(offset, v.camera.world.matrix)
+            target = la.vec_transform((0, 0, -1), v.camera.world.matrix)
+            expected = target - position
+            expected /= np.linalg.norm(expected)
+
+            assert np.asarray(v._headlight.world.forward) == pytest.approx(
+                expected, abs=1e-6
+            )
+
+    v.close()
+
+
+def test_headlight_shadow_is_camera_invariant():
+    """Moving the camera must not change the shadows the headlight casts.
+
+    With an ortho camera, dollying along the view axis changes neither the
+    projection nor the light's direction, so the render has to come out
+    identical. It did not before the headlight was taken off the camera: its
+    shadow frustum was sized from the camera's *position*, so every dolly step
+    re-quantised the shadow map and the shadows flickered.
+
+    """
+    def render(dolly):
+        # `plain` also switches off the occlusion, which samples the depth
+        # buffer - and its precision does depend on where the camera is, which
+        # has nothing to do with the shadows
+        v = _shadow_viewer(headlight=True, plain=True)
+        v.camera.local.position = (
+            np.asarray(v.camera.local.position) + v.camera.world.forward * dolly
+        )
+        img = np.asarray(v.screenshot(filename=None, size=(200, 200)))[..., :3]
+        cam = v._headlight.shadow.camera
+        v.close()
+        return img.astype(float), (cam.width, cam.height, *cam.depth_range)
+
+    ref, ref_frustum = render(0)
+    # There have to be shadows in the first place for this to mean anything
+    assert (ref.mean(axis=-1) < 100).sum() > 100
+
+    for dolly in (-5, -50, -500):
+        img, frustum = render(dolly)
+        assert frustum == pytest.approx(ref_frustum)
+        assert img == pytest.approx(ref)
 
 
 def test_headlight_render(mesh):

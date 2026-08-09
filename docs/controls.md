@@ -302,7 +302,22 @@ Shadows have to be rendered from each light's point of view, so the lights and
 their shadow cameras are automatically fitted to the scene - and re-fitted
 whenever you add or remove objects. That means the two static lights move in
 much closer than they normally sit, which slightly changes the shading. The
-headlight is unaffected.
+headlight moves too, but it is a directional light, where only the direction
+matters - so its shading is unaffected.
+
+Shadow edges are deliberately soft. A shadow map is sampled on a grid fixed in
+the light's frame, so when the light turns - which the headlight does whenever
+you rotate the camera - the samples land on different points and a hard edge
+crawls. Filtering over a wider disk turns that crawl into a gentle gradient.
+
+To trade softness back for sharpness, narrow that disk. The kernel is compiled
+into the shader, so this has to happen before you make a viewer:
+
+```python
+>>> from octarine.shaders.pcf import configure
+>>> configure(taps=9, radius=2)  # sharper, and cheaper
+>>> v = oc.Viewer()
+```
 
 !!! note
 

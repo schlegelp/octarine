@@ -684,8 +684,10 @@ class Controls(QtWidgets.QWidget):
             shaders_available = False
 
         # --- Shadows ---
-        # Like the eye-dome lighting below this comes straight from pygfx,
-        # i.e. it does not require octarine's custom shaders.
+        # Shadows themselves come straight from pygfx and work without
+        # octarine's custom shaders - those only widen the filter that softens
+        # the edges (see `octarine.shaders.pcf`), and the viewer falls back to
+        # pygfx' own if they are unavailable.
         self.shadows_section = self.add_effect_section(
             "Shadows",
             "Let objects cast shadows onto each other. Note that only meshes "

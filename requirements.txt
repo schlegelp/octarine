@@ -1,4 +1,4 @@
-pygfx>=0.16.0  # the sparse-volume shader (octarine.shaders) relies on pygfx's shader API
+pygfx>=0.16.0  # octarine.shaders (shadow filtering, sparse volumes, ...) relies on pygfx's shader API
 numpy
 pypng
 six
