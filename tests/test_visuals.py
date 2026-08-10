@@ -6,6 +6,8 @@ import trimesh as tm
 import numpy as np
 import pylinalg as la
 
+from functools import partial
+
 # Set random state
 np.random.seed(0)
 
@@ -629,11 +631,16 @@ def _crease_scene(size=(400, 400)):
 def test_ambient_occlusion_render():
     """AO must darken a right-angle crease and leave flat surfaces alone."""
     v = _crease_scene()
-    plain = np.asarray(v.screenshot(filename=None))[..., :3]
+    # Screenshots are supersampled by default, and the filter that resamples
+    # them has slight negative lobes: it overshoots at the crease, i.e. a few
+    # pixels next to it come out *brighter* than in the plain render. That is
+    # the filter's doing, not the occlusion's, so compare unfiltered renders
+    shot = partial(v.screenshot, filename=None, supersample=1)
+    plain = np.asarray(shot())[..., :3]
 
     # `debug` renders the occlusion itself: 1 = unoccluded
     v.set_ambient_occlusion(radius=3.0, samples=32, debug=True)
-    ao = _srgb_to_linear(np.asarray(v.screenshot(filename=None)))
+    ao = _srgb_to_linear(np.asarray(shot()))
 
     column = ao[:, ao.shape[1] // 2]
     # Half the hemisphere is blocked at a right-angle crease, so the
@@ -644,16 +651,13 @@ def test_ambient_occlusion_render():
 
     # Without `debug` the scene is darkened but never brightened
     v.set_ambient_occlusion(radius=3.0, samples=32)
-    shot = np.asarray(v.screenshot(filename=None))[..., :3]
-    delta = _srgb_to_linear(plain) - _srgb_to_linear(shot)
+    delta = _srgb_to_linear(plain) - _srgb_to_linear(np.asarray(shot())[..., :3])
     assert delta.max() > 0.1  # the crease is visibly darker ...
     assert delta.min() >= 0  # ... and nothing got brighter
 
     # Disabling restores the original render
     v.set_ambient_occlusion(False)
-    assert np.allclose(
-        np.asarray(v.screenshot(filename=None))[..., :3], plain, atol=2
-    )
+    assert np.allclose(np.asarray(shot())[..., :3], plain, atol=2)
     v.close()
 
 

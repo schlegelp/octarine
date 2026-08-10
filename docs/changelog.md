@@ -86,6 +86,15 @@ _Date: ongoing_
   coordinates can opt in with `method="bitmask"` (see
   [Sparse Volumes](objects.md#run-length-encoded-voxels))
 
+- [`Viewer.screenshot`][octarine.Viewer.screenshot] gained a `supersample` parameter: the frame
+  is rendered at N times the requested resolution and filtered back down, which - unlike the
+  post-processing anti-aliasing that runs during interaction - actually resolves sub-pixel
+  detail instead of smoothing over it. Thin lines, dense point clouds and curved silhouettes
+  benefit the most. It defaults to `2` (`4` is as good as it realistically gets) and the image
+  dimensions are unaffected. Effects that are sized in pixels (outlines, depth of field, EDL,
+  the occlusion blur) are scaled along, so the picture keeps its look. Note that
+  `make_rotation_video` defaults to `supersample=1`, since there the cost is paid per frame
+
 #### Fixes
 - adding many objects one by one is no longer quadratic in the number of objects: the bounding
   box visual, the camera centering, the fit of the shadow-casting lights, the ambient occlusion
@@ -104,6 +113,9 @@ _Date: ongoing_
   texcoord `1.0`, where pygfx's default `wrap="repeat"` blended the last color with the
   (transparent, if `hide_zero=True`) first one - halving both color and alpha. Affects volumes
   and sparse volumes
+- [`Viewer.screenshot`][octarine.Viewer.screenshot] raised `AttributeError` on an on-screen
+  canvas: it forced the frame through a private `rendercanvas` method that has since been
+  renamed. It now uses the public `canvas.force_draw()`
 
 #### Breaking
 - shadows, the camera-linked headlight and ambient occlusion are now **on by default**, i.e.

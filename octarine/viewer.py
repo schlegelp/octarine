@@ -6,15 +6,16 @@ import cmap
 import uuid
 import random
 import inspect
-import warnings
 
 import numpy as np
 import pygfx as gfx
 import trimesh as tm
+import wgpu  # only for flags/enums
 
 from pathlib import Path
 from collections import OrderedDict
 from functools import wraps, lru_cache, partial
+from pygfx.renderers.wgpu.engine.update import ensure_wgpu_object
 from pygfx.renderers.wgpu.engine.edl import EDLPass
 from pygfx.renderers.wgpu.engine.effectpasses import (
     NoisePass,
@@ -69,6 +70,27 @@ EFFECT_CLASSES = {
 EFFECT_STAGES = {"ao": 0, "outline": 1, "tonemap": 3}
 DEFAULT_EFFECT_STAGE = 2
 PPAA_EFFECT_STAGE = 4
+
+# Effect-pass parameters that are expressed in physical pixels, and hence have
+# to be scaled when a screenshot is supersampled: that renders the frame at N
+# times the output resolution, so a one-pixel outline drawn into it would come
+# out 1/N of a pixel wide in the final image (i.e. invisible). The value is an
+# upper limit for the scaled parameter, or `None` for "no limit" - it is there
+# for the ones that are sample counts rather than sizes: those pay for the
+# larger frame *and* the wider kernel, and are not worth taking to 8x.
+# Keyed by class name so that we need not import every pass here.
+PIXEL_SCALED_EFFECT_PARAMS = {
+    "OutlinePass": {"thickness": None},
+    "AmbientOcclusionPass": {"blur": None},
+    "DepthOfFieldPass": {
+        "aperture": None,
+        "max_radius": None,
+        "snap_radius": None,
+        "num_taps": 256,  # the blur disk grows with the radius, so sample it denser
+    },
+    "EDLPass": {"radius": None},
+    "DDAAPass": {"max_edge_iters": 20},  # length of the edge search, in pixels
+}
 
 # TODO
 # - add styles for viewer (lights, background, etc.) - e.g. .set_style(dark)
@@ -4553,7 +4575,12 @@ class Viewer:
         self.show_fps = not self.show_fps
 
     def screenshot(
-        self, filename="screenshot.png", size=None, pixel_ratio=None, alpha=True
+        self,
+        filename="screenshot.png",
+        size=None,
+        pixel_ratio=None,
+        alpha=True,
+        supersample=2,
     ):
         """Save a screenshot of the canvas.
 
@@ -4568,13 +4595,39 @@ class Viewer:
                         change the canvas size.
         pixel_ratio :   int, optional
                         Factor by which to scale canvas. Determines image
-                        dimensions. Note that this seems to have no effect
-                        on offscreen canvases.
+                        dimensions: the image comes out at `size` (or the
+                        current canvas size) times this factor. Defaults to
+                        the renderer's current pixel ratio.
         alpha :         bool, optional
                         If True, will export transparent background.
+        supersample :   int, optional
+                        Render the frame at this factor above the output
+                        resolution and filter it back down - i.e. supersampling
+                        anti-aliasing, the one knob that actually resolves
+                        sub-pixel detail rather than smoothing over it. The
+                        image dimensions are unaffected. 2 (the default) takes
+                        care of most of what the renderer's own anti-aliasing
+                        leaves behind, 4 is as good as it realistically gets;
+                        1 switches it off. Memory and render time grow with the
+                        square of the factor, and it is capped to whatever
+                        still fits the GPU's maximum texture size.
+
+                        The filter used to resample the frame is the renderer's
+                        `pixel_filter` - 'mitchell' by default, which is sharp
+                        but rings slightly at high-contrast edges; 'tent' or
+                        'bspline' trade sharpness for no ringing at all.
+
+        Examples
+        --------
+        A high quality 4k screenshot, no matter the size of the window:
+
+        >>> v.screenshot("figure.png", size=(3840, 2160), pixel_ratio=1,
+        ...              supersample=4)
 
         """
-        im = self._screenshot(alpha=alpha, size=size, pixel_ratio=pixel_ratio)
+        im = self._screenshot(
+            alpha=alpha, size=size, pixel_ratio=pixel_ratio, supersample=supersample
+        )
         if filename:
             filename = Path(filename)
             if filename.suffix != ".png":
@@ -4585,42 +4638,147 @@ class Viewer:
         else:
             return im
 
-    def _screenshot(self, alpha=True, size=None, pixel_ratio=None):
+    def _screenshot(self, alpha=True, size=None, pixel_ratio=None, supersample=1):
         """Return image array for screenshot."""
+        supersample = int(supersample)
+        if supersample < 1:
+            raise ValueError(f"supersample must be >= 1, got {supersample}")
+
         if alpha:
             vis = self._background.visible
             self._background.visible = False
         if size:
             os = self.size
             self.size = size
-        if pixel_ratio:
-            opr = self.renderer.pixel_ratio
-            self.renderer.pixel_ratio = pixel_ratio
 
-        # If this is an offscreen canvas, we need to manually trigger a draw first
-        # Note: this has to happen _after_ adjust parameters!
-        if isinstance(self.canvas, OffscreenRenderCanvas):
-            self.canvas.draw()
-        else:
-            # This is a bit of a hack to make sure a new frame with the (potentially)
-            # updated size, pixel ratio, etc. is drawn before taking the screenshot.
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                self.canvas._subwidget._draw_frame_and_present()
+        # The image comes out at logical size x pixel ratio. Supersampling
+        # renders it larger than that and filters it back down, so the ratio we
+        # render at and the one that defines the output size are not the same.
+        out_ratio = pixel_ratio if pixel_ratio else self.renderer.pixel_ratio
+        supersample = self._clamp_supersample(supersample, self._output_size(out_ratio))
 
+        # Both of these are plain attributes (the properties only ever set one
+        # of them), so this restores "auto" pixel ratio as well as a fixed one
+        opr = (self.renderer._pixel_scale, self.renderer._pixel_ratio)
+        scaled = []
         try:
-            im = self.renderer.snapshot()
-        except BaseException:
-            raise
+            self.renderer.pixel_ratio = out_ratio * supersample
+            if supersample > 1:
+                scaled = self._scale_pixel_effects(supersample)
+
+            # Make sure a frame with the (potentially) updated size, pixel ratio
+            # and effect parameters is drawn before we read the image back.
+            # Note: this has to happen _after_ adjusting those!
+            self.canvas.force_draw()
+
+            if supersample == 1:
+                im = self.renderer.snapshot()
+            else:
+                # Note we ask the canvas for its size again: a resize (see
+                # `size` above) may only have gone through with the draw
+                im = self._downsampled_snapshot(self._output_size(out_ratio))
         finally:
+            for effect_pass, param, value in scaled:
+                setattr(effect_pass, param, value)
+            self.renderer._pixel_scale, self.renderer._pixel_ratio = opr
             if alpha:
                 self._background.visible = vis
             if size:
                 self.size = os
-            if pixel_ratio:
-                self.renderer.pixel_ratio = opr
 
         return im
+
+    def _output_size(self, pixel_ratio):
+        """Size (in pixels) of a screenshot taken at the given pixel ratio."""
+        w, h = self.renderer.logical_size
+        return max(1, round(w * pixel_ratio)), max(1, round(h * pixel_ratio))
+
+    def _clamp_supersample(self, supersample, out_size):
+        """Reduce the supersample factor to what the GPU can still allocate."""
+        max_size = self.renderer.device.limits["max-texture-dimension-2d"]
+        max_supersample = max(1, int(max_size // max(out_size)))
+        if supersample > max_supersample:
+            logger.warning(
+                f"Supersampling a {out_size[0]}x{out_size[1]} screenshot {supersample}x "
+                f"exceeds this GPU's maximum texture size ({max_size} px). "
+                f"Falling back to {max_supersample}x."
+            )
+            supersample = max_supersample
+        return supersample
+
+    def _scale_pixel_effects(self, factor):
+        """Scale the effect parameters that are given in physical pixels.
+
+        See `PIXEL_SCALED_EFFECT_PARAMS` for the why. Returns a list of
+        `(pass, parameter, old value)` for the caller to restore.
+
+        """
+        scaled = []
+        for effect_pass in self.renderer.effect_passes:
+            for klass in type(effect_pass).__mro__:
+                params = PIXEL_SCALED_EFFECT_PARAMS.get(klass.__name__)
+                if params is None:
+                    continue
+                for param, limit in params.items():
+                    value = getattr(effect_pass, param, None)
+                    if value is None:
+                        continue
+                    new_value = value * factor
+                    if limit is not None:
+                        new_value = min(new_value, limit)
+                    setattr(effect_pass, param, type(value)(new_value))
+                    scaled.append((effect_pass, param, value))
+                break  # a pass is only ever listed once
+        return scaled
+
+    def _downsampled_snapshot(self, size):
+        """Filter the frame that was last drawn down to `size` pixels.
+
+        `renderer.snapshot()` reads the renderer's internal texture as it is,
+        so with supersampling it would simply hand us a larger image. Flushing
+        into a texture of the intended size instead takes the same route as
+        rendering to a screen with a pixel ratio > 1: the reconstruction filter
+        selected by `renderer.pixel_filter` ('mitchell' by default) does the
+        downsampling on the GPU, and in linear light rather than on the sRGB
+        encoded values.
+
+        """
+        w, h = size
+        texture = gfx.Texture(
+            size=(w, h, 1),
+            dim=2,
+            # Same format as the renderer's internal texture, so that the flush
+            # is a filter and nothing else. `colorspace` only matters when a
+            # texture is *sampled* - this one is a render target - but saying
+            # "srgb" twice makes pygfx complain.
+            format="rgba8unorm-srgb",
+            colorspace="physical",
+            usage=(
+                wgpu.TextureUsage.RENDER_ATTACHMENT
+                | wgpu.TextureUsage.TEXTURE_BINDING
+                | wgpu.TextureUsage.COPY_SRC
+            ),
+        )
+
+        # `flush` gamma-corrects for canvases whose format is not sRGB. Ours is,
+        # so that correction has to sit out this one flush.
+        gamma_correction_srgb = self.renderer._gamma_correction_srgb
+        self.renderer._gamma_correction_srgb = 1.0
+        try:
+            self.renderer.flush(target=texture)
+        finally:
+            self.renderer._gamma_correction_srgb = gamma_correction_srgb
+
+        data = self.renderer.device.queue.read_texture(
+            {
+                "texture": ensure_wgpu_object(texture),
+                "mip_level": 0,
+                "origin": (0, 0, 0),
+            },
+            {"offset": 0, "bytes_per_row": 4 * w, "rows_per_image": h},
+            (w, h, 1),
+        )
+        return np.frombuffer(data, np.uint8).reshape(h, w, 4)
 
     def set_view(self, view):
         """(Re-)set camera position.

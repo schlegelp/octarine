@@ -6,7 +6,7 @@ from tqdm.auto import trange
 from scipy.spatial.transform import Rotation
 
 
-def make_rotation_video(viewer, video_path, n_frames=100, fps=30, axis="z"):
+def make_rotation_video(viewer, video_path, n_frames=100, fps=30, axis="z", supersample=1):
     """Create a video of the viewer rotating around the specified axis.
 
     We're using imagio to create the video. Make sure to install if you haven't already:
@@ -27,6 +27,10 @@ def make_rotation_video(viewer, video_path, n_frames=100, fps=30, axis="z"):
                 The frames per second of the video.
     axis :      str
                 The axis to rotate around, one of 'x', 'y', or 'z'.
+    supersample : int
+                Anti-aliasing quality of each frame, see `Viewer.screenshot`.
+                Unlike for a single screenshot this defaults to 1 (off), since
+                the cost is paid `n_frames` times over.
 
     Returns
     -------
@@ -65,7 +69,9 @@ def make_rotation_video(viewer, video_path, n_frames=100, fps=30, axis="z"):
         viewer.set_view(view)
 
         # capture screenshot
-        frames.append(viewer.screenshot(filename=None, alpha=False))
+        frames.append(
+            viewer.screenshot(filename=None, alpha=False, supersample=supersample)
+        )
 
     if video_path:
         imageio.mimsave(video_path, frames, fps=fps)
