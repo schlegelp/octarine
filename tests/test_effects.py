@@ -234,8 +234,10 @@ def test_set_environment(scene_viewer):
     # ... and keep their color
     assert material.color.rgba == pytest.approx((0.6, 0.65, 0.8, 1.0), abs=1e-6)
 
-    # Meshes added afterwards get the same treatment
+    # Meshes added afterwards get the same treatment - on the next frame, that
+    # is (see `Viewer._refresh_scene`)
     scene_viewer.add_mesh(tm.creation.icosphere(subdivisions=2), color="w", name="late")
+    scene_viewer.canvas.draw()
     assert isinstance(scene_viewer.objects["late"][0].material, gfx.MeshStandardMaterial)
 
     # Switching it off restores everything

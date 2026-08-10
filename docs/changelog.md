@@ -87,6 +87,17 @@ _Date: ongoing_
   [Sparse Volumes](objects.md#run-length-encoded-voxels))
 
 #### Fixes
+- adding many objects one by one is no longer quadratic in the number of objects: the bounding
+  box visual, the camera centering, the fit of the shadow-casting lights, the ambient occlusion
+  radius and the environment all have to follow the scene, and each of them walks every visual
+  on the canvas. They are now re-fitted once, immediately before the next frame, rather than on
+  every single `add`. Filling a viewer with 800 objects went from ~11 s to ~0.3 s; the effect is
+  most pronounced with shadows and ambient occlusion (now on by default), but the centering
+  alone accounted for most of it. Note that this means those properties only catch up on the
+  next draw - `Viewer.bounds` is unaffected and always reports the scene as it currently stands,
+  as is an explicit [`Viewer.center_camera`][octarine.Viewer.center_camera], which centers there
+  and then. A camera you set up yourself after an `add` (e.g. via `camera.show_object`) also
+  still wins, i.e. the deferred centering does not overrule it
 - `add_volume`/`add_sparse_volume`: a hex color string (e.g. `"#ff9955"`) raised
   `Colormap '#ff9955' not found` instead of being used as a single color
 - fixed colormaps wrapping around: values at the very top of `clim` sampled the colormap at
@@ -102,7 +113,7 @@ _Date: ongoing_
   `headlight` parameter (or the matching properties/methods), e.g.
   `oc.Viewer(shadows=False, headlight=False, ambient_occlusion=False)` gets you the previous
   look. Note that fitting the shadows and the occlusion radius to the scene costs an extra
-  pass over the objects whenever one is added or removed
+  pass over the objects, which is made once per frame in which the scene changed
 - `opacity` no longer scales the extinction per voxel in `add_sparse_volume(mode="density")`;
   it is now a plain global opacity in all modes and `density` takes its place
 

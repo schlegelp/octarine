@@ -236,23 +236,14 @@ def update_helper(viewer, legend=True, bounds=True):
             if viewer.widget.toolbar:
                 viewer.widget.toolbar.update_legend()
     if bounds:
-        if getattr(viewer, "show_bounds", False):
-            viewer.update_bounds()
-        # New visuals have to pick up the shadow state, and both the lights
-        # (with their shadow cameras) and the ambient occlusion radius have to
-        # be re-fitted to the new extents of the scene. Walking those extents
-        # is O(number of objects), so do it once and share.
-        fit_shadows = getattr(viewer, "_shadows", False)
-        fit_ao = getattr(viewer, "_ao_pass", None) is not None
-        if fit_shadows or fit_ao:
-            world_bounds = viewer.bounds
-            if fit_shadows:
-                viewer._update_shadows(bounds=world_bounds)
-            if fit_ao:
-                viewer._update_ao_radius(bounds=world_bounds)
-        # ... and new meshes have to be lit by the environment like the rest
-        if getattr(viewer, "_env_map", None) is not None:
-            viewer._update_environment()
+        # Everything that is fitted to the scene as a whole - the bounding box
+        # visual, the shadow-casting lights, the ambient occlusion radius, the
+        # environment - is now out of date. Each of those walks every visual on
+        # the canvas, so bringing them up to date here would make a loop of
+        # `add` calls quadratic in the number of objects. Instead we only flag
+        # the scene and catch up once, right before the next frame is drawn
+        # (see `Viewer._refresh_scene`).
+        viewer._scene_stale = True
 
     # Any time we update the viewer, we should set it to stale
     viewer._render_stale = True
@@ -500,6 +491,13 @@ class Viewer:
         self._show_bounds = False
         self._shadows = False
         self._shadow_fit = None  # (center, radius) of the scene; see `_fit_shadows`
+        # Whether the scene's contents changed since we last fitted anything to
+        # them, and whether an `add` asked for the camera to be re-centered;
+        # see `Viewer._refresh_scene`
+        self._scene_stale = False
+        self._center_pending = False
+        self._centered_camera_sig = None
+        self._refreshing_scene = False
         self._ao_pass = None
         self._ao_auto_radius = True  # see `Viewer._update_ao_radius`
         self._outline_pass = None
@@ -548,6 +546,14 @@ class Viewer:
     def _animate(self):
         """Run the rendering loop."""
         rm = self.render_trigger
+
+        # Objects may have come or gone since the last frame - catch up on
+        # everything that is fitted to the scene as a whole before anything
+        # else in this frame gets to look at it. In particular this has to
+        # happen before the animations below: several of them (the scale bar,
+        # the depth-of-field focus tracker) read the camera, which we may be
+        # about to re-center.
+        self._refresh_scene()
 
         # First run the user animations
         self._animations_frame_counter += 1
@@ -630,6 +636,64 @@ class Viewer:
         self._last_camera_sig = self._camera_sig() if self._linked else None
 
         self.canvas.request_draw()
+
+    def _refresh_scene(self):
+        """Re-fit everything that is derived from the scene as a whole.
+
+        The bounding box visual, the camera (if an `add` asked to be centered),
+        the shadow-casting lights (with their shadow cameras), the ambient
+        occlusion radius and the environment maps all have to follow the scene
+        as objects come and go - and each of them walks every visual on the
+        canvas. Doing that for every object added would make filling a viewer
+        quadratic in the number of objects, which is why `update_helper` and
+        `Viewer.add` merely flag what is out of date and we catch up here
+        instead: once, immediately before the next frame is drawn. Objects are
+        typically added in a loop, so this collapses N sweeps into one.
+
+        Note that this does *not* affect `Viewer.bounds`, which always reports
+        the scene as it currently stands, nor an explicit call to
+        `Viewer.center_camera`, which centers there and then.
+
+        """
+        if not (self._scene_stale or self._center_pending) or self._refreshing_scene:
+            return
+
+        # `update_bounds` takes the previous bounding box off the scene, which
+        # comes back through `update_helper` and flags us as stale again -
+        # hence both the re-entrancy guard and clearing the flags only at the end
+        self._refreshing_scene = True
+        try:
+            if self._show_bounds:
+                self.update_bounds()
+
+            # N.B. this has to come *after* the bounding box visual was
+            # re-fitted: `center_camera` frames the whole scene graph, box
+            # included, and a stale box still sticking out of the scene would
+            # widen the view. It is also skipped if the camera was moved since
+            # (see `Viewer._request_center`).
+            if self._center_pending and self._camera_sig() == self._centered_camera_sig:
+                self.center_camera()
+
+            # New visuals have to pick up the shadow state, and both the lights
+            # and the ambient occlusion radius have to be re-fitted to the new
+            # extents of the scene. Walking those extents is O(number of
+            # objects), so do it once and share.
+            fit_shadows = self._shadows
+            fit_ao = self._ao_pass is not None
+            if fit_shadows or fit_ao:
+                world_bounds = self.bounds
+                if fit_shadows:
+                    self._update_shadows(bounds=world_bounds)
+                if fit_ao:
+                    self._update_ao_radius(bounds=world_bounds)
+
+            # ... and new meshes have to be lit by the environment like the rest
+            if self._env_map is not None:
+                self._update_environment()
+        finally:
+            self._refreshing_scene = False
+            self._scene_stale = False
+            self._center_pending = False
 
     def _next_color(self):
         """Return next color in the colormap."""
@@ -2092,8 +2156,26 @@ class Viewer:
 
         self.scene.add(box)
 
+    def _request_center(self):
+        """Ask for the camera to be centered on the scene before the next frame.
+
+        Centering frames the entire scene graph, which is O(number of objects)
+        - doing it inside every `add` is what made filling a viewer quadratic
+        (see `Viewer._refresh_scene`). We remember the camera as we leave it so
+        that the deferred centering can tell whether anybody has taken the
+        camera over in the meantime - a `camera.show_object` of their own, say,
+        or a drag of the controller. Centering there and then would have been
+        overruled by that just the same, so in that case we skip it.
+
+        """
+        self._center_pending = True
+        self._centered_camera_sig = self._camera_sig()
+
     def center_camera(self):
         """Center camera on visuals."""
+        # Adding objects only asks for this to happen before the next frame
+        # (see `Viewer._refresh_scene`) - doing it now makes that redundant
+        self._center_pending = False
         if len(self):
             self.camera.show_object(
                 self.scene, scale=1, view_dir=(0.0, 0.0, 1.0), up=(0.0, -1.0, 0.0)
@@ -2294,7 +2376,7 @@ class Viewer:
             for xx in x:
                 self.add(xx, center=False, clear=False, name=name, **kwargs)
             if center:
-                self.center_camera()
+                self._request_center()
             return
 
         if converter is None:
@@ -2324,8 +2406,10 @@ class Viewer:
 
             self.scene.add(v)
 
+        # Note this is deferred to just before the next frame rather than done
+        # here - see `Viewer._request_center`
         if center:
-            self.center_camera()
+            self._request_center()
 
     @update_viewer(legend=True, bounds=True)
     def _add_to_scene(self, visual, center=True):
@@ -2342,8 +2426,10 @@ class Viewer:
 
         self.scene.add(visual)
 
+        # Note this is deferred to just before the next frame rather than done
+        # here - see `Viewer._request_center`
         if center:
-            self.center_camera()
+            self._request_center()
 
     def add_mesh(
         self,

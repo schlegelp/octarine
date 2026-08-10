@@ -749,22 +749,27 @@ def test_default_effects(mesh):
     assert v.renderer.effect_passes[0] is v._ao_pass
 
     # There is nothing on the canvas yet, so the occlusion radius has to catch
-    # up with the scene as it fills (and shrink back again)
+    # up with the scene as it fills (and shrink back again). Note that this
+    # happens on the next frame, not on `add` itself - see
+    # `Viewer._refresh_scene`.
     assert v._ao_pass.radius == 1.0
     v.add_mesh(mesh, name="small")
+    v.canvas.draw()
     assert v._ao_pass.radius == pytest.approx(v._default_ao_radius())
     big = mesh.copy()
     big.apply_scale(100)
     v.add_mesh(big, name="big")
+    v.canvas.draw()
     assert v._ao_pass.radius == pytest.approx(v._default_ao_radius())
     assert v._ao_pass.radius > 10
     v.pop()
-    assert v._ao_pass.radius == pytest.approx(v._default_ao_radius())
     v.canvas.draw()
+    assert v._ao_pass.radius == pytest.approx(v._default_ao_radius())
 
     # An explicit radius pins it, i.e. the scene no longer overrides it
     v.set_ambient_occlusion(radius=7.0)
     v.add_mesh(big, name="big2")
+    v.canvas.draw()
     assert v._ao_pass.radius == 7.0
     v.close()
 
@@ -1583,6 +1588,7 @@ def test_shadow_flags(mesh, points, line_single):
     v.add_lines(line_single)
     # pygfx cannot render a volume into a shadow map and raises if we ask it to
     v.add_volume(np.random.rand(10, 10, 10).astype(np.float32))
+    v.canvas.draw()  # the flags are applied per frame; see `_refresh_scene`
 
     assert v.shadows is False
     assert not any(vis.cast_shadow for vis in v.visuals)
@@ -1616,6 +1622,7 @@ def test_shadow_flags(mesh, points, line_single):
     v = oc.Viewer(offscreen=True, size=(200, 200))
     assert v.shadows is True
     v.add_mesh(mesh)
+    v.canvas.draw()
     (vis,) = v.visuals
     assert vis.cast_shadow is True
     assert vis.receive_shadow is True
@@ -1639,10 +1646,12 @@ def test_shadow_lights_track_the_scene(mesh):
         [radius * oc.viewer.SHADOW_LIGHT_DISTANCE] * 2
     )
 
-    # Growing the scene has to move the lights out with it...
+    # Growing the scene has to move the lights out with it... (on the next
+    # frame, that is - see `Viewer._refresh_scene`)
     big = tm.creation.icosphere(radius=1000)
     big.apply_translation((5000, 0, 0))
     v.add_mesh(big)
+    v.canvas.draw()
     grown = np.array([tuple(light.local.position) for light in v._static_lights])
     assert np.linalg.norm(grown, axis=1).min() > np.linalg.norm(near, axis=1).max()
     # ... and the lights have to follow the scene's center, not sit at the origin
@@ -1651,6 +1660,7 @@ def test_shadow_lights_track_the_scene(mesh):
 
     # ... and shrinking it again has to bring them back
     v.pop()
+    v.canvas.draw()
     shrunk = np.array([tuple(light.local.position) for light in v._static_lights])
     assert shrunk == pytest.approx(near)
 
@@ -1663,12 +1673,131 @@ def test_shadow_lights_track_the_scene(mesh):
     v.close()
 
 
+def test_scene_refit_is_deferred(mesh):
+    """The scene is re-fitted once per frame, not once per object added.
+
+    Every one of those fits walks all visuals, so doing it per object made
+    filling a viewer quadratic in the number of objects.
+    """
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+
+    fits = []
+    wrapped = v._update_shadows
+
+    def _counting_update_shadows(*args, **kwargs):
+        fits.append(1)
+        return wrapped(*args, **kwargs)
+
+    v._update_shadows = _counting_update_shadows
+
+    for i in range(5):
+        v.add_mesh(mesh.copy(), name=f"mesh{i}")
+    assert v._scene_stale and not fits  # nothing fitted yet
+
+    v.canvas.draw()
+    assert not v._scene_stale and len(fits) == 1
+
+    # ... and a frame that did not change the scene must not re-fit at all
+    v.canvas.draw()
+    assert len(fits) == 1
+
+    v.close()
+
+
+def test_center_camera_is_deferred(mesh):
+    """Centering happens on the next frame, not inside `add`.
+
+    Like the rest of the re-fitting it frames the whole scene graph, so doing
+    it per object made filling a viewer quadratic.
+    """
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    off_center = mesh.copy()
+    off_center.apply_translation((500, 0, 0))
+
+    v.add_mesh(off_center, name="mesh")
+    assert v._center_pending
+    assert tuple(v.camera.local.position) == (0, 0, 0)  # not yet
+
+    v.canvas.draw()
+    assert not v._center_pending
+    assert v.camera.local.position[0] == pytest.approx(500, rel=1e-3)
+
+    # `center=False` must leave the camera alone entirely
+    before = tuple(v.camera.local.position)
+    v.add_mesh(mesh.copy(), name="second", center=False)
+    v.canvas.draw()
+    assert tuple(v.camera.local.position) == before
+
+    v.close()
+
+
+def test_center_camera_yields_to_the_user(mesh):
+    """A view set up after `add` must survive the deferred centering.
+
+    Centering used to happen inside `add`, so anything the user did to the
+    camera afterwards won. Deferring it must not turn that around.
+    """
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh)
+
+    # N.B. `local.rotation` is a live view onto the camera's own buffer, so
+    # these have to be copies rather than `np.asarray`
+    def rotation():
+        return np.array(v.camera.local.rotation, dtype=float)
+
+    # This is what the deferred centering would produce ...
+    v.center_camera()
+    centered = rotation()
+
+    v.add_mesh(mesh.copy(), name="second")
+    v.camera.show_object(v.scene, view_dir=(0, -0.6, -1), up=(0, 1, 0))
+    mine = rotation()
+    assert not np.allclose(mine, centered)
+
+    v.canvas.draw()
+    assert rotation() == pytest.approx(mine)
+
+    # ... but a *later* `add` centers again, just as it did before
+    v.add_mesh(mesh.copy(), name="third")
+    v.canvas.draw()
+    assert rotation() == pytest.approx(centered)
+
+    v.close()
+
+
+def test_scene_refit_with_bounding_box(mesh):
+    """The bounding box visual must not keep the scene stale forever.
+
+    Re-drawing it removes the old one, which comes back through
+    `update_helper` and would otherwise flag the scene as stale on every frame.
+    """
+    v = oc.Viewer(offscreen=True, size=(200, 200))
+    v.add_mesh(mesh)
+    v.show_bounds = True
+    v.canvas.draw()
+
+    assert not v._scene_stale
+    assert sum(getattr(x, "_object_type", None) == "boundingbox" for x in v.visuals) == 1
+
+    # A new object still has to grow the box
+    big = mesh.copy()
+    big.apply_scale(10)
+    v.add_mesh(big, name="big")
+    v.canvas.draw()
+    (box,) = [x for x in v.visuals if getattr(x, "_object_type", None) == "boundingbox"]
+    assert tuple(box.local.scale) == pytest.approx(np.ptp(v.bounds, axis=1), rel=1e-3)
+    assert not v._scene_stale
+
+    v.close()
+
+
 def test_shadow_applies_to_objects_added_later(mesh):
     """Visuals added after the toggle must pick up the shadow state."""
     v = oc.Viewer(offscreen=True, size=(200, 200))
     v.shadows = True
 
     v.add_mesh(mesh)
+    v.canvas.draw()  # the flags are applied per frame; see `_refresh_scene`
     (vis,) = v.visuals
     assert vis.cast_shadow is True
     assert vis.receive_shadow is True
