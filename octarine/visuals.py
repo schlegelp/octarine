@@ -7,6 +7,7 @@ import pygfx as gfx
 import numpy as np
 import trimesh as tm
 
+from functools import lru_cache
 from importlib.util import find_spec
 
 from . import config, utils
@@ -85,6 +86,7 @@ def mesh2gfx(
     return vis
 
 
+@lru_cache(maxsize=1)
 def available_shaders():
     """Return a dict mapping shader names to pygfx mesh material classes.
 
