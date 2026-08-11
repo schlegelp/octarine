@@ -8,11 +8,62 @@ import numpy as np
 import trimesh as tm
 
 from functools import lru_cache
-from importlib.util import find_spec
 
 from . import config, utils
 
 logger = config.get_logger(__name__)
+
+
+def _materialized_vertex_normals(mesh):
+    """Return a mesh's vertex normals, but only if they already exist.
+
+    Trimesh computes `vertex_normals` on demand from both the face normals and
+    the face angles. That is ~2x slower than the area-weighted fallback pygfx
+    uses for a geometry without normals (it needs no per-corner `arccos`), so
+    reading the property to find out whether normals exist is precisely the
+    cost we want to avoid. Instead we peek at the cache and let pygfx do the
+    work whenever normals aren't already materialized.
+
+    Returns
+    -------
+    normals :   (N, 3) np.ndarray | None
+                Contiguous float32 normals, or `None` if they aren't
+                available without computing them.
+
+    """
+    normals = None
+
+    cache = getattr(mesh, "_cache", None)
+    if cache is not None:
+        # Note we go through `Cache.__getitem__` (which returns None for a
+        # miss) rather than reading `cache.cache`: the former validates the
+        # cache against the mesh's data hash first, so it can't hand back
+        # normals belonging to since-mutated geometry. The hash is memoized,
+        # so this is free for any mesh that came out of `trimesh.load()`.
+        try:
+            normals = cache["vertex_normals"]
+        except (KeyError, TypeError):
+            normals = None
+    elif "vertex_normals" in getattr(mesh, "__dict__", {}):
+        # Duck-typed mesh: an instance attribute is already materialized.
+        normals = mesh.__dict__["vertex_normals"]
+
+    if normals is None:
+        return None
+
+    # Loaders can stash normals that don't line up with the vertices - trimesh
+    # re-checks this in its own property, and we bypassed it.
+    normals = np.asarray(normals)
+    expected = (len(mesh.vertices), 3)
+    if normals.shape != expected:
+        logger.warning(
+            f"Ignoring vertex normals with shape {normals.shape}; "
+            f"expected {expected}. Normals will be computed instead."
+        )
+        return None
+
+    # Trimesh stores normals as float64, so this always copies.
+    return np.ascontiguousarray(normals, dtype="f4")
 
 
 def mesh2gfx(
@@ -70,11 +121,17 @@ def mesh2gfx(
     # But that doesn't seem to be the case.
     mat_color_kwargs["pick_write"] = True
 
+    # Hand pygfx the normals only if the mesh already has them
+    geometry_kwargs = dict(obj_color_kwargs)
+    normals = _materialized_vertex_normals(mesh)
+    if normals is not None:
+        geometry_kwargs["normals"] = normals
+
     vis = gfx.Mesh(
         gfx.Geometry(
             indices=mesh.faces.astype(np.int32, copy=False),
             positions=mesh.vertices.astype(np.float32, copy=False),
-            **obj_color_kwargs,
+            **geometry_kwargs,
         ),
         _make_mesh_material(mat_color_kwargs, silhouette, subsurface, shader, matcap),
     )
@@ -1412,9 +1469,10 @@ def trimesh2gfx(mesh, color=None, alpha=None, use_material=True):
         positions=np.ascontiguousarray(mesh.vertices, dtype="f4"),
         indices=np.ascontiguousarray(mesh.faces, dtype="i4"),
     )
-    # trimesh needs scipy to compute normals
-    if find_spec("scipy"):
-        kwargs["normals"] = np.ascontiguousarray(mesh.vertex_normals, dtype="f4")
+    # Hand pygfx the normals only if the mesh already has them
+    normals = _materialized_vertex_normals(mesh)
+    if normals is not None:
+        kwargs["normals"] = normals
 
     if mesh.visual.kind == "texture" and getattr(mesh.visual, "uv", None) is not None:
         # convert the uv coordinates from opengl to wgpu conventions.
