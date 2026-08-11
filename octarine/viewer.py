@@ -3107,7 +3107,10 @@ class Viewer:
         except ValueError:
             pass
 
-    @update_viewer(legend=True, bounds=True)
+    # N.B. `bounds=False`: `Viewer.bounds` deliberately covers invisible visuals
+    # too, so hiding an object can never change the extents of the scene and
+    # there is nothing for `_refresh_scene` to re-fit.
+    @update_viewer(legend=True, bounds=False)
     def hide_objects(self, obj):
         """Hide given object(s).
 
@@ -3128,12 +3131,12 @@ class Viewer:
                 if v.visible:
                     v.visible = False
 
-    @update_viewer(legend=True, bounds=True)
     def hide_selected(self):
         """Hide currently selected object(s)."""
+        # N.B. no decorator here - `hide_objects` already updates the viewer
         self.hide_objects(self.selected)
 
-    @update_viewer(legend=True, bounds=True)
+    @update_viewer(legend=True, bounds=False)
     def unhide_objects(self, obj=None):
         """Unhide given object(s).
 

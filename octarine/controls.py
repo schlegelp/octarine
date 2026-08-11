@@ -92,6 +92,20 @@ def fix_native_color_picker(picker, qcolor):
         pass
 
 
+def set_swatch_color(button, color):
+    """Paint a legend color swatch, skipping the restyle if nothing changed.
+
+    `setStyleSheet` is not cheap (it re-polishes the widget's style) and
+    `update_legend` re-applies every swatch on every update, so on a legend with
+    hundreds of entries this guard is worth having.
+    """
+    css = f"background-color: {gfx.Color(color).css}"
+    if getattr(button, "_swatch_css", None) == css:
+        return
+    button.setStyleSheet(css)
+    button._swatch_css = css
+
+
 def set_viewer_stale(func):
     """Decorator to set the viewer stale after a function call."""
 
@@ -2397,7 +2411,7 @@ class Controls(QtWidgets.QWidget):
                     None,
                 )
                 if line_push_button:
-                    line_push_button.setStyleSheet(f"background-color: {color.css}")
+                    set_swatch_color(line_push_button, color)
             else:
                 # Object ids may be non-strings (e.g. uuid.UUID), so keep raw ids
                 # for building rows / highlighting and only stringify for matching
@@ -2470,9 +2484,7 @@ class Controls(QtWidgets.QWidget):
                         None,
                     )
                     if line_push_button:
-                        line_push_button.setStyleSheet(
-                            f"background-color: {color.css}"
-                        )
+                        set_swatch_color(line_push_button, color)
 
                 group_color_btn = next(
                     (
@@ -2487,9 +2499,7 @@ class Controls(QtWidgets.QWidget):
                         group_color = entry["visuals"][0].material.color
                     except BaseException:
                         group_color = gfx.Color("k")
-                    group_color_btn.setStyleSheet(
-                        f"background-color: {group_color.css}"
-                    )
+                    set_swatch_color(group_color_btn, group_color)
 
         # Add new items
         for entry_id, entry in legend_entries.items():
@@ -2518,8 +2528,11 @@ class Controls(QtWidgets.QWidget):
                 self.legend.addItem(item)
                 self.legend.setItemWidget(item, item_widget)
 
-        # Check visibility and selected status of objects
-        visible = self.viewer.visible
+        # Check visibility and selected status of objects. Both are looked up
+        # once per legend row below, so use sets rather than the lists the
+        # viewer hands out - otherwise this loop alone is quadratic.
+        visible = set(self.viewer.visible)
+        selected = set(self.viewer.selected or [])
         for i in range(self.legend.count()):
             item = self.legend.item(i)
             item_widget = self.legend.itemWidget(item)
@@ -2566,7 +2579,16 @@ class Controls(QtWidgets.QWidget):
             for member_id in member_ids:
                 line_checkbox = item_widget.findChild(QtWidgets.QCheckBox, str(member_id))
                 if line_checkbox:
+                    # N.B. signals must be blocked here: the visuals already
+                    # have the visibility we are about to display (that is where
+                    # `visible` came from), so this is a display-only sync. Let
+                    # it emit `toggled` and the checkbox's own callback calls
+                    # `update_legend` again, once per row that changed state -
+                    # which makes hiding/showing everything quadratic (and
+                    # recurse once per object).
+                    line_checkbox.blockSignals(True)
                     line_checkbox.setChecked(member_id in visible)
+                    line_checkbox.blockSignals(False)
 
                 member_widget = item_widget.findChild(QtWidgets.QWidget, str(member_id))
                 if member_widget is None:
@@ -2583,9 +2605,7 @@ class Controls(QtWidgets.QWidget):
                 if not line_text:
                     continue
 
-                line_text.setSelected(
-                    bool(self.viewer.selected and member_id in self.viewer.selected)
-                )
+                line_text.setSelected(member_id in selected)
 
         # Re-apply an active filter so rows added/removed above stay consistent
         # with the current search text.
@@ -2878,7 +2898,7 @@ class Controls(QtWidgets.QWidget):
         if color is None:
             color = "w"
         color = gfx.Color(color)
-        color_btn.setStyleSheet(f"background-color: {color.css}")
+        set_swatch_color(color_btn, color)
 
         # Connect callback (this just sets the active object)
         color_btn.clicked.connect(self.color_button_clicked)
@@ -2902,7 +2922,7 @@ class Controls(QtWidgets.QWidget):
         if color is None:
             color = "w"
         color = gfx.Color(color)
-        volume_btn.setStyleSheet(f"background-color: {color.css}")
+        set_swatch_color(volume_btn, color)
 
         # Connect callback (this just sets the active object)
         volume_btn.clicked.connect(self.volume_button_clicked)
