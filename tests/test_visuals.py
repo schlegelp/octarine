@@ -2084,6 +2084,24 @@ def _radial_luminance(img):
     return img[..., :3].mean(axis=-1)[ys, xs], r / r.max()
 
 
+def _axial_luminance(img):
+    """Median luminance at the top/bottom vs the left/right of the object.
+
+    Both are taken at the ends of an axis and close to the other one, i.e.
+    they sample the same distance out along each of the two silhouette axes.
+    """
+    mask = img[..., :3].max(axis=-1) > 5
+    ys, xs = np.nonzero(mask)
+    lum = img[..., :3].mean(axis=-1)[ys, xs]
+    # Offsets from the centroid, each normalized by its own extent
+    vert = (ys - ys.mean()) / np.abs(ys - ys.mean()).max()
+    horz = (xs - xs.mean()) / np.abs(xs - xs.mean()).max()
+    return (
+        np.median(lum[(np.abs(vert) > 0.75) & (np.abs(horz) < 0.3)]),
+        np.median(lum[(np.abs(horz) > 0.75) & (np.abs(vert) < 0.3)]),
+    )
+
+
 def test_sparse_volume_surface_shading(solid_ball):
     """The isosurface must be lit by its gradient, not rendered flat.
 
@@ -2110,6 +2128,14 @@ def test_sparse_volume_surface_anisotropic(solid_ball):
 
     With anisotropic `spacing` the two are not related by a rotation, so
     skipping the inverse-transpose transform visibly changes the shading.
+
+    A ball stretched four-fold along the screen's vertical axis is locally a
+    cylinder: near the top and the bottom the surface still faces the camera
+    (bright), while the left and right rims turn away from it (dark). Voxel
+    space normals instead carry the ball's radial falloff onto the stretched
+    silhouette, which darkens top and bottom just as much as the sides -
+    i.e. the two ends of the measurement swap over, so it does not matter
+    much where between them the threshold sits.
     """
     lums = []
     for spacing in ((1, 1, 1), (1, 1, 4)):
@@ -2120,12 +2146,15 @@ def test_sparse_volume_surface_anisotropic(solid_ball):
         v.camera.show_object(v.scene, scale=1, view_dir=(1, 0, 0), up=(0, 0, 1))
         img = np.asarray(v.screenshot(filename=None, size=(200, 200)))
         v.close()
-        lum, r = _radial_luminance(img)
-        lums.append(np.median(lum[r > 0.7]))
+        lums.append(_axial_luminance(img))
 
-    # Stretching along the view-perpendicular axis turns the rim of the
-    # silhouette more towards the camera, i.e. it must get brighter
-    assert lums[1] > lums[0] + 10, f"Shading ignores `spacing` ({lums})"
+    # Control: without the stretch the shading is radially symmetric, so the
+    # two directions must agree - if they do not, we are not measuring shading
+    assert abs(lums[0][0] - lums[0][1]) < 15, f"Isotropic ball is lopsided ({lums[0]})"
+
+    # Correct normals put this at ~+25, voxel space ones at ~-25
+    vert, horz = lums[1]
+    assert vert > horz + 10, f"Shading ignores `spacing` (vert={vert}, horz={horz})"
 
 
 def test_sparse_volume_surface_threshold(solid_ball):
