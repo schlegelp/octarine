@@ -66,7 +66,7 @@ def parse_objects(x, include_geometries=True):
     # Remove arrays with wrong dimensions
     if [ob for ob in arrays if ob.shape[1] != 3 and ob.shape[0] != 2]:
         logger.warning(
-            "Arrays need to be of shape (N, 3) for scatter or (2, N)" " for line plots."
+            "Arrays need to be of shape (N, 3) for scatter or (2, N) for line plots."
         )
     arrays = [ob for ob in arrays if any(np.isin(ob.shape, [2, 3]))]
 
@@ -137,6 +137,30 @@ def as_color_list(*colors):
     if len(colors) == 1 and _is_color_sequence(colors[0]):
         colors = tuple(colors[0])
     return [gfx.Color(c) for c in colors]
+
+
+def write_png(image, filename):
+    """Write an (H, W, 3|4) uint8 array to a PNG file.
+
+    Parameters
+    ----------
+    image :     (H, W, 3) | (H, W, 4) numpy array
+                Image to write. The number of channels decides whether the PNG
+                comes out as RGB or RGBA.
+    filename :  str | pathlib.Path
+                Where to write to.
+
+    """
+    import png  # noqa: F401 - a hard dependency, but only needed right here
+
+    image = np.asarray(image)
+    if image.ndim != 3 or image.shape[-1] not in (3, 4):
+        raise ValueError(f"Expected an (H, W, 3|4) image, got {image.shape}")
+
+    mode = "RGBA" if image.shape[-1] == 4 else "RGB"
+    # pypng wants one row per scanline, i.e. the channels flattened into it
+    rows = image.reshape(image.shape[0], image.shape[1] * image.shape[2])
+    png.from_array(rows, mode=mode).save(str(filename))
 
 
 def background_options(viewer):
@@ -288,9 +312,7 @@ class VoxelCloud:
         if values is not None:
             values = np.asarray(values).ravel()
             if len(values) != len(coords):
-                raise ValueError(
-                    f"Got {len(values)} values for {len(coords)} voxels."
-                )
+                raise ValueError(f"Got {len(values)} values for {len(coords)} voxels.")
         self.coords = coords
         self.values = values
 

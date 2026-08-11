@@ -1,5 +1,4 @@
 import os
-import png
 import sys
 import time
 import cmap
@@ -27,7 +26,15 @@ from pygfx.renderers.wgpu.engine.bloom import PhysicalBasedBloomPass
 
 from rendercanvas.offscreen import OffscreenRenderCanvas
 
-from .visuals import mesh2gfx, volume2gfx, points2gfx, lines2gfx, text2gfx, sparsevolume2gfx, tubes2gfx
+from .visuals import (
+    mesh2gfx,
+    volume2gfx,
+    points2gfx,
+    lines2gfx,
+    text2gfx,
+    sparsevolume2gfx,
+    tubes2gfx,
+)
 from .conversion import get_converter
 from . import utils, config
 
@@ -100,6 +107,17 @@ PIXEL_SCALED_EFFECT_PARAMS = {
 # - make Viewer reactive (see reactive_rendering.py) to save
 #   resources when not actively using the viewer - might help in Jupyter?
 # [/] add specialised methods for adding neurons, volumes, etc. to the viewer
+
+# The named views `Viewer.set_view` and `Viewer.get_view` understand, as
+# ``name -> (view_dir, up)``. Prefixing a name with "-" looks from the far side.
+NAMED_VIEWS = {
+    "XY": ((0.0, 0.0, 1.0), (0.0, -1.0, 0.0)),  # frontal
+    "-XY": ((0.0, 0.0, -1.0), (0.0, -1.0, 0.0)),  # from the back
+    "XZ": ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),  # lateral
+    "-XZ": ((0.0, -1.0, 0.0), (0.0, 0.0, 1.0)),  # the other lateral
+    "YZ": ((1.0, 0.0, 0.0), (0.0, -1.0, 0.0)),  # top
+    "-YZ": ((-1.0, 0.0, 0.0), (0.0, -1.0, 0.0)),  # bottom
+}
 
 # Positions of the two static lights (see `Viewer.__init__`). They are parked
 # far away from the scene so that their light arrives virtually parallel, no
@@ -1119,7 +1137,9 @@ class Viewer:
         # pygfx used to derive for us. N.B. this comes out of the camera's
         # orientation alone, not of where it is - and the rotation matrix does
         # it ~20x faster than `pylinalg.vec_transform_quat`.
-        direction = self.camera.world.rotation_matrix[:3, :3] @ self._headlight_direction
+        direction = (
+            self.camera.world.rotation_matrix[:3, :3] @ self._headlight_direction
+        )
 
         if self._shadow_fit is None:
             # Nothing to fit to (an empty canvas, or shadows are off). Only the
@@ -1142,6 +1162,9 @@ class Viewer:
     def bounds(self):
         """Bounds of all current visuals (visible and invisible).
 
+        See [`Viewer.get_bounds`][octarine.Viewer.get_bounds] to ask for the
+        bounds of individual objects.
+
         Returns
         -------
         bounds :    (3, 2) array | None
@@ -1149,8 +1172,32 @@ class Viewer:
                     space, or ``None`` if there is nothing on the canvas.
 
         """
+        return self.get_bounds()
+
+    def get_bounds(self, objects=None):
+        """Bounds of the given objects (visible and invisible).
+
+        Parameters
+        ----------
+        objects :   str | int | list | visual, optional
+                    Object(s) to measure: name(s)/ID(s), index(es) in the list
+                    of visuals, or the visual(s) themselves. If ``None``
+                    (default), uses everything on the canvas.
+
+        Returns
+        -------
+        bounds :    (3, 2) array | None
+                    ``[[xmin, xmax], [ymin, ymax], [zmin, zmax]]`` in world
+                    space, or ``None`` if nothing takes up any space.
+
+        """
+        if objects is None:
+            visuals = self.visuals
+        else:
+            visuals = self._resolve_visuals(objects)
+
         bounds = []
-        for vis in self.visuals:
+        for vis in visuals:
             # Skip the bounding box itself
             if getattr(vis, "_object_type", None) == "boundingbox":
                 continue
@@ -1169,6 +1216,24 @@ class Viewer:
         mx = bounds[:, 1, :].max(axis=0)
 
         return np.vstack((mn, mx)).T
+
+    def _resolve_visuals(self, obj):
+        """Turn name(s)/index(es)/visual(s) into a flat list of visuals."""
+        objects = obj if utils.is_iterable(obj) else [obj]
+
+        all_objects = self.objects  # grab once to speed things up
+
+        visuals = []
+        for ob in objects:
+            if ob in all_objects:
+                visuals += list(all_objects[ob])
+            elif isinstance(ob, int):
+                visuals += list(list(all_objects.values())[ob])
+            elif isinstance(ob, gfx.WorldObject):
+                visuals.append(ob)
+            else:
+                raise ValueError(f"Unable to find object(s) for {ob}")
+        return visuals
 
     @property
     def max_fps(self):
@@ -3642,7 +3707,9 @@ class Viewer:
         if tint is None:
             # The recipe's own tint. An image we were handed directly says
             # nothing about tinting, so leave the object's color in place.
-            recipe = MATCAP_PRESETS.get(matcap, {}) if isinstance(matcap, str) else matcap
+            recipe = (
+                MATCAP_PRESETS.get(matcap, {}) if isinstance(matcap, str) else matcap
+            )
             tint = recipe.get("tint", 1.0) if isinstance(recipe, dict) else 1.0
 
         for n in objects:
@@ -3683,9 +3750,18 @@ class Viewer:
 
     @update_viewer(legend=False, bounds=False)
     def set_environment(
-        self, preset="studio", *, resolution=128, rotation=0.0,
-        show_background=False, pbr=True, roughness=0.4, metalness=0.0,
-        reflectivity=0.35, dim_lights=0.5, **overrides,
+        self,
+        preset="studio",
+        *,
+        resolution=128,
+        rotation=0.0,
+        show_background=False,
+        pbr=True,
+        roughness=0.4,
+        metalness=0.0,
+        reflectivity=0.35,
+        dim_lights=0.5,
+        **overrides,
     ):
         """Light the scene with a procedural environment map (IBL).
 
@@ -3953,8 +4029,14 @@ class Viewer:
 
     @update_viewer(legend=False, bounds=False)
     def set_depth_of_field(
-        self, enabled=True, *, focus=None, aperture=100.0, max_radius=16.0,
-        smooth=False, snap_radius=0,
+        self,
+        enabled=True,
+        *,
+        focus=None,
+        aperture=100.0,
+        max_radius=16.0,
+        smooth=False,
+        snap_radius=0,
     ):
         """Set a depth-of-field (focal blur) effect for the viewer.
 
@@ -4074,8 +4156,16 @@ class Viewer:
 
     @update_viewer(legend=False, bounds=False)
     def set_ambient_occlusion(
-        self, enabled=True, *, radius=None, intensity=1.0, bias=0.01,
-        samples=16, power=1.0, blur=True, debug=False,
+        self,
+        enabled=True,
+        *,
+        radius=None,
+        intensity=1.0,
+        bias=0.01,
+        samples=16,
+        power=1.0,
+        blur=True,
+        debug=False,
     ):
         """Set a screen-space ambient occlusion (SSAO) effect for the viewer.
 
@@ -4167,8 +4257,14 @@ class Viewer:
 
     @update_viewer(legend=False, bounds=False)
     def set_outline(
-        self, enabled=True, *, color="#000", thickness=1.0,
-        depth_threshold=0.02, normal_threshold=0.3, debug=False,
+        self,
+        enabled=True,
+        *,
+        color="#000",
+        thickness=1.0,
+        depth_threshold=0.02,
+        normal_threshold=0.3,
+        debug=False,
     ):
         """Draw outlines around silhouettes and along creases.
 
@@ -4305,7 +4401,9 @@ class Viewer:
         if mode is None or mode is False:
             if getattr(self, "_tonemap_pass", None) is not None:
                 self.renderer.effect_passes = tuple(
-                    e for e in self.renderer.effect_passes if e is not self._tonemap_pass
+                    e
+                    for e in self.renderer.effect_passes
+                    if e is not self._tonemap_pass
                 )
                 self._tonemap_pass = None
             return
@@ -4635,9 +4733,7 @@ class Viewer:
             filename = Path(filename)
             if filename.suffix != ".png":
                 filename = filename.parent / f"{filename.name}.png"
-            png.from_array(
-                im.reshape(im.shape[0], im.shape[1] * im.shape[2]), mode="RGBA"
-            ).save(str(filename.resolve()))
+            utils.write_png(im, filename.resolve())
         else:
             return im
 
@@ -4794,40 +4890,50 @@ class Viewer:
                     this is obtained by calling `viewer.get_view()`.
 
         """
-        if view == "XY":
-            self.camera.show_object(
-                self.scene, view_dir=(0.0, 0.0, 1.0), up=(0.0, -1.0, 0.0)
-            )
-        elif view == "-XY":
-            self.camera.show_object(
-                self.scene, view_dir=(0.0, 0.0, -1.0), up=(0.0, -1.0, 0.0)
-            )
-        elif view == "XZ":
-            self.camera.show_object(
-                self.scene, scale=1, view_dir=(0.0, 1.0, 0.0), up=(0.0, 0.0, 1.0)
-            )
-        elif view == "-XZ":
-            self.camera.show_object(
-                self.scene, scale=1, view_dir=(0.0, -1.0, 0.0), up=(0.0, 0.0, 1.0)
-            )
-        elif view == "YZ":
-            self.camera.show_object(
-                self.scene, scale=1, view_dir=(1.0, 0.0, 0.0), up=(0.0, -1.0, 0.0)
-            )
-        elif view == "-YZ":
-            self.camera.show_object(
-                self.scene, scale=1, view_dir=(-1.0, 0.0, 0.0), up=(0.0, -1.0, 0.0)
-            )
-        elif isinstance(view, dict):
+        if isinstance(view, dict):
             self.camera.set_state(view)
+        elif isinstance(view, str) and view in NAMED_VIEWS:
+            view_dir, up = NAMED_VIEWS[view]
+            self.camera.show_object(self.scene, view_dir=view_dir, up=up)
         else:
-            raise TypeError(f"Unable to set view from {type(view)}")
+            raise TypeError(f"Unable to set view from {view!r}")
 
         self._sync_linked()
 
-    def get_view(self):
-        """Get current camera position."""
-        return self.camera.get_state()
+    def get_view(self, view=None):
+        """Get camera state.
+
+        Parameters
+        ----------
+        view :      XY | XZ | YZ, optional
+                    If given, return the camera state that `set_view(view)`
+                    would produce instead of the current one - without actually
+                    moving the camera.
+
+        Returns
+        -------
+        dict
+                    Camera state, as accepted by
+                    [`Viewer.set_view`][octarine.Viewer.set_view].
+
+        """
+        if view is None:
+            return self.camera.get_state()
+
+        if not isinstance(view, str) or view not in NAMED_VIEWS:
+            raise TypeError(f"Unable to make a view from {view!r}")
+
+        # Let the camera work out what this view means for the current scene,
+        # then put it back where it was. N.B. this deliberately does not go
+        # through `set_view`: merely asking what a view looks like must not
+        # push the intermediate state to linked viewers.
+        before = self.camera.get_state()
+        try:
+            view_dir, up = NAMED_VIEWS[view]
+            self.camera.show_object(self.scene, view_dir=view_dir, up=up)
+            return self.camera.get_state()
+        finally:
+            self.camera.set_state(before)
 
     def bind_key(self, key, func, modifiers=None):
         """Bind a function to a key press.

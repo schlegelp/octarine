@@ -21,7 +21,3 @@
       filters:
        - "!^_"
        - "^__init__$"
-
-::: octarine.video_helpers.make_rotation_video
-    options:
-      show_root_heading: true

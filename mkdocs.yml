@@ -29,6 +29,7 @@ nav:
   - FAQ: faq.md
   - API:
     - Viewer: api/viewer.md
+    - Animation: api/animation.md
     - Selection: api/selection.md
     - Shaders: api/shaders.md
     - Utility: api/utils.md

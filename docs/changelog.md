@@ -11,8 +11,38 @@ _Date: ongoing_
 - `Octarine` now requires `pygfx>=0.17` - `0.17` renamed two symbols in the shader API that
   `octarine`'s custom shaders build on (`lighting_phong()` no longer takes `is_front`, and
   `physical_albeido` is now spelled `physical_albedo`)
+- the `octarine.video_helpers` module (i.e. `make_rotation_video`) has been removed in favour
+  of [`octarine.Animation`][], which does the same job with better output (no stray alpha
+  channel, no rescaling of odd-sized frames) and without the undeclared `scipy`/`tqdm`
+  imports. `make_rotation_video(v, "rotation.mp4", n_frames=100, fps=30, axis="z")` becomes
+  `oc.Animation(v, fps=30).orbit(axis="view", recenter=False, duration=100 / 30)
+  .render("rotation.mp4")` - though for most scenes the new default,
+  `oc.Animation(v).orbit().render("rotation.mp4")`, is what you actually want: a turntable
+  rotation around the scene rather than a roll about the camera's own axis
+  (see [Animations](animations.md#camera-animations))
 
 #### Improvements
+- new [`octarine.Animation`][] class: a timeline of camera moves that can be played in the
+  viewer or rendered to a video. Segments are appended one after the other -
+  [`orbit`][octarine.Animation.orbit] (around the whole scene or given objects, about any
+  axis, optionally re-framing the target first), [`move_to`][octarine.Animation.move_to]
+  (a named view or a camera state grabbed from [`Viewer.get_view`][octarine.Viewer.get_view],
+  swinging around what you are looking at rather than through it),
+  [`zoom`][octarine.Animation.zoom] and [`hold`][octarine.Animation.hold] - each with its own
+  duration and easing. [`render`][octarine.Animation.render] writes `.mp4`/`.gif` (via
+  `imageio`), a folder of numbered PNGs (no extra dependencies) or plain numpy arrays, frame by
+  frame off the timeline rather than the wall clock, and works on an offscreen viewer
+  (see [Animations](animations.md#camera-animations))
+- new [`Viewer.get_bounds`][octarine.Viewer.get_bounds] method: like the
+  [`Viewer.bounds`][octarine.Viewer.bounds] property (which now delegates to it) but for
+  individual objects - `v.get_bounds("neuron_1")`
+- [`Viewer.get_view`][octarine.Viewer.get_view] gained a `view` parameter: `v.get_view("XZ")`
+  returns the camera state that `set_view("XZ")` would produce, without moving the camera
+  (or nudging any linked viewers)
+- control panel: new "Animation" tab - set up an orbit or capture the views you want to fly
+  through as keyframes, preview it in the viewer and record it to file. Recording renders one
+  frame per event-loop tick, so the window stays responsive and long renders can be cancelled
+  (see [Animations](animations.md#the-animation-tab))
 - new [`Viewer.set_ambient_occlusion`][octarine.Viewer.set_ambient_occlusion] method (also
   available as `add_effect('ao')`): screen-space ambient occlusion, i.e. the shadowing that
   ambient light would produce in creases, cavities and where objects touch - `pygfx` has no
@@ -93,9 +123,15 @@ _Date: ongoing_
   benefit the most. It defaults to `2` (`4` is as good as it realistically gets) and the image
   dimensions are unaffected. Effects that are sized in pixels (outlines, depth of field, EDL,
   the occlusion blur) are scaled along, so the picture keeps its look. Note that
-  `make_rotation_video` defaults to `supersample=1`, since there the cost is paid per frame
+  [`Animation.render`][octarine.Animation.render] defaults to `supersample=1`, since there the
+  cost is paid per frame
 
 #### Fixes
+- control panel: the "Browse..." buttons no longer flash up a file dialog that closes again
+  immediately. The static `QFileDialog` helpers are modal, i.e. they run an event loop of their
+  own - which does not survive every way of hosting the Qt loop (IPython's Qt input hook quits
+  it as soon as the prompt wants control back, taking the dialog with it). The dialogs are now
+  opened non-modally and report back through a signal
 - adding many objects one by one is no longer quadratic in the number of objects: the bounding
   box visual, the camera centering, the fit of the shadow-casting lights, the ambient occlusion
   radius and the environment all have to follow the scene, and each of them walks every visual
@@ -215,8 +251,8 @@ _Date: 10/04/26_
 _Date: 24/03/26_
 
 #### Improvements
-- new `octarine.video_helpers` module with [`make_rotation_video`][octarine.video_helpers.make_rotation_video]
-  (see [Recording videos](animations.md#recording-videos))
+- new `octarine.video_helpers` module with `make_rotation_video` (removed again in `dev`, see
+  [`octarine.Animation`][])
 - the event-loop warning can now be suppressed
 
 #### Fixes

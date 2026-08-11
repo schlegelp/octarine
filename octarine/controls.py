@@ -16,6 +16,10 @@ except ModuleNotFoundError:
         "Showing controls requires PySide6. Please install it via:\n `pip install PySide6`."
     )
 
+# N.B. this must come after the import above - it pulls in PySide6 itself and
+# would pre-empt the friendly error message with a bare ImportError
+from .anim_controls import AnimationControlsMixin  # noqa: E402
+
 # TODOs:
 # - add custom legend formatting (e.g. "{object.name}")
 # - show type of object in legend
@@ -117,7 +121,7 @@ def set_viewer_stale(func):
     return wrapper
 
 
-class Controls(QtWidgets.QWidget):
+class Controls(AnimationControlsMixin, QtWidgets.QWidget):
     _shared_color_picker = None
     _active_color_controls = None
 
@@ -133,6 +137,9 @@ class Controls(QtWidgets.QWidget):
         self.setWindowTitle("Controls")
         self.resize(width, height)
 
+        # Non-modal file dialogs we have open (see `Controls.open_file_dialog`)
+        self._file_dialogs = []
+
         self.tab_layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.tab_layout)
 
@@ -147,19 +154,23 @@ class Controls(QtWidgets.QWidget):
         self.tab2 = QtWidgets.QWidget()
         self.tab3 = QtWidgets.QWidget()
         self.tab4 = QtWidgets.QWidget()
+        self.tab5 = QtWidgets.QWidget()
         self.tab1_layout = QtWidgets.QVBoxLayout()
         self.tab2_layout = QtWidgets.QVBoxLayout()
         self.tab3_layout = QtWidgets.QVBoxLayout()
         self.tab4_layout = QtWidgets.QVBoxLayout()
+        self.tab5_layout = QtWidgets.QVBoxLayout()
         self.tab1.setLayout(self.tab1_layout)
         self.tab2.setLayout(self.tab2_layout)
         self.tab3.setLayout(self.tab3_layout)
         self.tab4.setLayout(self.tab4_layout)
+        self.tab5.setLayout(self.tab5_layout)
 
         self.tabs.addTab(self.tab1, "Legend")
         self.tabs.addTab(self.tab2, "Controls")
         self.tabs.addTab(self.tab3, "Screenshot")
         self.tabs.addTab(self.tab4, "Effects")
+        self.tabs.addTab(self.tab5, "Animation")
 
         # self.btn_layout = QtWidgets.QVBoxLayout()
         # self.setLayout(self.btn_layout)
@@ -172,6 +183,7 @@ class Controls(QtWidgets.QWidget):
         self.build_controls_gui()
         self.build_screenshot_gui()
         self.build_effects_gui()
+        self.build_animation_gui()
 
         # Populate legend
         self.update_legend()
@@ -501,42 +513,19 @@ class Controls(QtWidgets.QWidget):
         self._screenshot_size_timer.start()
 
         # Checkbox + spinboxes for a custom screenshot size
-        self.screenshot_size_checkbox = QtWidgets.QCheckBox("Custom size")
-        self.screenshot_size_checkbox.setChecked(False)
-        self.screenshot_size_checkbox.setToolTip(
+        (
+            self.screenshot_size_checkbox,
+            self.screenshot_width_spinbox,
+            self.screenshot_height_spinbox,
+        ) = self.create_size_widgets(
+            self.tab3_layout,
             "Render the screenshot at a custom size. The canvas is temporarily "
-            "resized during the capture."
+            "resized during the capture.",
         )
-        self.tab3_layout.addWidget(self.screenshot_size_checkbox)
-
-        self.screenshot_width_spinbox = QtWidgets.QSpinBox()
-        self.screenshot_width_spinbox.setToolTip("Width in pixels.")
-        self.screenshot_height_spinbox = QtWidgets.QSpinBox()
-        self.screenshot_height_spinbox.setToolTip("Height in pixels.")
-        for spinbox, value in zip(
-            (self.screenshot_width_spinbox, self.screenshot_height_spinbox),
-            self.viewer.size,
-        ):
-            spinbox.setRange(1, 8192)
-            spinbox.setValue(int(round(value)))
-            spinbox.setEnabled(False)
-
-        # One row per dimension - side by side they would dictate a fairly
-        # large minimum width for the whole controls window
-        size_layout = QtWidgets.QGridLayout()
-        size_layout.addWidget(QtWidgets.QLabel("Width:"), 0, 0)
-        size_layout.addWidget(self.screenshot_width_spinbox, 0, 1)
-        size_layout.addWidget(QtWidgets.QLabel("Height:"), 1, 0)
-        size_layout.addWidget(self.screenshot_height_spinbox, 1, 1)
-        self.tab3_layout.addLayout(size_layout)
-
-        def toggle_custom_size(checked):
-            self.screenshot_width_spinbox.setEnabled(checked)
-            self.screenshot_height_spinbox.setEnabled(checked)
-            # Grey out the current-size label while it is overridden
-            self.screenshot_current_size_label.setEnabled(not checked)
-
-        self.screenshot_size_checkbox.toggled.connect(toggle_custom_size)
+        # Grey out the current-size label while it is overridden
+        self.screenshot_size_checkbox.toggled.connect(
+            lambda checked: self.screenshot_current_size_label.setEnabled(not checked)
+        )
 
         # Horizontal divider
         self.tab3_layout.addWidget(QHLine())
@@ -586,27 +575,24 @@ class Controls(QtWidgets.QWidget):
 
     def _screenshot_kwargs(self):
         """Collect screenshot options from the GUI."""
-        kwargs = dict(alpha=self.screenshot_alpha_checkbox.isChecked())
-        if self.screenshot_size_checkbox.isChecked():
-            kwargs["size"] = (
-                self.screenshot_width_spinbox.value(),
-                self.screenshot_height_spinbox.value(),
-            )
-            # Without this, the image dimensions would be the requested size
-            # times the renderer's pixel ratio (e.g. 2 on HiDPI screens)
-            kwargs["pixel_ratio"] = 1
-        return kwargs
+        return dict(
+            alpha=self.screenshot_alpha_checkbox.isChecked(),
+            **self._size_kwargs(
+                self.screenshot_size_checkbox,
+                self.screenshot_width_spinbox,
+                self.screenshot_height_spinbox,
+            ),
+        )
 
     def _screenshot_browse(self):
         """Open a file dialog to pick the screenshot filename."""
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self,
+        self.open_file_dialog(
             "Save screenshot",
-            self.screenshot_filename_edit.text() or "screenshot.png",
-            "PNG image (*.png)",
+            self.screenshot_filename_edit.setText,
+            initial=self.screenshot_filename_edit.text() or "screenshot.png",
+            filters=["PNG image (*.png)"],
+            default_suffix="png",
         )
-        if filename:
-            self.screenshot_filename_edit.setText(filename)
 
     def _save_screenshot(self):
         """Save a screenshot with the current GUI settings."""
@@ -645,16 +631,172 @@ class Controls(QtWidgets.QWidget):
 
     def _set_screenshot_status(self, text, timeout=5000):
         """Show a transient status message in the screenshot tab."""
-        self.screenshot_status_label.setText(text)
-        self.screenshot_status_label.setToolTip(text)
+        self.set_status(self.screenshot_status_label, text, timeout=timeout)
+
+    @staticmethod
+    def set_status(label, text, timeout=5000):
+        """Show a message on `label`, cleared again after `timeout` ms.
+
+        Pass ``timeout=None`` for a message that stays until it is replaced
+        (e.g. "Recording...").
+
+        """
+        label.setText(text)
+        label.setToolTip(text)
+        # Tag the message so that a clear scheduled for an earlier one does not
+        # wipe whatever has come in since
+        status_id = getattr(label, "_status_id", 0) + 1
+        label._status_id = status_id
+
+        if not text or timeout is None:
+            return
 
         def clear():
-            # Only clear if no newer message has replaced this one
-            if self.screenshot_status_label.text() == text:
-                self.screenshot_status_label.setText("")
-                self.screenshot_status_label.setToolTip("")
+            if getattr(label, "_status_id", None) == status_id:
+                label.setText("")
+                label.setToolTip("")
 
         QtCore.QTimer.singleShot(timeout, clear)
+
+    def open_file_dialog(
+        self,
+        title,
+        on_selected,
+        *,
+        initial=None,
+        filters=None,
+        default_suffix=None,
+        directory=False,
+    ):
+        """Ask for a file (or a directory) and report back through `on_selected`.
+
+        Note that this deliberately does *not* use the static helpers
+        (`QFileDialog.getSaveFileName` & co.): those are modal, i.e. they spin
+        an event loop of their own until the user has picked something - and
+        that nested loop does not survive every way of hosting the Qt event
+        loop. Under IPython's Qt input hook, in particular, it is quit as soon
+        as the prompt wants control back, so the dialog flashes up and vanishes
+        again. Opening the dialog non-modally and taking the answer from a
+        signal side-steps all of that.
+
+        Parameters
+        ----------
+        title :         str
+                        Window title.
+        on_selected :   callable
+                        Called with the chosen path (a str) - and not at all if
+                        the user cancels.
+        initial :       str | pathlib.Path, optional
+                        File (or, with `directory`, folder) to start at.
+        filters :       list of str, optional
+                        Name filters, e.g. ``["PNG image (*.png)"]``.
+        default_suffix : str, optional
+                        Appended if the user types a name without an extension.
+        directory :     bool
+                        Ask for a directory rather than a file.
+
+        """
+        dialog = QtWidgets.QFileDialog(self, title)
+        if directory:
+            dialog.setFileMode(QtWidgets.QFileDialog.Directory)
+            dialog.setOption(QtWidgets.QFileDialog.ShowDirsOnly, True)
+            if initial:
+                dialog.setDirectory(str(initial))
+        else:
+            dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+            if filters:
+                dialog.setNameFilters(filters)
+            if default_suffix:
+                dialog.setDefaultSuffix(default_suffix)
+            if initial:
+                dialog.selectFile(str(initial))
+        dialog.fileSelected.connect(on_selected)
+
+        # A non-modal dialog is a window of its own and nothing else holds on
+        # to it - park it here so it neither gets garbage-collected while open
+        # nor left behind when the controls close
+        self._file_dialogs.append(dialog)
+        dialog.finished.connect(lambda *_: self._forget_file_dialog(dialog))
+        dialog.open()
+        return dialog
+
+    def _forget_file_dialog(self, dialog):
+        if dialog in self._file_dialogs:
+            self._file_dialogs.remove(dialog)
+
+    def close_file_dialogs(self):
+        """Close any file dialogs this panel has open."""
+        for dialog in list(self._file_dialogs):
+            dialog.close()
+        self._file_dialogs = []
+
+    def create_size_widgets(self, layout, tooltip, minimum=1):
+        """Add a "Custom size" checkbox plus width/height spinboxes to `layout`.
+
+        The spinboxes start out at the viewer's current size and are only
+        enabled while the checkbox is ticked. See `Controls._size_kwargs` for
+        turning them back into screenshot/recording arguments.
+
+        Returns
+        -------
+        (checkbox, width_spinbox, height_spinbox)
+
+        """
+        checkbox = QtWidgets.QCheckBox("Custom size")
+        checkbox.setToolTip(tooltip)
+        layout.addWidget(checkbox)
+
+        width = QtWidgets.QSpinBox()
+        width.setToolTip("Width in pixels.")
+        height = QtWidgets.QSpinBox()
+        height.setToolTip("Height in pixels.")
+        for spinbox, value in zip((width, height), self.viewer.size):
+            spinbox.setRange(minimum, 8192)
+            spinbox.setValue(int(round(value)))
+            spinbox.setEnabled(False)
+
+        # One row per dimension - side by side they would dictate a fairly
+        # large minimum width for the whole controls window
+        size_layout = QtWidgets.QGridLayout()
+        size_layout.addWidget(QtWidgets.QLabel("Width:"), 0, 0)
+        size_layout.addWidget(width, 0, 1)
+        size_layout.addWidget(QtWidgets.QLabel("Height:"), 1, 0)
+        size_layout.addWidget(height, 1, 1)
+        layout.addLayout(size_layout)
+
+        checkbox.toggled.connect(width.setEnabled)
+        checkbox.toggled.connect(height.setEnabled)
+
+        return checkbox, width, height
+
+    @staticmethod
+    def _size_kwargs(checkbox, width, height):
+        """Screenshot/recording arguments for `create_size_widgets`' state."""
+        if not checkbox.isChecked():
+            return {}
+        # Without the pixel ratio the image would come out at the requested
+        # size times the renderer's own ratio (e.g. 2 on HiDPI screens)
+        return {"size": (width.value(), height.value()), "pixel_ratio": 1}
+
+    def make_scrolling_tab(self, tab_layout, horizontal=False):
+        """Put a tab's contents in a scroll area and return their layout.
+
+        Without this a long tab dictates the minimum height of the whole
+        controls window.
+
+        """
+        scroll_area = QtWidgets.QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
+        if not horizontal:
+            scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+
+        content = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        scroll_area.setWidget(content)
+        tab_layout.addWidget(scroll_area)
+        return layout
 
     def add_effect_section(self, title, tooltip, checked=False, collapsible=True):
         """Add a collapsible section with an on/off checkbox to the effects tab.
@@ -678,15 +820,7 @@ class Controls(QtWidgets.QWidget):
         body, so the tab stays a short list of effects.
         """
         # Expanded sections quickly add up to more than fits the window
-        scroll_area = QtWidgets.QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
-        scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        effects_widget = QtWidgets.QWidget()
-        self.effects_layout = QtWidgets.QVBoxLayout(effects_widget)
-        self.effects_layout.setContentsMargins(0, 0, 0, 0)
-        scroll_area.setWidget(effects_widget)
-        self.tab4_layout.addWidget(scroll_area)
+        self.effects_layout = self.make_scrolling_tab(self.tab4_layout)
 
         # Most of the effects require octarine's custom shaders (pygfx >=
         # 0.17); if those are unavailable we show their controls greyed-out.
@@ -940,7 +1074,9 @@ class Controls(QtWidgets.QWidget):
         # The radius is in world units, so - unlike the other parameters - its
         # slider has to be scaled to the scene; see `_fit_ao_radius_slider`
         self._updating_ao_radius = False
-        self._ao_radius_touched = ao_pass is not None and not self.viewer._ao_auto_radius
+        self._ao_radius_touched = (
+            ao_pass is not None and not self.viewer._ao_auto_radius
+        )
         ao_radius = ao_pass.radius if ao_pass else self.viewer._default_ao_radius()
 
         self.ao_radius_slider = self.create_effect_slider(
@@ -1078,7 +1214,9 @@ class Controls(QtWidgets.QWidget):
             def value(slider):
                 return slider.value() * slider._step
 
-            color = gfx.Color(outline_colors[self.outline_color_dropdown.currentIndex()][1])
+            color = gfx.Color(
+                outline_colors[self.outline_color_dropdown.currentIndex()][1]
+            )
             return dict(
                 color=(*color.rgb, value(self.outline_opacity_slider)),
                 thickness=value(self.outline_thickness_slider),
@@ -1211,9 +1349,7 @@ class Controls(QtWidgets.QWidget):
 
         def toggle_silhouette(checked):
             slider = self.silhouette_slider
-            self.viewer.set_silhouette(
-                slider.value() * slider._step if checked else 0
-            )
+            self.viewer.set_silhouette(slider.value() * slider._step if checked else 0)
             slider.setEnabled(checked)
 
         self.silhouette_checkbox.toggled.connect(toggle_silhouette)
@@ -1253,9 +1389,7 @@ class Controls(QtWidgets.QWidget):
 
         def toggle_subsurface(checked):
             slider = self.subsurface_slider
-            self.viewer.set_subsurface(
-                slider.value() * slider._step if checked else 0
-            )
+            self.viewer.set_subsurface(slider.value() * slider._step if checked else 0)
             slider.setEnabled(checked)
 
         self.subsurface_checkbox.toggled.connect(toggle_subsurface)
@@ -1555,7 +1689,9 @@ class Controls(QtWidgets.QWidget):
         self.dof_focus_dropdown.setCurrentIndex(1 if dof_fix else 0)
         self.dof_focus_row.setVisible(dof_fix)
         self.dof_snap_row.setVisible(not dof_fix)
-        self.dof_smooth_checkbox.setChecked(dof_pass is not None and dof_pass.smooth > 0)
+        self.dof_smooth_checkbox.setChecked(
+            dof_pass is not None and dof_pass.smooth > 0
+        )
         self.dof_smooth_checkbox.setVisible(not dof_fix)
         self.dof_focus_marker_checkbox.setVisible(not dof_fix)
         if dof_fix:
@@ -1636,7 +1772,9 @@ class Controls(QtWidgets.QWidget):
         if "aces" in tonemap_modes:
             self.tonemap_dropdown.setCurrentIndex(tonemap_modes.index("aces"))
         if tonemap_on and tonemap_pass.mode in tonemap_modes:
-            self.tonemap_dropdown.setCurrentIndex(tonemap_modes.index(tonemap_pass.mode))
+            self.tonemap_dropdown.setCurrentIndex(
+                tonemap_modes.index(tonemap_pass.mode)
+            )
         tonemap_row.addWidget(self.tonemap_dropdown)
         self.tonemap_section.content_layout.addLayout(tonemap_row)
 
@@ -1648,8 +1786,10 @@ class Controls(QtWidgets.QWidget):
                 # The slider is in stops, which is how exposure is normally
                 # thought about: +1 is twice as bright
                 exposure=2.0
-                ** (self.tonemap_exposure_slider.value()
-                    * self.tonemap_exposure_slider._step),
+                ** (
+                    self.tonemap_exposure_slider.value()
+                    * self.tonemap_exposure_slider._step
+                ),
                 white_point=self.tonemap_white_slider.value()
                 * self.tonemap_white_slider._step,
             )
@@ -2211,7 +2351,9 @@ class Controls(QtWidgets.QWidget):
         item_layout.addWidget(content_widget)
 
         def toggle_group(expanded):
-            header.setArrowType(QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow)
+            header.setArrowType(
+                QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow
+            )
             if expanded:
                 self._materialize_group_members(item_widget)
             content_widget.setVisible(expanded)
@@ -2353,9 +2495,9 @@ class Controls(QtWidgets.QWidget):
                 continue
 
             grouped_ids[object_group] = grouped_ids.get(object_group, {})
-            grouped_ids[object_group][object_id] = (
-                grouped_ids[object_group].get(object_id, []) + [vis]
-            )
+            grouped_ids[object_group][object_id] = grouped_ids[object_group].get(
+                object_id, []
+            ) + [vis]
 
         # Build a unified legend spec for add/update/remove bookkeeping.
         legend_entries = {}
@@ -2478,7 +2620,9 @@ class Controls(QtWidgets.QWidget):
                     line_push_button = next(
                         (
                             button
-                            for button in member_widget.findChildren(QtWidgets.QPushButton)
+                            for button in member_widget.findChildren(
+                                QtWidgets.QPushButton
+                            )
                             if button.property("legend_role") == "control"
                         ),
                         None,
@@ -2553,7 +2697,9 @@ class Controls(QtWidgets.QWidget):
                     None,
                 )
                 if group_checkbox is not None:
-                    visible_count = sum(member_id in visible for member_id in member_ids)
+                    visible_count = sum(
+                        member_id in visible for member_id in member_ids
+                    )
                     is_mixed = 0 < visible_count < len(member_ids)
 
                     group_checkbox.blockSignals(True)
@@ -2577,7 +2723,9 @@ class Controls(QtWidgets.QWidget):
                 member_ids = [item._id]
 
             for member_id in member_ids:
-                line_checkbox = item_widget.findChild(QtWidgets.QCheckBox, str(member_id))
+                line_checkbox = item_widget.findChild(
+                    QtWidgets.QCheckBox, str(member_id)
+                )
                 if line_checkbox:
                     # N.B. signals must be blocked here: the visuals already
                     # have the visibility we are about to display (that is where
@@ -2609,7 +2757,10 @@ class Controls(QtWidgets.QWidget):
 
         # Re-apply an active filter so rows added/removed above stay consistent
         # with the current search text.
-        if getattr(self, "legend_filter", None) is not None and self.legend_filter.text():
+        if (
+            getattr(self, "legend_filter", None) is not None
+            and self.legend_filter.text()
+        ):
             self.filter_legend(self.legend_filter.text())
 
     @connect_color_picker
@@ -2648,8 +2799,7 @@ class Controls(QtWidgets.QWidget):
             cmap = {name: tuple(rgba) for name in targets}
         else:
             cmap = {
-                name: tuple(rgba[:3]) + (self._current_alpha(name),)
-                for name in targets
+                name: tuple(rgba[:3]) + (self._current_alpha(name),) for name in targets
             }
 
         self.viewer.set_colors(cmap)
@@ -3061,9 +3211,13 @@ class Controls(QtWidgets.QWidget):
             Controls._active_color_controls = None
         # Stop tracking the depth-of-field focus point (if we were)
         self._set_dof_focus_marker(False)
+        # Stop any animation preview / recording that is still running
+        self._anim_cleanup()
         self.color_picker.hide()
         if getattr(self, "_point_size_popup", None) is not None:
             self._point_size_popup.hide()
+        # Our file dialogs are windows of their own and would be left behind
+        self.close_file_dialogs()
         super().close()
 
 
@@ -3119,9 +3273,7 @@ class ElidedLabel(QtWidgets.QLabel):
         painter.setPen(
             QtGui.QColor("yellow") if self._selected else QtGui.QColor("white")
         )
-        painter.drawText(
-            rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, elided
-        )
+        painter.drawText(rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, elided)
 
     def mousePressEvent(self, event):
         # Accept the press so the matching release (and our `clicked` signal) is
@@ -3132,9 +3284,7 @@ class ElidedLabel(QtWidgets.QLabel):
             super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton and self.rect().contains(
-            event.pos()
-        ):
+        if event.button() == QtCore.Qt.LeftButton and self.rect().contains(event.pos()):
             self.clicked.emit()
         super().mouseReleaseEvent(event)
 

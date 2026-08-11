@@ -326,7 +326,7 @@ into the shader, so this has to happen before you make a viewer:
 
 ## GUI Controls
 
-The control panel is organized into four tabs:
+The control panel is organized into five tabs:
 
 ![picking controls](_static/picking_controls.png)
 
@@ -349,6 +349,10 @@ The control panel is organized into four tabs:
   [depth of field](effects.md#depth-of-field). The checkbox switches an
   effect on, the arrow next to it expands its parameters - see
   [Effects & Shading](effects.md).
+- **Animation**: set up an orbit around the scene (or around the objects
+  selected in the legend), or fly through views you captured yourself, then
+  preview it in the viewer and record it to a video - see
+  [Animations](animations.md#the-animation-tab).
 
 ### Shell/IPython
 `Octarine` GUI controls when run from the shell currently
