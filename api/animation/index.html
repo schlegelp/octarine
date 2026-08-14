@@ -1,0 +1,1318 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Fast and easy-to-use 3D Viewer for Python"><link href="https://schlegelp.github.io/octarine/api/animation/" rel="canonical"><link href="../viewer/" rel="prev"><link href="../selection/" rel="next"><link rel="icon" href="../../images/favicon-32x32.png"><meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7"><title>Animation - octarine</title><link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css"><link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css"><link rel="stylesheet" href="../../assets/external/fonts.googleapis.com/css.49ea35f2.css"><style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style><link rel="stylesheet" href="../../assets/_mkdocstrings.css"><link rel="stylesheet" href="../../stylesheets/extra.css"><script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script><link rel="apple-touch-icon" sizes="180x180" href="../../images/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="../../images/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="../../images/favicon-16x16.png"><link rel="manifest" href="../../images/site.webmanifest"><meta property="og:type" content="website"><meta property="og:title" content="Animation - octarine"><meta property="og:description" content="Fast and easy-to-use 3D Viewer for Python"><meta property="og:image" content="https://schlegelp.github.io/octarine/assets/images/social/api/animation.png"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta content="https://schlegelp.github.io/octarine/api/animation/" property="og:url"><meta property="twitter:card" content="summary_large_image"><meta property="twitter:title" content="Animation - octarine"><meta property="twitter:description" content="Fast and easy-to-use 3D Viewer for Python"><meta property="twitter:image" content="https://schlegelp.github.io/octarine/assets/images/social/api/animation.png"><link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head> <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"> <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off"> <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off"> <label class="md-overlay" for="__drawer"></label> <div data-md-component="skip"> <a href="#octarineanimation" class="md-skip"> Skip to content </a> </div> <div data-md-component="announce"> </div> <header class="md-header md-header--shadow" data-md-component="header"> <nav class="md-header__inner md-grid" aria-label="Header"> <a href="../.." title="octarine" class="md-header__button md-logo" aria-label="octarine" data-md-component="logo"> <img src="../../images/icon.png" alt="logo"> </a> <label class="md-header__button md-icon" for="__drawer"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg> </label> <div class="md-header__title" data-md-component="header-title"> <div class="md-header__ellipsis"> <div class="md-header__topic"> <span class="md-ellipsis"> octarine </span> </div> <div class="md-header__topic" data-md-component="header-topic"> <span class="md-ellipsis"> Animation </span> </div> </div> </div> <form class="md-header__option" data-md-component="palette"> <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo" aria-label="Switch to dark mode" type="radio" name="__palette" id="__palette_0"> <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden=""> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M296.5 291.1C321 265.2 336 230.4 336 192c0-79.5-64.5-144-144-144S48 112.5 48 192c0 38.4 15 73.2 39.5 99.1 21.3 22.4 44.9 54 53.3 92.9h102.4c8.4-39 32-70.5 53.3-92.9m34.8 33C307.7 349 288 379.4 288 413.7V432c0 44.2-35.8 80-80 80h-32c-44.2 0-80-35.8-80-80v-18.3c0-34.3-19.7-64.7-43.3-89.6C20 289.7 0 243.2 0 192 0 86 86 0 192 0s192 86 192 192c0 51.2-20 97.7-52.7 132.1M144 184c0 13.3-10.7 24-24 24s-24-10.7-24-24c0-48.6 39.4-88 88-88 13.3 0 24 10.7 24 24s-10.7 24-24 24c-22.1 0-40 17.9-40 40"></path></svg> </label> <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="pink" data-md-color-accent="pink" aria-label="Switch to light mode" type="radio" name="__palette" id="__palette_1"> <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden=""> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M292.9 384c7.3-22.3 21.9-42.5 38.4-59.9C364 289.7 384 243.2 384 192 384 86 298 0 192 0S0 86 0 192c0 51.2 20 97.7 52.7 132.1 16.5 17.4 31.2 37.6 38.4 59.9h201.7zm-4.9 48H96v16c0 44.2 35.8 80 80 80h32c44.2 0 80-35.8 80-80zM184 112c-39.8 0-72 32.2-72 72 0 13.3-10.7 24-24 24s-24-10.7-24-24c0-66.3 53.7-120 120-120 13.3 0 24 10.7 24 24s-10.7 24-24 24"></path></svg> </label> </form> <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script> <label class="md-header__button md-icon" for="__search"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg> </label> <div class="md-search" data-md-component="search" role="dialog"> <label class="md-search__overlay" for="__search"></label> <div class="md-search__inner" role="search"> <form class="md-search__form" name="search"> <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required=""> <label class="md-search__icon md-icon" for="__search"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg> </label> <nav class="md-search__options" aria-label="Search"> <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg> </button> </nav> </form> <div class="md-search__output"> <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix=""> <div class="md-search-result" data-md-component="search-result"> <div class="md-search-result__meta"> Initializing search </div> <ol class="md-search-result__list" role="presentation"></ol> </div> </div> </div> </div> </div> <div class="md-header__source"> <a href="https://github.com/schlegelp/octarine" title="Go to repository" class="md-source" data-md-component="source"> <div class="md-source__icon md-icon"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg> </div> <div class="md-source__repository"> schlegelp/octarine </div> </a> </div> </nav> </header> <div class="md-container" data-md-component="container"> <main class="md-main" data-md-component="main"> <div class="md-main__inner md-grid"> <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation"> <div class="md-sidebar__scrollwrap"> <div class="md-sidebar__inner"> <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0"> <label class="md-nav__title" for="__drawer"> <a href="../.." title="octarine" class="md-nav__button md-logo" aria-label="octarine" data-md-component="logo"> <img src="../../images/icon.png" alt="logo"> </a> octarine </label> <div class="md-nav__source"> <a href="https://github.com/schlegelp/octarine" title="Go to repository" class="md-source" data-md-component="source"> <div class="md-source__icon md-icon"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg> </div> <div class="md-source__repository"> schlegelp/octarine </div> </a> </div> <ul class="md-nav__list" data-md-scrollfix=""> <li class="md-nav__item"> <a href="../.." class="md-nav__link"> <span class="md-ellipsis"> Home </span> </a> </li> <li class="md-nav__item"> <a href="../../install/" class="md-nav__link"> <span class="md-ellipsis"> Installation </span> </a> </li> <li class="md-nav__item"> <a href="../../intro/" class="md-nav__link"> <span class="md-ellipsis"> The Basics </span> </a> </li> <li class="md-nav__item"> <a href="../../objects/" class="md-nav__link"> <span class="md-ellipsis"> Adding Objects </span> </a> </li> <li class="md-nav__item"> <a href="../../manage/" class="md-nav__link"> <span class="md-ellipsis"> Managing Objects </span> </a> </li> <li class="md-nav__item"> <a href="../../controls/" class="md-nav__link"> <span class="md-ellipsis"> Viewer Controls </span> </a> </li> <li class="md-nav__item"> <a href="../../selections/" class="md-nav__link"> <span class="md-ellipsis"> Selecting Objects </span> </a> </li> <li class="md-nav__item"> <a href="../../effects/" class="md-nav__link"> <span class="md-ellipsis"> Effects &amp; Shading </span> </a> </li> <li class="md-nav__item"> <a href="../../animations/" class="md-nav__link"> <span class="md-ellipsis"> Animations </span> </a> </li> <li class="md-nav__item"> <a href="../../triggers/" class="md-nav__link"> <span class="md-ellipsis"> Render Triggers </span> </a> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11"> <div class="md-nav__link md-nav__container"> <a href="../../extending/" class="md-nav__link "> <span class="md-ellipsis"> Extending Octarine </span> </a> <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="0"> <span class="md-nav__icon md-icon"></span> </label> </div> <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false"> <label class="md-nav__title" for="__nav_11"> <span class="md-nav__icon md-icon"></span> Extending Octarine </label> <ul class="md-nav__list" data-md-scrollfix=""> <li class="md-nav__item"> <a href="../../extending/converters/" class="md-nav__link"> <span class="md-ellipsis"> Custom Converters </span> </a> </li> <li class="md-nav__item"> <a href="../../extending/plugins/" class="md-nav__link"> <span class="md-ellipsis"> Plugins </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="../../changelog/" class="md-nav__link"> <span class="md-ellipsis"> Changelog </span> </a> </li> <li class="md-nav__item"> <a href="../../faq/" class="md-nav__link"> <span class="md-ellipsis"> FAQ </span> </a> </li> <li class="md-nav__item md-nav__item--active md-nav__item--nested"> <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" checked=""> <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="0"> <span class="md-ellipsis"> API </span> <span class="md-nav__icon md-icon"></span> </label> <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="true"> <label class="md-nav__title" for="__nav_14"> <span class="md-nav__icon md-icon"></span> API </label> <ul class="md-nav__list" data-md-scrollfix=""> <li class="md-nav__item"> <a href="../viewer/" class="md-nav__link"> <span class="md-ellipsis"> Viewer </span> </a> </li> <li class="md-nav__item md-nav__item--active"> <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc"> <label class="md-nav__link md-nav__link--active" for="__toc"> <span class="md-ellipsis"> Animation </span> <span class="md-nav__icon md-icon"></span> </label> <a href="./" class="md-nav__link md-nav__link--active"> <span class="md-ellipsis"> Animation </span> </a> <nav class="md-nav md-nav--secondary" aria-label="Table of contents"> <label class="md-nav__title" for="__toc"> <span class="md-nav__icon md-icon"></span> Table of contents </label> <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix=""> <li class="md-nav__item"> <a href="#octarine.Animation" class="md-nav__link"> <span class="md-ellipsis"> Animation </span> </a> <nav class="md-nav" aria-label="Animation"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.Animation.current_state" class="md-nav__link"> <span class="md-ellipsis"> current_state </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.duration" class="md-nav__link"> <span class="md-ellipsis"> duration </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.n_frames" class="md-nav__link"> <span class="md-ellipsis"> n_frames </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.playing" class="md-nav__link"> <span class="md-ellipsis"> playing </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.clear" class="md-nav__link"> <span class="md-ellipsis"> clear </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.hold" class="md-nav__link"> <span class="md-ellipsis"> hold </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.move_to" class="md-nav__link"> <span class="md-ellipsis"> move_to </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.orbit" class="md-nav__link"> <span class="md-ellipsis"> orbit </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.play" class="md-nav__link"> <span class="md-ellipsis"> play </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.recorder" class="md-nav__link"> <span class="md-ellipsis"> recorder </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.render" class="md-nav__link"> <span class="md-ellipsis"> render </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.set_time" class="md-nav__link"> <span class="md-ellipsis"> set_time </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.start_at" class="md-nav__link"> <span class="md-ellipsis"> start_at </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.stop" class="md-nav__link"> <span class="md-ellipsis"> stop </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.times" class="md-nav__link"> <span class="md-ellipsis"> times </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.zoom" class="md-nav__link"> <span class="md-ellipsis"> zoom </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.EASINGS" class="md-nav__link"> <span class="md-ellipsis"> EASINGS </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Recorder" class="md-nav__link"> <span class="md-ellipsis"> Recorder </span> </a> <nav class="md-nav" aria-label="Recorder"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.anim_utils.Recorder.cancel" class="md-nav__link"> <span class="md-ellipsis"> cancel </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Recorder.finish" class="md-nav__link"> <span class="md-ellipsis"> finish </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Recorder.step" class="md-nav__link"> <span class="md-ellipsis"> step </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Segment" class="md-nav__link"> <span class="md-ellipsis"> Segment </span> </a> <nav class="md-nav" aria-label="Segment"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.anim_utils.Segment.apply" class="md-nav__link"> <span class="md-ellipsis"> apply </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Segment.progress" class="md-nav__link"> <span class="md-ellipsis"> progress </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Track" class="md-nav__link"> <span class="md-ellipsis"> Track </span> </a> <nav class="md-nav" aria-label="Track"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.anim_utils.Track.append" class="md-nav__link"> <span class="md-ellipsis"> append </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Track.segment_at" class="md-nav__link"> <span class="md-ellipsis"> segment_at </span> </a> </li> </ul> </nav> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="../selection/" class="md-nav__link"> <span class="md-ellipsis"> Selection </span> </a> </li> <li class="md-nav__item"> <a href="../shaders/" class="md-nav__link"> <span class="md-ellipsis"> Shaders </span> </a> </li> <li class="md-nav__item"> <a href="../utils/" class="md-nav__link"> <span class="md-ellipsis"> Utility </span> </a> </li> </ul> </nav> </li> </ul> </nav> </div> </div> </div> <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc"> <div class="md-sidebar__scrollwrap"> <div class="md-sidebar__inner"> <nav class="md-nav md-nav--secondary" aria-label="Table of contents"> <label class="md-nav__title" for="__toc"> <span class="md-nav__icon md-icon"></span> Table of contents </label> <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix=""> <li class="md-nav__item"> <a href="#octarine.Animation" class="md-nav__link"> <span class="md-ellipsis"> Animation </span> </a> <nav class="md-nav" aria-label="Animation"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.Animation.current_state" class="md-nav__link"> <span class="md-ellipsis"> current_state </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.duration" class="md-nav__link"> <span class="md-ellipsis"> duration </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.n_frames" class="md-nav__link"> <span class="md-ellipsis"> n_frames </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.playing" class="md-nav__link"> <span class="md-ellipsis"> playing </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.clear" class="md-nav__link"> <span class="md-ellipsis"> clear </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.hold" class="md-nav__link"> <span class="md-ellipsis"> hold </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.move_to" class="md-nav__link"> <span class="md-ellipsis"> move_to </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.orbit" class="md-nav__link"> <span class="md-ellipsis"> orbit </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.play" class="md-nav__link"> <span class="md-ellipsis"> play </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.recorder" class="md-nav__link"> <span class="md-ellipsis"> recorder </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.render" class="md-nav__link"> <span class="md-ellipsis"> render </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.set_time" class="md-nav__link"> <span class="md-ellipsis"> set_time </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.start_at" class="md-nav__link"> <span class="md-ellipsis"> start_at </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.stop" class="md-nav__link"> <span class="md-ellipsis"> stop </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.times" class="md-nav__link"> <span class="md-ellipsis"> times </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.Animation.zoom" class="md-nav__link"> <span class="md-ellipsis"> zoom </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.EASINGS" class="md-nav__link"> <span class="md-ellipsis"> EASINGS </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Recorder" class="md-nav__link"> <span class="md-ellipsis"> Recorder </span> </a> <nav class="md-nav" aria-label="Recorder"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.anim_utils.Recorder.cancel" class="md-nav__link"> <span class="md-ellipsis"> cancel </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Recorder.finish" class="md-nav__link"> <span class="md-ellipsis"> finish </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Recorder.step" class="md-nav__link"> <span class="md-ellipsis"> step </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Segment" class="md-nav__link"> <span class="md-ellipsis"> Segment </span> </a> <nav class="md-nav" aria-label="Segment"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.anim_utils.Segment.apply" class="md-nav__link"> <span class="md-ellipsis"> apply </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Segment.progress" class="md-nav__link"> <span class="md-ellipsis"> progress </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Track" class="md-nav__link"> <span class="md-ellipsis"> Track </span> </a> <nav class="md-nav" aria-label="Track"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.anim_utils.Track.append" class="md-nav__link"> <span class="md-ellipsis"> append </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.anim_utils.Track.segment_at" class="md-nav__link"> <span class="md-ellipsis"> segment_at </span> </a> </li> </ul> </nav> </li> </ul> </nav> </div> </div> </div> <div class="md-content" data-md-component="content"> <article class="md-content__inner md-typeset"> <h1 id="octarineanimation">octarine.Animation<a class="headerlink" href="#octarineanimation" title="Permanent link">#</a></h1> <div class="doc doc-object doc-class"> <h2 id="octarine.Animation" class="doc doc-heading"> <code>octarine.Animation</code> <a href="#octarine.Animation" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>A timeline of camera moves that can be played or rendered to a video.</p> <p>Segments are appended one after the other; each starts where the previous one ended, so a timeline reads much like the animation itself:</p> <blockquote> <blockquote> <blockquote> <p>anim = oc.Animation(v) # doctest: +SKIP anim.orbit(duration=6) # one turn around the scene anim.move_to("XZ", duration=2) # swing round to the lateral view anim.hold(1) # ... and stay there for a second anim.render("tour.mp4")</p> </blockquote> </blockquote> </blockquote> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>viewer</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Viewer to animate.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> Viewer</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>fps</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Frames per second used when rendering (and the rate the
+    preview aims for, capped by ``viewer.max_fps``).
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> int</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>30</code> </span> </p> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">455</span>
+<span class="normal">456</span>
+<span class="normal">457</span>
+<span class="normal">458</span>
+<span class="normal">459</span>
+<span class="normal">460</span>
+<span class="normal">461</span>
+<span class="normal">462</span>
+<span class="normal">463</span>
+<span class="normal">464</span>
+<span class="normal">465</span>
+<span class="normal">466</span>
+<span class="normal">467</span>
+<span class="normal">468</span>
+<span class="normal">469</span>
+<span class="normal">470</span>
+<span class="normal">471</span>
+<span class="normal">472</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span>
+<span class="normal">476</span>
+<span class="normal">477</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span>
+<span class="normal">496</span>
+<span class="normal">497</span>
+<span class="normal">498</span>
+<span class="normal">499</span>
+<span class="normal">500</span>
+<span class="normal">501</span>
+<span class="normal">502</span>
+<span class="normal">503</span>
+<span class="normal">504</span>
+<span class="normal">505</span>
+<span class="normal">506</span>
+<span class="normal">507</span>
+<span class="normal">508</span>
+<span class="normal">509</span>
+<span class="normal">510</span>
+<span class="normal">511</span>
+<span class="normal">512</span>
+<span class="normal">513</span>
+<span class="normal">514</span>
+<span class="normal">515</span>
+<span class="normal">516</span>
+<span class="normal">517</span>
+<span class="normal">518</span>
+<span class="normal">519</span>
+<span class="normal">520</span>
+<span class="normal">521</span>
+<span class="normal">522</span>
+<span class="normal">523</span>
+<span class="normal">524</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span>
+<span class="normal">538</span>
+<span class="normal">539</span>
+<span class="normal">540</span>
+<span class="normal">541</span>
+<span class="normal">542</span>
+<span class="normal">543</span>
+<span class="normal">544</span>
+<span class="normal">545</span>
+<span class="normal">546</span>
+<span class="normal">547</span>
+<span class="normal">548</span>
+<span class="normal">549</span>
+<span class="normal">550</span>
+<span class="normal">551</span>
+<span class="normal">552</span>
+<span class="normal">553</span>
+<span class="normal">554</span>
+<span class="normal">555</span>
+<span class="normal">556</span>
+<span class="normal">557</span>
+<span class="normal">558</span>
+<span class="normal">559</span>
+<span class="normal">560</span>
+<span class="normal">561</span>
+<span class="normal">562</span>
+<span class="normal">563</span>
+<span class="normal">564</span>
+<span class="normal">565</span>
+<span class="normal">566</span>
+<span class="normal">567</span>
+<span class="normal">568</span>
+<span class="normal">569</span>
+<span class="normal">570</span>
+<span class="normal">571</span>
+<span class="normal">572</span>
+<span class="normal">573</span>
+<span class="normal">574</span>
+<span class="normal">575</span>
+<span class="normal">576</span>
+<span class="normal">577</span>
+<span class="normal">578</span>
+<span class="normal">579</span>
+<span class="normal">580</span>
+<span class="normal">581</span>
+<span class="normal">582</span>
+<span class="normal">583</span>
+<span class="normal">584</span>
+<span class="normal">585</span>
+<span class="normal">586</span>
+<span class="normal">587</span>
+<span class="normal">588</span>
+<span class="normal">589</span>
+<span class="normal">590</span>
+<span class="normal">591</span>
+<span class="normal">592</span>
+<span class="normal">593</span>
+<span class="normal">594</span>
+<span class="normal">595</span>
+<span class="normal">596</span>
+<span class="normal">597</span>
+<span class="normal">598</span>
+<span class="normal">599</span>
+<span class="normal">600</span>
+<span class="normal">601</span>
+<span class="normal">602</span>
+<span class="normal">603</span>
+<span class="normal">604</span>
+<span class="normal">605</span>
+<span class="normal">606</span>
+<span class="normal">607</span>
+<span class="normal">608</span>
+<span class="normal">609</span>
+<span class="normal">610</span>
+<span class="normal">611</span>
+<span class="normal">612</span>
+<span class="normal">613</span>
+<span class="normal">614</span>
+<span class="normal">615</span>
+<span class="normal">616</span>
+<span class="normal">617</span>
+<span class="normal">618</span>
+<span class="normal">619</span>
+<span class="normal">620</span>
+<span class="normal">621</span>
+<span class="normal">622</span>
+<span class="normal">623</span>
+<span class="normal">624</span>
+<span class="normal">625</span>
+<span class="normal">626</span>
+<span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span>
+<span class="normal">631</span>
+<span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span>
+<span class="normal">642</span>
+<span class="normal">643</span>
+<span class="normal">644</span>
+<span class="normal">645</span>
+<span class="normal">646</span>
+<span class="normal">647</span>
+<span class="normal">648</span>
+<span class="normal">649</span>
+<span class="normal">650</span>
+<span class="normal">651</span>
+<span class="normal">652</span>
+<span class="normal">653</span>
+<span class="normal">654</span>
+<span class="normal">655</span>
+<span class="normal">656</span>
+<span class="normal">657</span>
+<span class="normal">658</span>
+<span class="normal">659</span>
+<span class="normal">660</span>
+<span class="normal">661</span>
+<span class="normal">662</span>
+<span class="normal">663</span>
+<span class="normal">664</span>
+<span class="normal">665</span>
+<span class="normal">666</span>
+<span class="normal">667</span>
+<span class="normal">668</span>
+<span class="normal">669</span>
+<span class="normal">670</span>
+<span class="normal">671</span>
+<span class="normal">672</span>
+<span class="normal">673</span>
+<span class="normal">674</span>
+<span class="normal">675</span>
+<span class="normal">676</span>
+<span class="normal">677</span>
+<span class="normal">678</span>
+<span class="normal">679</span>
+<span class="normal">680</span>
+<span class="normal">681</span>
+<span class="normal">682</span>
+<span class="normal">683</span>
+<span class="normal">684</span>
+<span class="normal">685</span>
+<span class="normal">686</span>
+<span class="normal">687</span>
+<span class="normal">688</span>
+<span class="normal">689</span>
+<span class="normal">690</span>
+<span class="normal">691</span>
+<span class="normal">692</span>
+<span class="normal">693</span>
+<span class="normal">694</span>
+<span class="normal">695</span>
+<span class="normal">696</span>
+<span class="normal">697</span>
+<span class="normal">698</span>
+<span class="normal">699</span>
+<span class="normal">700</span>
+<span class="normal">701</span>
+<span class="normal">702</span>
+<span class="normal">703</span>
+<span class="normal">704</span>
+<span class="normal">705</span>
+<span class="normal">706</span>
+<span class="normal">707</span>
+<span class="normal">708</span>
+<span class="normal">709</span>
+<span class="normal">710</span>
+<span class="normal">711</span>
+<span class="normal">712</span>
+<span class="normal">713</span>
+<span class="normal">714</span>
+<span class="normal">715</span>
+<span class="normal">716</span>
+<span class="normal">717</span>
+<span class="normal">718</span>
+<span class="normal">719</span>
+<span class="normal">720</span>
+<span class="normal">721</span>
+<span class="normal">722</span>
+<span class="normal">723</span>
+<span class="normal">724</span>
+<span class="normal">725</span>
+<span class="normal">726</span>
+<span class="normal">727</span>
+<span class="normal">728</span>
+<span class="normal">729</span>
+<span class="normal">730</span>
+<span class="normal">731</span>
+<span class="normal">732</span>
+<span class="normal">733</span>
+<span class="normal">734</span>
+<span class="normal">735</span>
+<span class="normal">736</span>
+<span class="normal">737</span>
+<span class="normal">738</span>
+<span class="normal">739</span>
+<span class="normal">740</span>
+<span class="normal">741</span>
+<span class="normal">742</span>
+<span class="normal">743</span>
+<span class="normal">744</span>
+<span class="normal">745</span>
+<span class="normal">746</span>
+<span class="normal">747</span>
+<span class="normal">748</span>
+<span class="normal">749</span>
+<span class="normal">750</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span>
+<span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span>
+<span class="normal">757</span>
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span>
+<span class="normal">761</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span>
+<span class="normal">788</span>
+<span class="normal">789</span>
+<span class="normal">790</span>
+<span class="normal">791</span>
+<span class="normal">792</span>
+<span class="normal">793</span>
+<span class="normal">794</span>
+<span class="normal">795</span>
+<span class="normal">796</span>
+<span class="normal">797</span>
+<span class="normal">798</span>
+<span class="normal">799</span>
+<span class="normal">800</span>
+<span class="normal">801</span>
+<span class="normal">802</span>
+<span class="normal">803</span>
+<span class="normal">804</span>
+<span class="normal">805</span>
+<span class="normal">806</span>
+<span class="normal">807</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">Animation</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A timeline of camera moves that can be played or rendered to a video.</span>
+
+<span class="sd">    Segments are appended one after the other; each starts where the previous</span>
+<span class="sd">    one ended, so a timeline reads much like the animation itself:</span>
+
+<span class="sd">    &gt;&gt;&gt; anim = oc.Animation(v)                              # doctest: +SKIP</span>
+<span class="sd">    &gt;&gt;&gt; anim.orbit(duration=6)          # one turn around the scene</span>
+<span class="sd">    &gt;&gt;&gt; anim.move_to("XZ", duration=2)  # swing round to the lateral view</span>
+<span class="sd">    &gt;&gt;&gt; anim.hold(1)                    # ... and stay there for a second</span>
+<span class="sd">    &gt;&gt;&gt; anim.render("tour.mp4")</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    viewer :    Viewer</span>
+<span class="sd">                Viewer to animate.</span>
+<span class="sd">    fps :       int</span>
+<span class="sd">                Frames per second used when rendering (and the rate the</span>
+<span class="sd">                preview aims for, capped by ``viewer.max_fps``).</span>
+
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">viewer</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">viewer</span> <span class="o">=</span> <span class="n">viewer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fps</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fps</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">camera</span> <span class="o">=</span> <span class="n">CameraTrack</span><span class="p">()</span>
+        <span class="c1">#: All tracks on this animation. Camera-only for now, but a track</span>
+        <span class="c1">#: animating e.g. object visibility would simply be added here.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tracks</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_start_state</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># where the timeline picks up from</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_playback</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># the function registered with the viewer</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"&lt;Animation </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">s @ </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">fps</span><span class="si">}</span><span class="s2"> fps, "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="p">)</span><span class="si">}</span><span class="s2"> camera segment(s)&gt;"</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">duration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Length of the animation in seconds."""</span>
+        <span class="k">return</span> <span class="nb">max</span><span class="p">((</span><span class="n">track</span><span class="o">.</span><span class="n">duration</span> <span class="k">for</span> <span class="n">track</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracks</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">n_frames</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Number of frames this animation renders to."""</span>
+        <span class="k">return</span> <span class="n">frame_count</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fps</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">current_state</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Camera state the next segment will start from."""</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">end_state</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">state</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start_state</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_start_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="o">.</span><span class="n">get_view</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start_state</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Remove all segments."""</span>
+        <span class="k">for</span> <span class="n">track</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracks</span><span class="p">:</span>
+            <span class="n">track</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_start_state</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">start_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Set the view the timeline starts from, without animating to it.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        view :  str | dict, optional</span>
+<span class="sd">                A view as accepted by `Viewer.set_view` (e.g. ``"XY"``) or a</span>
+<span class="sd">                camera state. Defaults to the viewer's current view.</span>
+
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">segments</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"`start_at` only works on an empty timeline - use `move_to` to "</span>
+                <span class="s2">"jump to a view mid-animation."</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_start_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_as_state</span><span class="p">(</span><span class="n">view</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">hold</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Stay on the current view for `duration` seconds."""</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Hold</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_state</span><span class="p">,</span> <span class="n">duration</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">orbit</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">turns</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">duration</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+        <span class="n">axis</span><span class="o">=</span><span class="s2">"up"</span><span class="p">,</span>
+        <span class="n">recenter</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">easing</span><span class="o">=</span><span class="s2">"linear"</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Circle the camera around object(s).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        objects :   str | list of str | visual(s), optional</span>
+<span class="sd">                    What to orbit around, given as object ID(s) as shown in the</span>
+<span class="sd">                    legend (or the visuals themselves). Defaults to everything</span>
+<span class="sd">                    on the viewer.</span>
+<span class="sd">        turns :     float</span>
+<span class="sd">                    Number of turns. Negative values orbit the other way.</span>
+<span class="sd">        duration :  float</span>
+<span class="sd">                    Seconds the orbit takes.</span>
+<span class="sd">        axis :      "up" | "x" | "y" | "z" | "view" | (3, ) vector</span>
+<span class="sd">                    Axis to rotate about. The default, ``"up"``, is the scene's</span>
+<span class="sd">                    up direction (the camera's ``reference_up``) and gives a</span>
+<span class="sd">                    turntable rotation from whatever view you start at. Prefix</span>
+<span class="sd">                    with ``-`` to flip it.</span>
+<span class="sd">        recenter :  bool</span>
+<span class="sd">                    If True (default), frame `objects` before orbiting: the</span>
+<span class="sd">                    pivot is the centre of their bounding box and the camera is</span>
+<span class="sd">                    moved to fit them in view. If False, keep the current view</span>
+<span class="sd">                    and orbit around whatever the camera is already looking at</span>
+<span class="sd">                    - use this to animate exactly what you see on screen.</span>
+<span class="sd">        scale :     float</span>
+<span class="sd">                    Only with ``recenter=True``: how much of the viewport the</span>
+<span class="sd">                    objects fill. Values &gt; 1 zoom out.</span>
+<span class="sd">        easing :    str | callable</span>
+<span class="sd">                    See `octarine.anim_utils.EASINGS`. Note that anything but</span>
+<span class="sd">                    ``"linear"`` will make a full turn start and/or end slowly.</span>
+
+<span class="sd">        """</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_state</span>
+        <span class="k">if</span> <span class="n">recenter</span><span class="p">:</span>
+            <span class="n">pivot</span><span class="p">,</span> <span class="n">radius</span> <span class="o">=</span> <span class="n">_bounding_sphere</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="n">_framed_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="p">,</span> <span class="n">pivot</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">scale</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">objects</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">pivot</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_bounding_sphere</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">pivot</span> <span class="o">=</span> <span class="n">_pivot</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">Orbit</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pivot</span><span class="p">,</span> <span class="n">axis</span><span class="p">,</span> <span class="n">turns</span><span class="o">=</span><span class="n">turns</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="n">duration</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="n">easing</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">move_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="s2">"in_out"</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">"arc"</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Move the camera to another view.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        view :      str | dict, optional</span>
+<span class="sd">                    Target view - anything `Viewer.set_view` takes (``"XY"``,</span>
+<span class="sd">                    ``"-XZ"``, ...) or a camera state as returned by</span>
+<span class="sd">                    `Viewer.get_view`. Defaults to the viewer's current view,</span>
+<span class="sd">                    which is what makes "fly to where I am looking now" work</span>
+<span class="sd">                    from the GUI.</span>
+<span class="sd">        duration :  float</span>
+<span class="sd">                    Seconds the move takes.</span>
+<span class="sd">        easing :    str | callable</span>
+<span class="sd">                    Defaults to ``"in_out"`` so the camera accelerates out of</span>
+<span class="sd">                    and decelerates into the move.</span>
+<span class="sd">        path :      "arc" | "linear"</span>
+<span class="sd">                    ``"arc"`` swings around the point being looked at,</span>
+<span class="sd">                    ``"linear"`` moves the camera in a straight line.</span>
+
+<span class="sd">        """</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">Transition</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_state</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_as_state</span><span class="p">(</span><span class="n">view</span><span class="p">),</span>
+                <span class="n">duration</span><span class="p">,</span>
+                <span class="n">easing</span><span class="o">=</span><span class="n">easing</span><span class="p">,</span>
+                <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">zoom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="s2">"in_out"</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Zoom in (`factor` &gt; 1) or out (`factor` &lt; 1) on the current view."""</span>
+        <span class="k">if</span> <span class="n">factor</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Zoom factor must be &gt; 0, got </span><span class="si">{</span><span class="n">factor</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="n">_copy_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_state</span><span class="p">)</span>
+        <span class="n">pivot</span> <span class="o">=</span> <span class="n">_pivot</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"width"</span><span class="p">,</span> <span class="s2">"height"</span><span class="p">,</span> <span class="s2">"depth"</span><span class="p">):</span>
+            <span class="n">state</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">/</span> <span class="n">factor</span>
+        <span class="n">state</span><span class="p">[</span><span class="s2">"position"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_position_from_pivot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pivot</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">Transition</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_state</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="n">easing</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_as_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Resolve a view specifier into a camera state."""</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">view</span>
+        <span class="c1"># `None` gives the current view, a name (e.g. "XY") what that view</span>
+        <span class="c1"># would be - neither moves the camera</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="o">.</span><span class="n">get_view</span><span class="p">(</span><span class="n">view</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_time</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Apply the animation's state at time `t` (in seconds)."""</span>
+        <span class="k">for</span> <span class="n">track</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracks</span><span class="p">:</span>
+            <span class="n">track</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">times</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Times (in seconds) of the frames this animation renders to.</span>
+
+<span class="sd">        The last frame stops one frame short of the end so that a full turn</span>
+<span class="sd">        loops seamlessly.</span>
+
+<span class="sd">        """</span>
+        <span class="n">fps</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fps</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">fps</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">i</span> <span class="o">/</span> <span class="n">fps</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">frame_count</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="n">fps</span><span class="p">))]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">play</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loop</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">speed</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Play the animation in the viewer.</span>
+
+<span class="sd">        Playback is driven by the viewer's animation loop and follows the wall</span>
+<span class="sd">        clock, so it runs at the same speed no matter the frame rate (see</span>
+<span class="sd">        `Viewer.max_fps` if it looks choppy).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        loop :  bool</span>
+<span class="sd">                Whether to start over when the end is reached.</span>
+<span class="sd">        speed : float</span>
+<span class="sd">                Playback speed multiplier.</span>
+
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Nothing to play - this animation is empty."</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_tick</span><span class="p">():</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="n">speed</span>
+            <span class="k">if</span> <span class="n">t</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">loop</span><span class="p">:</span>
+                    <span class="n">t</span> <span class="o">=</span> <span class="n">t</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">set_time</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+                    <span class="k">return</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_time</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_playback</span> <span class="o">=</span> <span class="n">_tick</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="o">.</span><span class="n">add_animation</span><span class="p">(</span><span class="n">_tick</span><span class="p">,</span> <span class="n">on_error</span><span class="o">=</span><span class="s2">"log"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Stop playback (see `Animation.play`)."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_playback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="o">.</span><span class="n">remove_animation</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_playback</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_playback</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">playing</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Whether the animation is currently being played in the viewer."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_playback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">recorder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Return a `Recorder` that renders this animation frame by frame.</span>
+
+<span class="sd">        Use this instead of `Animation.render` when you need to keep control</span>
+<span class="sd">        between frames - the controls panel drives one of these off a timer to</span>
+<span class="sd">        keep the GUI responsive while recording.</span>
+
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="n">Recorder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">fps</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">pixel_ratio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">alpha</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">supersample</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">restore</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">progress</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Render the animation.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        filename :  str | pathlib.Path, optional</span>
+<span class="sd">                    Where to write to. The format follows the extension:</span>
+
+<span class="sd">                     - ``.mp4`` (and other video formats) is written frame by</span>
+<span class="sd">                       frame and requires ``imageio`` + ``imageio-ffmpeg``</span>
+<span class="sd">                     - ``.gif`` requires ``imageio``</span>
+<span class="sd">                     - a path without an extension is treated as a directory</span>
+<span class="sd">                       and gets a numbered PNG per frame - no extra</span>
+<span class="sd">                       dependencies, and you can encode it yourself</span>
+
+<span class="sd">                    If ``None``, the frames are returned as a list of numpy</span>
+<span class="sd">                    arrays instead.</span>
+<span class="sd">        fps :       int, optional</span>
+<span class="sd">                    Overrides the animation's own frame rate.</span>
+<span class="sd">        size :      (width, height), optional</span>
+<span class="sd">                    Size of the video. Defaults to the current canvas size.</span>
+<span class="sd">                    Note that the canvas is resized for the recording.</span>
+<span class="sd">        pixel_ratio : float, optional</span>
+<span class="sd">                    Factor by which to scale the canvas size, see</span>
+<span class="sd">                    `Viewer.screenshot`. You probably want ``1`` when passing</span>
+<span class="sd">                    an explicit `size`.</span>
+<span class="sd">        alpha :     bool</span>
+<span class="sd">                    Whether to keep the background transparent. Only useful for</span>
+<span class="sd">                    PNG sequences - videos are written without an alpha channel</span>
+<span class="sd">                    either way.</span>
+<span class="sd">        supersample : int</span>
+<span class="sd">                    Anti-aliasing quality, see `Viewer.screenshot`. The cost is</span>
+<span class="sd">                    paid per frame, hence the conservative default.</span>
+<span class="sd">        restore :   bool</span>
+<span class="sd">                    Whether to put the camera back where it was afterwards.</span>
+<span class="sd">        progress :  bool | callable</span>
+<span class="sd">                    Show a progress bar (requires ``tqdm``), or a callable</span>
+<span class="sd">                    ``f(frame, n_frames)`` called after every frame.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        list of numpy arrays</span>
+<span class="sd">                    If `filename` is ``None``.</span>
+<span class="sd">        pathlib.Path</span>
+<span class="sd">                    The file (or directory) written to, otherwise.</span>
+
+<span class="sd">        """</span>
+        <span class="n">rec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">recorder</span><span class="p">(</span>
+            <span class="n">filename</span><span class="p">,</span>
+            <span class="n">fps</span><span class="o">=</span><span class="n">fps</span><span class="p">,</span>
+            <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
+            <span class="n">pixel_ratio</span><span class="o">=</span><span class="n">pixel_ratio</span><span class="p">,</span>
+            <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span>
+            <span class="n">supersample</span><span class="o">=</span><span class="n">supersample</span><span class="p">,</span>
+            <span class="n">restore</span><span class="o">=</span><span class="n">restore</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">callback</span> <span class="o">=</span> <span class="n">_progress_callback</span><span class="p">(</span><span class="n">progress</span><span class="p">,</span> <span class="n">rec</span><span class="o">.</span><span class="n">n_frames</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="n">rec</span><span class="o">.</span><span class="n">step</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">callback</span><span class="p">:</span>
+                    <span class="n">callback</span><span class="p">(</span><span class="n">rec</span><span class="o">.</span><span class="n">frame</span><span class="p">,</span> <span class="n">rec</span><span class="o">.</span><span class="n">n_frames</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+            <span class="n">rec</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+            <span class="k">raise</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">callback</span><span class="p">:</span>
+                <span class="n">callback</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">rec</span><span class="o">.</span><span class="n">finish</span><span class="p">()</span>
+</code></pre></div></td></tr></tbody></table></div> </details> <div class="doc doc-children"> <div class="doc doc-object doc-attribute"> <h3 id="octarine.Animation.current_state" class="doc doc-heading"> <code class="highlight language-python"><span class="n">current_state</span></code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-property"><code>property</code></small> </span> <a href="#octarine.Animation.current_state" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Camera state the next segment will start from.</p> </div> </div> <div class="doc doc-object doc-attribute"> <h3 id="octarine.Animation.duration" class="doc doc-heading"> <code class="highlight language-python"><span class="n">duration</span></code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-property"><code>property</code></small> </span> <a href="#octarine.Animation.duration" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Length of the animation in seconds.</p> </div> </div> <div class="doc doc-object doc-attribute"> <h3 id="octarine.Animation.n_frames" class="doc doc-heading"> <code class="highlight language-python"><span class="n">n_frames</span></code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-property"><code>property</code></small> </span> <a href="#octarine.Animation.n_frames" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Number of frames this animation renders to.</p> </div> </div> <div class="doc doc-object doc-attribute"> <h3 id="octarine.Animation.playing" class="doc doc-heading"> <code class="highlight language-python"><span class="n">playing</span></code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-property"><code>property</code></small> </span> <a href="#octarine.Animation.playing" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Whether the animation is currently being played in the viewer.</p> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.clear" class="doc doc-heading"> <code class="highlight language-python"><span class="n">clear</span><span class="p">()</span></code> <a href="#octarine.Animation.clear" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Remove all segments.</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">514</span>
+<span class="normal">515</span>
+<span class="normal">516</span>
+<span class="normal">517</span>
+<span class="normal">518</span>
+<span class="normal">519</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Remove all segments."""</span>
+    <span class="k">for</span> <span class="n">track</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracks</span><span class="p">:</span>
+        <span class="n">track</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_start_state</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.hold" class="doc doc-heading"> <code class="highlight language-python"><span class="n">hold</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span></code> <a href="#octarine.Animation.hold" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Stay on the current view for <code>duration</code> seconds.</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">539</span>
+<span class="normal">540</span>
+<span class="normal">541</span>
+<span class="normal">542</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hold</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Stay on the current view for `duration` seconds."""</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Hold</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_state</span><span class="p">,</span> <span class="n">duration</span><span class="p">))</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.move_to" class="doc doc-heading"> <code class="highlight language-python"><span class="n">move_to</span><span class="p">(</span><span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="s1">'in_out'</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s1">'arc'</span><span class="p">)</span></code> <a href="#octarine.Animation.move_to" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Move the camera to another view.</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>view</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Target view - anything `Viewer.set_view` takes (``"XY"``,
+    ``"-XZ"``, ...) or a camera state as returned by
+    `Viewer.get_view`. Defaults to the viewer's current view,
+    which is what makes "fly to where I am looking now" work
+    from the GUI.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> str | dict</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>duration</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Seconds the move takes.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> float</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>2</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>easing</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Defaults to ``"in_out"`` so the camera accelerates out of
+    and decelerates into the move.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> str | callable</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>'in_out'</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>path</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    ``"arc"`` swings around the point being looked at,
+    ``"linear"`` moves the camera in a straight line.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> "arc" | "linear"</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>'arc'</code> </span> </p> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">600</span>
+<span class="normal">601</span>
+<span class="normal">602</span>
+<span class="normal">603</span>
+<span class="normal">604</span>
+<span class="normal">605</span>
+<span class="normal">606</span>
+<span class="normal">607</span>
+<span class="normal">608</span>
+<span class="normal">609</span>
+<span class="normal">610</span>
+<span class="normal">611</span>
+<span class="normal">612</span>
+<span class="normal">613</span>
+<span class="normal">614</span>
+<span class="normal">615</span>
+<span class="normal">616</span>
+<span class="normal">617</span>
+<span class="normal">618</span>
+<span class="normal">619</span>
+<span class="normal">620</span>
+<span class="normal">621</span>
+<span class="normal">622</span>
+<span class="normal">623</span>
+<span class="normal">624</span>
+<span class="normal">625</span>
+<span class="normal">626</span>
+<span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">move_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="s2">"in_out"</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">"arc"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Move the camera to another view.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    view :      str | dict, optional</span>
+<span class="sd">                Target view - anything `Viewer.set_view` takes (``"XY"``,</span>
+<span class="sd">                ``"-XZ"``, ...) or a camera state as returned by</span>
+<span class="sd">                `Viewer.get_view`. Defaults to the viewer's current view,</span>
+<span class="sd">                which is what makes "fly to where I am looking now" work</span>
+<span class="sd">                from the GUI.</span>
+<span class="sd">    duration :  float</span>
+<span class="sd">                Seconds the move takes.</span>
+<span class="sd">    easing :    str | callable</span>
+<span class="sd">                Defaults to ``"in_out"`` so the camera accelerates out of</span>
+<span class="sd">                and decelerates into the move.</span>
+<span class="sd">    path :      "arc" | "linear"</span>
+<span class="sd">                ``"arc"`` swings around the point being looked at,</span>
+<span class="sd">                ``"linear"`` moves the camera in a straight line.</span>
+
+<span class="sd">    """</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">Transition</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_state</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_as_state</span><span class="p">(</span><span class="n">view</span><span class="p">),</span>
+            <span class="n">duration</span><span class="p">,</span>
+            <span class="n">easing</span><span class="o">=</span><span class="n">easing</span><span class="p">,</span>
+            <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.orbit" class="doc doc-heading"> <code class="highlight language-python"><span class="n">orbit</span><span class="p">(</span><span class="n">objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">turns</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="s1">'up'</span><span class="p">,</span> <span class="n">recenter</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="s1">'linear'</span><span class="p">)</span></code> <a href="#octarine.Animation.orbit" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Circle the camera around object(s).</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>objects</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    What to orbit around, given as object ID(s) as shown in the
+    legend (or the visuals themselves). Defaults to everything
+    on the viewer.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> str | list of str | visual(s)</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>turns</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Number of turns. Negative values orbit the other way.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> float</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>1</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>duration</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Seconds the orbit takes.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> float</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>6</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>axis</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Axis to rotate about. The default, ``"up"``, is the scene's
+    up direction (the camera's ``reference_up``) and gives a
+    turntable rotation from whatever view you start at. Prefix
+    with ``-`` to flip it.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> "up" | "x" | "y" | "z" | "view" | (3, ) vector</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>'up'</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>recenter</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    If True (default), frame `objects` before orbiting: the
+    pivot is the centre of their bounding box and the camera is
+    moved to fit them in view. If False, keep the current view
+    and orbit around whatever the camera is already looking at
+    - use this to animate exactly what you see on screen.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> bool</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>True</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>scale</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Only with ``recenter=True``: how much of the viewport the
+    objects fill. Values &gt; 1 zoom out.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> float</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>1.0</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>easing</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    See `octarine.anim_utils.EASINGS`. Note that anything but
+    ``"linear"`` will make a full turn start and/or end slowly.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> str | callable</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>'linear'</code> </span> </p> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">544</span>
+<span class="normal">545</span>
+<span class="normal">546</span>
+<span class="normal">547</span>
+<span class="normal">548</span>
+<span class="normal">549</span>
+<span class="normal">550</span>
+<span class="normal">551</span>
+<span class="normal">552</span>
+<span class="normal">553</span>
+<span class="normal">554</span>
+<span class="normal">555</span>
+<span class="normal">556</span>
+<span class="normal">557</span>
+<span class="normal">558</span>
+<span class="normal">559</span>
+<span class="normal">560</span>
+<span class="normal">561</span>
+<span class="normal">562</span>
+<span class="normal">563</span>
+<span class="normal">564</span>
+<span class="normal">565</span>
+<span class="normal">566</span>
+<span class="normal">567</span>
+<span class="normal">568</span>
+<span class="normal">569</span>
+<span class="normal">570</span>
+<span class="normal">571</span>
+<span class="normal">572</span>
+<span class="normal">573</span>
+<span class="normal">574</span>
+<span class="normal">575</span>
+<span class="normal">576</span>
+<span class="normal">577</span>
+<span class="normal">578</span>
+<span class="normal">579</span>
+<span class="normal">580</span>
+<span class="normal">581</span>
+<span class="normal">582</span>
+<span class="normal">583</span>
+<span class="normal">584</span>
+<span class="normal">585</span>
+<span class="normal">586</span>
+<span class="normal">587</span>
+<span class="normal">588</span>
+<span class="normal">589</span>
+<span class="normal">590</span>
+<span class="normal">591</span>
+<span class="normal">592</span>
+<span class="normal">593</span>
+<span class="normal">594</span>
+<span class="normal">595</span>
+<span class="normal">596</span>
+<span class="normal">597</span>
+<span class="normal">598</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">orbit</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">turns</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">duration</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+    <span class="n">axis</span><span class="o">=</span><span class="s2">"up"</span><span class="p">,</span>
+    <span class="n">recenter</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">easing</span><span class="o">=</span><span class="s2">"linear"</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Circle the camera around object(s).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    objects :   str | list of str | visual(s), optional</span>
+<span class="sd">                What to orbit around, given as object ID(s) as shown in the</span>
+<span class="sd">                legend (or the visuals themselves). Defaults to everything</span>
+<span class="sd">                on the viewer.</span>
+<span class="sd">    turns :     float</span>
+<span class="sd">                Number of turns. Negative values orbit the other way.</span>
+<span class="sd">    duration :  float</span>
+<span class="sd">                Seconds the orbit takes.</span>
+<span class="sd">    axis :      "up" | "x" | "y" | "z" | "view" | (3, ) vector</span>
+<span class="sd">                Axis to rotate about. The default, ``"up"``, is the scene's</span>
+<span class="sd">                up direction (the camera's ``reference_up``) and gives a</span>
+<span class="sd">                turntable rotation from whatever view you start at. Prefix</span>
+<span class="sd">                with ``-`` to flip it.</span>
+<span class="sd">    recenter :  bool</span>
+<span class="sd">                If True (default), frame `objects` before orbiting: the</span>
+<span class="sd">                pivot is the centre of their bounding box and the camera is</span>
+<span class="sd">                moved to fit them in view. If False, keep the current view</span>
+<span class="sd">                and orbit around whatever the camera is already looking at</span>
+<span class="sd">                - use this to animate exactly what you see on screen.</span>
+<span class="sd">    scale :     float</span>
+<span class="sd">                Only with ``recenter=True``: how much of the viewport the</span>
+<span class="sd">                objects fill. Values &gt; 1 zoom out.</span>
+<span class="sd">    easing :    str | callable</span>
+<span class="sd">                See `octarine.anim_utils.EASINGS`. Note that anything but</span>
+<span class="sd">                ``"linear"`` will make a full turn start and/or end slowly.</span>
+
+<span class="sd">    """</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_state</span>
+    <span class="k">if</span> <span class="n">recenter</span><span class="p">:</span>
+        <span class="n">pivot</span><span class="p">,</span> <span class="n">radius</span> <span class="o">=</span> <span class="n">_bounding_sphere</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="n">_framed_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="p">,</span> <span class="n">pivot</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">scale</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">objects</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">pivot</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_bounding_sphere</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">pivot</span> <span class="o">=</span> <span class="n">_pivot</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">Orbit</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pivot</span><span class="p">,</span> <span class="n">axis</span><span class="p">,</span> <span class="n">turns</span><span class="o">=</span><span class="n">turns</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="n">duration</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="n">easing</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.play" class="doc doc-heading"> <code class="highlight language-python"><span class="n">play</span><span class="p">(</span><span class="n">loop</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">speed</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span></code> <a href="#octarine.Animation.play" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Play the animation in the viewer.</p> <p>Playback is driven by the viewer's animation loop and follows the wall clock, so it runs at the same speed no matter the frame rate (see <code>Viewer.max_fps</code> if it looks choppy).</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>loop</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>Whether to start over when the end is reached.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> bool</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>False</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>speed</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>Playback speed multiplier.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>1.0</code> </span> </p> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">670</span>
+<span class="normal">671</span>
+<span class="normal">672</span>
+<span class="normal">673</span>
+<span class="normal">674</span>
+<span class="normal">675</span>
+<span class="normal">676</span>
+<span class="normal">677</span>
+<span class="normal">678</span>
+<span class="normal">679</span>
+<span class="normal">680</span>
+<span class="normal">681</span>
+<span class="normal">682</span>
+<span class="normal">683</span>
+<span class="normal">684</span>
+<span class="normal">685</span>
+<span class="normal">686</span>
+<span class="normal">687</span>
+<span class="normal">688</span>
+<span class="normal">689</span>
+<span class="normal">690</span>
+<span class="normal">691</span>
+<span class="normal">692</span>
+<span class="normal">693</span>
+<span class="normal">694</span>
+<span class="normal">695</span>
+<span class="normal">696</span>
+<span class="normal">697</span>
+<span class="normal">698</span>
+<span class="normal">699</span>
+<span class="normal">700</span>
+<span class="normal">701</span>
+<span class="normal">702</span>
+<span class="normal">703</span>
+<span class="normal">704</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">play</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loop</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">speed</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Play the animation in the viewer.</span>
+
+<span class="sd">    Playback is driven by the viewer's animation loop and follows the wall</span>
+<span class="sd">    clock, so it runs at the same speed no matter the frame rate (see</span>
+<span class="sd">    `Viewer.max_fps` if it looks choppy).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    loop :  bool</span>
+<span class="sd">            Whether to start over when the end is reached.</span>
+<span class="sd">    speed : float</span>
+<span class="sd">            Playback speed multiplier.</span>
+
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Nothing to play - this animation is empty."</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_tick</span><span class="p">():</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">*</span> <span class="n">speed</span>
+        <span class="k">if</span> <span class="n">t</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">loop</span><span class="p">:</span>
+                <span class="n">t</span> <span class="o">=</span> <span class="n">t</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">set_time</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+                <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_time</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_playback</span> <span class="o">=</span> <span class="n">_tick</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="o">.</span><span class="n">add_animation</span><span class="p">(</span><span class="n">_tick</span><span class="p">,</span> <span class="n">on_error</span><span class="o">=</span><span class="s2">"log"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.recorder" class="doc doc-heading"> <code class="highlight language-python"><span class="n">recorder</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code> <a href="#octarine.Animation.recorder" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Return a <code>Recorder</code> that renders this animation frame by frame.</p> <p>Use this instead of <code>Animation.render</code> when you need to keep control between frames - the controls panel drives one of these off a timer to keep the GUI responsive while recording.</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">718</span>
+<span class="normal">719</span>
+<span class="normal">720</span>
+<span class="normal">721</span>
+<span class="normal">722</span>
+<span class="normal">723</span>
+<span class="normal">724</span>
+<span class="normal">725</span>
+<span class="normal">726</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">recorder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Return a `Recorder` that renders this animation frame by frame.</span>
+
+<span class="sd">    Use this instead of `Animation.render` when you need to keep control</span>
+<span class="sd">    between frames - the controls panel drives one of these off a timer to</span>
+<span class="sd">    keep the GUI responsive while recording.</span>
+
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">Recorder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.render" class="doc doc-heading"> <code class="highlight language-python"><span class="n">render</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">pixel_ratio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">supersample</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">restore</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">progress</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code> <a href="#octarine.Animation.render" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Render the animation.</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>filename</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Where to write to. The format follows the extension:
+
+     - ``.mp4`` (and other video formats) is written frame by
+       frame and requires ``imageio`` + ``imageio-ffmpeg``
+     - ``.gif`` requires ``imageio``
+     - a path without an extension is treated as a directory
+       and gets a numbered PNG per frame - no extra
+       dependencies, and you can encode it yourself
+
+    If ``None``, the frames are returned as a list of numpy
+    arrays instead.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> str | pathlib.Path</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>fps</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Overrides the animation's own frame rate.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> int</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>size</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Size of the video. Defaults to the current canvas size.
+    Note that the canvas is resized for the recording.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> (width, height)</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>pixel_ratio</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Factor by which to scale the canvas size, see
+    `Viewer.screenshot`. You probably want ``1`` when passing
+    an explicit `size`.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>alpha</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Whether to keep the background transparent. Only useful for
+    PNG sequences - videos are written without an alpha channel
+    either way.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> bool</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>False</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>supersample</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Anti-aliasing quality, see `Viewer.screenshot`. The cost is
+    paid per frame, hence the conservative default.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>1</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>restore</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Whether to put the camera back where it was afterwards.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> bool</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>True</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>progress</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Show a progress bar (requires ``tqdm``), or a callable
+    ``f(frame, n_frames)`` called after every frame.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> bool | callable</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>True</code> </span> </p> </td> </tr> </tbody> </table> <table> <thead> <tr> <th><span class="doc-section-title">RETURNS</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <span class="doc-returns-annotation"> <code>list of numpy arrays</code> </span> </td> <td class="doc-returns-details"> <div class="doc-md-description"> <p>If <code>filename</code> is <code>None</code>.</p> </div> </td> </tr> <tr class="doc-section-item"> <td> <span class="doc-returns-annotation"> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/pathlib.html#module-pathlib">pathlib</a>.<a class="autorefs autorefs-external" title="pathlib.Path" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></code> </span> </td> <td class="doc-returns-details"> <div class="doc-md-description"> <p>The file (or directory) written to, otherwise.</p> </div> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">728</span>
+<span class="normal">729</span>
+<span class="normal">730</span>
+<span class="normal">731</span>
+<span class="normal">732</span>
+<span class="normal">733</span>
+<span class="normal">734</span>
+<span class="normal">735</span>
+<span class="normal">736</span>
+<span class="normal">737</span>
+<span class="normal">738</span>
+<span class="normal">739</span>
+<span class="normal">740</span>
+<span class="normal">741</span>
+<span class="normal">742</span>
+<span class="normal">743</span>
+<span class="normal">744</span>
+<span class="normal">745</span>
+<span class="normal">746</span>
+<span class="normal">747</span>
+<span class="normal">748</span>
+<span class="normal">749</span>
+<span class="normal">750</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span>
+<span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span>
+<span class="normal">757</span>
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span>
+<span class="normal">761</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span>
+<span class="normal">788</span>
+<span class="normal">789</span>
+<span class="normal">790</span>
+<span class="normal">791</span>
+<span class="normal">792</span>
+<span class="normal">793</span>
+<span class="normal">794</span>
+<span class="normal">795</span>
+<span class="normal">796</span>
+<span class="normal">797</span>
+<span class="normal">798</span>
+<span class="normal">799</span>
+<span class="normal">800</span>
+<span class="normal">801</span>
+<span class="normal">802</span>
+<span class="normal">803</span>
+<span class="normal">804</span>
+<span class="normal">805</span>
+<span class="normal">806</span>
+<span class="normal">807</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">fps</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">pixel_ratio</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">supersample</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">restore</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">progress</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Render the animation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    filename :  str | pathlib.Path, optional</span>
+<span class="sd">                Where to write to. The format follows the extension:</span>
+
+<span class="sd">                 - ``.mp4`` (and other video formats) is written frame by</span>
+<span class="sd">                   frame and requires ``imageio`` + ``imageio-ffmpeg``</span>
+<span class="sd">                 - ``.gif`` requires ``imageio``</span>
+<span class="sd">                 - a path without an extension is treated as a directory</span>
+<span class="sd">                   and gets a numbered PNG per frame - no extra</span>
+<span class="sd">                   dependencies, and you can encode it yourself</span>
+
+<span class="sd">                If ``None``, the frames are returned as a list of numpy</span>
+<span class="sd">                arrays instead.</span>
+<span class="sd">    fps :       int, optional</span>
+<span class="sd">                Overrides the animation's own frame rate.</span>
+<span class="sd">    size :      (width, height), optional</span>
+<span class="sd">                Size of the video. Defaults to the current canvas size.</span>
+<span class="sd">                Note that the canvas is resized for the recording.</span>
+<span class="sd">    pixel_ratio : float, optional</span>
+<span class="sd">                Factor by which to scale the canvas size, see</span>
+<span class="sd">                `Viewer.screenshot`. You probably want ``1`` when passing</span>
+<span class="sd">                an explicit `size`.</span>
+<span class="sd">    alpha :     bool</span>
+<span class="sd">                Whether to keep the background transparent. Only useful for</span>
+<span class="sd">                PNG sequences - videos are written without an alpha channel</span>
+<span class="sd">                either way.</span>
+<span class="sd">    supersample : int</span>
+<span class="sd">                Anti-aliasing quality, see `Viewer.screenshot`. The cost is</span>
+<span class="sd">                paid per frame, hence the conservative default.</span>
+<span class="sd">    restore :   bool</span>
+<span class="sd">                Whether to put the camera back where it was afterwards.</span>
+<span class="sd">    progress :  bool | callable</span>
+<span class="sd">                Show a progress bar (requires ``tqdm``), or a callable</span>
+<span class="sd">                ``f(frame, n_frames)`` called after every frame.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list of numpy arrays</span>
+<span class="sd">                If `filename` is ``None``.</span>
+<span class="sd">    pathlib.Path</span>
+<span class="sd">                The file (or directory) written to, otherwise.</span>
+
+<span class="sd">    """</span>
+    <span class="n">rec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">recorder</span><span class="p">(</span>
+        <span class="n">filename</span><span class="p">,</span>
+        <span class="n">fps</span><span class="o">=</span><span class="n">fps</span><span class="p">,</span>
+        <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
+        <span class="n">pixel_ratio</span><span class="o">=</span><span class="n">pixel_ratio</span><span class="p">,</span>
+        <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span>
+        <span class="n">supersample</span><span class="o">=</span><span class="n">supersample</span><span class="p">,</span>
+        <span class="n">restore</span><span class="o">=</span><span class="n">restore</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">callback</span> <span class="o">=</span> <span class="n">_progress_callback</span><span class="p">(</span><span class="n">progress</span><span class="p">,</span> <span class="n">rec</span><span class="o">.</span><span class="n">n_frames</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">while</span> <span class="n">rec</span><span class="o">.</span><span class="n">step</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">callback</span><span class="p">:</span>
+                <span class="n">callback</span><span class="p">(</span><span class="n">rec</span><span class="o">.</span><span class="n">frame</span><span class="p">,</span> <span class="n">rec</span><span class="o">.</span><span class="n">n_frames</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+        <span class="n">rec</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+        <span class="k">raise</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">callback</span><span class="p">:</span>
+            <span class="n">callback</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">rec</span><span class="o">.</span><span class="n">finish</span><span class="p">()</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.set_time" class="doc doc-heading"> <code class="highlight language-python"><span class="n">set_time</span><span class="p">(</span><span class="n">t</span><span class="p">)</span></code> <a href="#octarine.Animation.set_time" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Apply the animation's state at time <code>t</code> (in seconds).</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">654</span>
+<span class="normal">655</span>
+<span class="normal">656</span>
+<span class="normal">657</span>
+<span class="normal">658</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_time</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Apply the animation's state at time `t` (in seconds)."""</span>
+    <span class="k">for</span> <span class="n">track</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracks</span><span class="p">:</span>
+        <span class="n">track</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.start_at" class="doc doc-heading"> <code class="highlight language-python"><span class="n">start_at</span><span class="p">(</span><span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code> <a href="#octarine.Animation.start_at" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Set the view the timeline starts from, without animating to it.</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>view</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>A view as accepted by `Viewer.set_view` (e.g. ``"XY"``) or a
+camera state. Defaults to the viewer's current view.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> str | dict</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">521</span>
+<span class="normal">522</span>
+<span class="normal">523</span>
+<span class="normal">524</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">start_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Set the view the timeline starts from, without animating to it.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    view :  str | dict, optional</span>
+<span class="sd">            A view as accepted by `Viewer.set_view` (e.g. ``"XY"``) or a</span>
+<span class="sd">            camera state. Defaults to the viewer's current view.</span>
+
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">segments</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"`start_at` only works on an empty timeline - use `move_to` to "</span>
+            <span class="s2">"jump to a view mid-animation."</span>
+        <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_start_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_as_state</span><span class="p">(</span><span class="n">view</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.stop" class="doc doc-heading"> <code class="highlight language-python"><span class="n">stop</span><span class="p">()</span></code> <a href="#octarine.Animation.stop" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Stop playback (see <code>Animation.play</code>).</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">706</span>
+<span class="normal">707</span>
+<span class="normal">708</span>
+<span class="normal">709</span>
+<span class="normal">710</span>
+<span class="normal">711</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Stop playback (see `Animation.play`)."""</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_playback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">viewer</span><span class="o">.</span><span class="n">remove_animation</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_playback</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_playback</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.times" class="doc doc-heading"> <code class="highlight language-python"><span class="n">times</span><span class="p">(</span><span class="n">fps</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code> <a href="#octarine.Animation.times" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Times (in seconds) of the frames this animation renders to.</p> <p>The last frame stops one frame short of the end so that a full turn loops seamlessly.</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">660</span>
+<span class="normal">661</span>
+<span class="normal">662</span>
+<span class="normal">663</span>
+<span class="normal">664</span>
+<span class="normal">665</span>
+<span class="normal">666</span>
+<span class="normal">667</span>
+<span class="normal">668</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">times</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Times (in seconds) of the frames this animation renders to.</span>
+
+<span class="sd">    The last frame stops one frame short of the end so that a full turn</span>
+<span class="sd">    loops seamlessly.</span>
+
+<span class="sd">    """</span>
+    <span class="n">fps</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fps</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">fps</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">i</span> <span class="o">/</span> <span class="n">fps</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">frame_count</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="n">fps</span><span class="p">))]</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.Animation.zoom" class="doc doc-heading"> <code class="highlight language-python"><span class="n">zoom</span><span class="p">(</span><span class="n">factor</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="s1">'in_out'</span><span class="p">)</span></code> <a href="#octarine.Animation.zoom" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Zoom in (<code>factor</code> &gt; 1) or out (<code>factor</code> &lt; 1) on the current view.</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/anim_utils.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span>
+<span class="normal">642</span>
+<span class="normal">643</span>
+<span class="normal">644</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">zoom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="s2">"in_out"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Zoom in (`factor` &gt; 1) or out (`factor` &lt; 1) on the current view."""</span>
+    <span class="k">if</span> <span class="n">factor</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Zoom factor must be &gt; 0, got </span><span class="si">{</span><span class="n">factor</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">_copy_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_state</span><span class="p">)</span>
+    <span class="n">pivot</span> <span class="o">=</span> <span class="n">_pivot</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"width"</span><span class="p">,</span> <span class="s2">"height"</span><span class="p">,</span> <span class="s2">"depth"</span><span class="p">):</span>
+        <span class="n">state</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">/</span> <span class="n">factor</span>
+    <span class="n">state</span><span class="p">[</span><span class="s2">"position"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_position_from_pivot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pivot</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">Transition</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_state</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">easing</span><span class="o">=</span><span class="n">easing</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> </div> </div> </div> <div class="doc doc-object doc-attribute"> <h2 id="octarine.anim_utils.EASINGS" class="doc doc-heading"> <code class="highlight language-python"><span class="n">octarine</span><span class="o">.</span><span class="n">anim_utils</span><span class="o">.</span><span class="n">EASINGS</span> <span class="o">=</span> <span class="p">{</span><span class="s1">'linear'</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">t</span><span class="p">,</span> <span class="s1">'in'</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">t</span> <span class="o">*</span> <span class="n">t</span><span class="p">,</span> <span class="s1">'out'</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">t</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="s1">'in_out'</span><span class="p">:</span> <span class="n">_smoothstep</span><span class="p">,</span> <span class="s1">'smooth'</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">_smoothstep</span><span class="p">(</span><span class="n">_smoothstep</span><span class="p">(</span><span class="n">t</span><span class="p">))}</span></code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small> </span> <a href="#octarine.anim_utils.EASINGS" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> </div> </div> <div class="doc doc-object doc-class"> <h2 id="octarine.anim_utils.Recorder" class="doc doc-heading"> <code>octarine.anim_utils.Recorder</code> <a href="#octarine.anim_utils.Recorder" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>Renders an animation one frame at a time.</p> <p>Instantiating a recorder starts the recording (it resizes the canvas and opens the output file); each <code>step</code> renders and writes the next frame and returns <code>False</code> once there are none left; <code>finish</code> closes the output and returns it. <code>Animation.render</code> simply runs this to completion - drive it yourself if you need to do something between frames (e.g. keep a GUI responsive).</p> <div class="doc doc-children"> <div class="doc doc-object doc-function"> <h3 id="octarine.anim_utils.Recorder.cancel" class="doc doc-heading"> <code class="highlight language-python"><span class="n">cancel</span><span class="p">()</span></code> <a href="#octarine.anim_utils.Recorder.cancel" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Abort the recording and discard whatever was written.</p> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.anim_utils.Recorder.finish" class="doc doc-heading"> <code class="highlight language-python"><span class="n">finish</span><span class="p">()</span></code> <a href="#octarine.anim_utils.Recorder.finish" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Close the output and return it (a path, or the list of frames).</p> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.anim_utils.Recorder.step" class="doc doc-heading"> <code class="highlight language-python"><span class="n">step</span><span class="p">()</span></code> <a href="#octarine.anim_utils.Recorder.step" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Render and write the next frame.</p> <p>Returns <code>True</code> if a frame was written and <code>False</code> if there was nothing left to do.</p> </div> </div> </div> </div> </div> <div class="doc doc-object doc-class"> <h2 id="octarine.anim_utils.Segment" class="doc doc-heading"> <code>octarine.anim_utils.Segment</code> <a href="#octarine.anim_utils.Segment" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>A piece of a track, covering <code>[start, start + duration)</code>.</p> <p>Subclass this to animate something new: implement <code>apply</code> and add the segments to a <code>Track</code> on an <code>Animation</code>. Segments must be able to render any point in their time range without having seen the ones before it.</p> <div class="doc doc-children"> <div class="doc doc-object doc-function"> <h3 id="octarine.anim_utils.Segment.apply" class="doc doc-heading"> <code class="highlight language-python"><span class="n">apply</span><span class="p">(</span><span class="n">viewer</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span></code> <a href="#octarine.anim_utils.Segment.apply" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Apply this segment at local time <code>t</code> (seconds from its start).</p> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.anim_utils.Segment.progress" class="doc doc-heading"> <code class="highlight language-python"><span class="n">progress</span><span class="p">(</span><span class="n">t</span><span class="p">)</span></code> <a href="#octarine.anim_utils.Segment.progress" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Eased progress [0-1] at local time <code>t</code>.</p> </div> </div> </div> </div> </div> <div class="doc doc-object doc-class"> <h2 id="octarine.anim_utils.Track" class="doc doc-heading"> <code>octarine.anim_utils.Track</code> <a href="#octarine.anim_utils.Track" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>An ordered sequence of segments, animating one aspect of the scene.</p> <div class="doc doc-children"> <div class="doc doc-object doc-function"> <h3 id="octarine.anim_utils.Track.append" class="doc doc-heading"> <code class="highlight language-python"><span class="n">append</span><span class="p">(</span><span class="n">segment</span><span class="p">)</span></code> <a href="#octarine.anim_utils.Track.append" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Add a segment to the end of this track.</p> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.anim_utils.Track.segment_at" class="doc doc-heading"> <code class="highlight language-python"><span class="n">segment_at</span><span class="p">(</span><span class="n">t</span><span class="p">)</span></code> <a href="#octarine.anim_utils.Track.segment_at" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>Return <code>(segment, local_time)</code> active at time <code>t</code>, or <code>(None, 0)</code>.</p> </div> </div> </div> </div> </div> </article> </div> <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script> <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script> </div> </main> <footer class="md-footer"> <div class="md-footer-meta md-typeset"> <div class="md-footer-meta__inner md-grid"> <div class="md-copyright"> Made with <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener"> Material for MkDocs </a> </div> </div> </div> </footer> </div> <div class="md-dialog" data-md-component="dialog"> <div class="md-dialog__inner md-typeset"></div> </div> <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.tabs.link", "content.code.annotate", "navigation.indexes", "navigation.instant", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script> <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>  <script id="init-glightbox">document.querySelectorAll('.glightbox').forEach(function(element) {
+    try {
+        var img = element.querySelector('img');
+        if (img && img.src) {
+            element.setAttribute('href', img.src);
+        } else {
+            console.log('No img element with src attribute found');
+        }
+    } catch (error) {
+        console.log('Error:', error);
+    }
+});
+const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
