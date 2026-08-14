@@ -150,6 +150,36 @@ def test_screenshot_forces_a_render(scene_viewer, trigger):
     assert np.asarray(scene_viewer.renderer.snapshot())[..., 3].min() == 255
 
 
+def test_screenshot_controls_collect_screenshots_in_a_folder(viewer, tmp_path):
+    """A folder in the control panel's filename box must number the files."""
+    try:
+        from PySide6 import QtWidgets
+
+        QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    except Exception as e:  # not installed, clashing bindings, no plugin, ...
+        pytest.skip(f"no usable PySide6: {e}")
+
+    from octarine.controls import Controls
+
+    controls = Controls(viewer)
+    try:
+        # A file name is still used as it stands (bar the enforced suffix)
+        controls.screenshot_filename_edit.setText(str(tmp_path / "shot"))
+        assert controls._screenshot_target() == tmp_path / "shot.png"
+
+        controls.screenshot_filename_edit.setText(str(tmp_path))
+        for i in (1, 2, 3):
+            assert controls._screenshot_target() == tmp_path / f"screenshot_{i:04d}.png"
+            controls._save_screenshot()
+            assert f"screenshot_{i:04d}.png" in controls.screenshot_status_label.text()
+
+        # Numbering must continue past what is already in there, gaps and all
+        (tmp_path / "screenshot_0009.png").touch()
+        assert controls._screenshot_target() == tmp_path / "screenshot_0010.png"
+    finally:
+        controls.close()
+
+
 def test_screenshot_supersample_is_capped(scene_viewer):
     """A factor that would blow past the GPU's texture limit must be reduced."""
     max_size = scene_viewer.renderer.device.limits["max-texture-dimension-2d"]

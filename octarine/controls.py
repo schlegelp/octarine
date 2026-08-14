@@ -111,6 +111,22 @@ def set_swatch_color(button, color):
     button._swatch_css = css
 
 
+def next_numbered_file(directory, prefix="screenshot", suffix=".png", digits=4):
+    """Return the next free ``<prefix>_0001<suffix>`` in `directory`.
+
+    Numbering continues past the highest number already in there, so nothing
+    that is on disk gets overwritten - and files deleted in between do not get
+    their number re-used either.
+
+    """
+    highest = 0
+    for path in directory.glob(f"{prefix}_*{suffix}"):
+        number = path.name[len(prefix) + 1 : -len(suffix)]
+        if number.isdigit():
+            highest = max(highest, int(number))
+    return directory / f"{prefix}_{highest + 1:0{digits}d}{suffix}"
+
+
 def set_viewer_stale(func):
     """Decorator to set the viewer stale after a function call."""
 
@@ -539,8 +555,21 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         # Filename + browse button
         self.tab3_layout.addWidget(QtWidgets.QLabel("File:"))
         self.screenshot_filename_edit = QtWidgets.QLineEdit("screenshot.png")
+        self.screenshot_filename_edit.setToolTip(
+            "File to write. Point this at a folder instead and screenshots are "
+            "collected in there as screenshot_0001.png, screenshot_0002.png, ..."
+        )
         self.screenshot_browse_button = QtWidgets.QPushButton("Browse...")
-        self.screenshot_browse_button.clicked.connect(self._screenshot_browse)
+        self.screenshot_browse_menu = QtWidgets.QMenu(self)
+        self.screenshot_browse_menu.addAction("File...")
+        self.screenshot_browse_menu.actions()[-1].triggered.connect(
+            self._screenshot_browse
+        )
+        self.screenshot_browse_menu.addAction("Folder...")
+        self.screenshot_browse_menu.actions()[-1].triggered.connect(
+            self._screenshot_browse_folder
+        )
+        self.screenshot_browse_button.setMenu(self.screenshot_browse_menu)
 
         filename_layout = QtWidgets.QHBoxLayout()
         filename_layout.addWidget(self.screenshot_filename_edit)
@@ -600,23 +629,50 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
             default_suffix="png",
         )
 
-    def _save_screenshot(self):
-        """Save a screenshot with the current GUI settings."""
+    def _screenshot_browse_folder(self):
+        """Open a dialog to pick a folder to collect screenshots in."""
+        current = Path(
+            self.screenshot_filename_edit.text().strip() or "screenshot.png"
+        ).expanduser()
+        self.open_file_dialog(
+            "Folder to collect screenshots in",
+            self.screenshot_filename_edit.setText,
+            initial=current if current.is_dir() else current.parent,
+            directory=True,
+        )
+
+    def _screenshot_target(self):
+        """Resolve the filename box to the file to write - `None` if it's empty.
+
+        A folder collects numbered screenshots (`screenshot_0001.png`,
+        `screenshot_0002.png`, ...) rather than being written to as a file.
+
+        """
         filename = self.screenshot_filename_edit.text().strip()
         if not filename:
+            return None
+
+        path = Path(filename).expanduser()
+        if path.is_dir():
+            return next_numbered_file(path)
+        # `Viewer.screenshot` always writes a PNG - name it accordingly
+        if path.suffix != ".png":
+            path = path.parent / f"{path.name}.png"
+        return path
+
+    def _save_screenshot(self):
+        """Save a screenshot with the current GUI settings."""
+        path = self._screenshot_target()
+        if path is None:
             self._set_screenshot_status("Please choose a filename.")
             return
 
         try:
-            self.viewer.screenshot(filename=filename, **self._screenshot_kwargs())
+            self.viewer.screenshot(filename=path, **self._screenshot_kwargs())
         except Exception as e:
             self._set_screenshot_status(f"Error: {e}")
             return
 
-        # Viewer.screenshot always writes PNG files - report the actual path
-        path = Path(filename)
-        if path.suffix != ".png":
-            path = path.parent / f"{path.name}.png"
         self._set_screenshot_status(f"Saved {path.resolve()}")
 
     def _screenshot_to_clipboard(self):

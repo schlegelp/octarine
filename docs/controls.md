@@ -341,7 +341,9 @@ The control panel is organized into five tabs:
   shading/wireframe for meshes, an FPS counter, lighting (see
   [Lighting](#lighting)) and the [render trigger](triggers.md).
 - **Screenshot**: save a screenshot to file (with options for size and a
-  transparent background) or copy it straight to the clipboard.
+  transparent background) or copy it straight to the clipboard. Pointing it at
+  a folder instead of a file collects numbered screenshots in there
+  (`screenshot_0001.png`, `screenshot_0002.png`, ...).
 - **Effects**: one collapsible section per effect - [shadows](#shadows),
   eye-dome lighting, [ambient occlusion](effects.md#ambient-occlusion),
   [silhouette rendering](effects.md#silhouette-rendering),

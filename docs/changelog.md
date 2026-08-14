@@ -126,6 +126,11 @@ _Date: ongoing_
   [`Animation.render`][octarine.Animation.render] defaults to `supersample=1`, since there the
   cost is paid per frame
 
+- control panel: the "Screenshot" tab's "Browse..." button now offers a folder as well as a
+  file. Point the tab at a folder and screenshots are collected in there as
+  `screenshot_0001.png`, `screenshot_0002.png`, ... - numbering continues past whatever is
+  already in the folder, so nothing gets overwritten
+
 #### Fixes
 - [`Viewer.screenshot`][octarine.Viewer.screenshot] came out with the background still in it
   (i.e. not transparent) unless the [render trigger](triggers.md) was `"continuous"`: the other
