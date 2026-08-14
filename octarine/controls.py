@@ -1,4 +1,5 @@
 import ctypes
+import math
 import sys
 
 import numpy as np
@@ -125,11 +126,16 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
     _shared_color_picker = None
     _active_color_controls = None
 
-    # Point-size slider range for scatter visuals. The slider is integer-valued,
-    # so size = tick * _SIZE_STEP.
-    _SIZE_MIN = 0.5
-    _SIZE_MAX = 50.0
-    _SIZE_STEP = 0.5
+    # Point-size slider for scatter visuals. Point sizes span orders of
+    # magnitude - a handful of pixels with `size_space="screen"` but arbitrarily
+    # small or large in world/model space - so instead of a fixed range the
+    # slider maps its (integer) ticks logarithmically onto
+    # [size / _SIZE_SPAN, size * _SIZE_SPAN], anchored on the visual's size when
+    # the popup opens. That puts the current size in the middle of the slider
+    # and gives the same relative control at any magnitude.
+    _SIZE_TICKS = 100
+    _SIZE_SPAN = 10.0
+    _SIZE_FALLBACK = 2.0  # anchor to fall back on if the size is zero/invalid
 
     def __init__(self, viewer, width=300, height=400):
         super().__init__()
@@ -2894,6 +2900,43 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         for vis in self._iter_points_visuals():
             vis.material.size = float(size)
 
+    @staticmethod
+    def _format_size(size):
+        """Format a point size for the slider label, at any magnitude."""
+        if size >= 10:
+            return f"{size:.1f}"
+        if size >= 0.1:
+            return f"{size:.2f}"
+        return f"{size:.3g}"
+
+    def _tick_to_size(self, tick):
+        """Map a slider tick onto a size within the current (log) range."""
+        lo, hi = self._point_size_range
+        return lo * (hi / lo) ** (tick / self._SIZE_TICKS)
+
+    def _size_to_tick(self, size):
+        """Map a size onto a slider tick within the current (log) range."""
+        lo, hi = self._point_size_range
+        size = max(lo, min(hi, size))
+        return int(round(self._SIZE_TICKS * math.log(size / lo) / math.log(hi / lo)))
+
+    def _anchor_size_slider(self, size):
+        """Re-center the slider's range on `size` without changing the size itself."""
+        if not math.isfinite(size) or size <= 0:
+            size = self._SIZE_FALLBACK
+        self._point_size_range = (size / self._SIZE_SPAN, size * self._SIZE_SPAN)
+
+        lo, hi = self._point_size_range
+        self._point_size_slider.setToolTip(
+            f"{self._format_size(lo)} - {self._format_size(hi)}"
+        )
+        # Block signals: this only moves the handle to match the size we already
+        # have, it must not push a (re-quantized) size back onto the visuals.
+        self._point_size_slider.blockSignals(True)
+        self._point_size_slider.setValue(self._size_to_tick(size))
+        self._point_size_slider.blockSignals(False)
+        self._point_size_label.setText(self._format_size(size))
+
     def _ensure_point_size_popup(self):
         """Lazily build the per-instance point-size popup and return it."""
         if getattr(self, "_point_size_popup", None) is not None:
@@ -2908,23 +2951,38 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         layout.addWidget(QtWidgets.QLabel("Point size"))
 
         slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        slider.setMinimum(int(round(self._SIZE_MIN / self._SIZE_STEP)))
-        slider.setMaximum(int(round(self._SIZE_MAX / self._SIZE_STEP)))
-        label = QtWidgets.QLabel(f"{self._SIZE_MIN:3.2f}")
-        label.setMinimumWidth(40)
+        slider.setMinimum(0)
+        slider.setMaximum(self._SIZE_TICKS)
+        label = QtWidgets.QLabel()
+        label.setMinimumWidth(48)
 
         def on_change(tick):
-            size = tick * self._SIZE_STEP
-            label.setText(f"{size:3.2f}")
+            size = self._tick_to_size(tick)
+            label.setText(self._format_size(size))
             self.set_point_size(size)
+            # Reaching an end of the range would otherwise cap how far the size
+            # can be pushed; re-anchor there so the slider can keep going. While
+            # dragging we wait for the release, else the handle would jump back
+            # to the middle from under the cursor.
+            if tick in (0, self._SIZE_TICKS) and not slider.isSliderDown():
+                self._anchor_size_slider(size)
+
+        def on_release():
+            if slider.value() in (0, self._SIZE_TICKS):
+                self._anchor_size_slider(self._tick_to_size(slider.value()))
 
         slider.valueChanged.connect(on_change)
+        slider.sliderReleased.connect(on_release)
         layout.addWidget(slider, stretch=1)
         layout.addWidget(label)
 
         self._point_size_popup = popup
         self._point_size_slider = slider
         self._point_size_label = label
+        self._point_size_range = (
+            self._SIZE_FALLBACK / self._SIZE_SPAN,
+            self._SIZE_FALLBACK * self._SIZE_SPAN,
+        )
         return popup
 
     def _sync_and_show_size_popup(self, anchor=None):
@@ -2936,15 +2994,10 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
             return
 
         popup = self._ensure_point_size_popup()
-        size = float(getattr(first.material, "size", self._SIZE_MIN))
-        size = max(self._SIZE_MIN, min(self._SIZE_MAX, size))
-        tick = int(round(size / self._SIZE_STEP))
-
-        # Block signals so the pre-fill doesn't re-quantize the stored size.
-        self._point_size_slider.blockSignals(True)
-        self._point_size_slider.setValue(tick)
-        self._point_size_slider.blockSignals(False)
-        self._point_size_label.setText(f"{tick * self._SIZE_STEP:3.2f}")
+        # Anchor the range on the size these points currently have, so the
+        # slider is useful whether they're 0.01 or 100 units across.
+        size = getattr(first.material, "size", None)
+        self._anchor_size_slider(float(size) if size is not None else 0.0)
 
         if anchor is not None:
             popup.move(anchor.mapToGlobal(QtCore.QPoint(0, anchor.height())))

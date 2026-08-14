@@ -921,6 +921,63 @@ def test_effects_controls_qt(mesh):
     v.close()
 
 
+def test_point_size_controls_qt(points):
+    """The legend's point-size slider must adapt its range to the current size."""
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    from octarine.controls import Controls
+
+    v = oc.Viewer(offscreen=True, size=(300, 300))
+    v.add_points(points, name="tiny", size=0.02, size_space="world")
+    v.add_points(points, name="big", size=40)
+    (tiny,) = v.objects["tiny"]
+    (big,) = v.objects["big"]
+
+    ctrl = Controls(v)
+    ctrl.active_objects = "tiny"
+    ctrl._sync_and_show_size_popup()
+    slider = ctrl._point_size_slider
+
+    # The range brackets the current size, which sits mid-slider
+    assert ctrl._point_size_range == (pytest.approx(0.002), pytest.approx(0.2))
+    assert slider.value() == ctrl._SIZE_TICKS // 2
+
+    # ... so the slider resolves sizes that a fixed 0.5-50 range could not
+    slider.setValue(slider.value() + 10)
+    assert 0.02 < tiny.material.size < 0.2
+
+    # Running into the end of the range re-anchors it: the size is kept but the
+    # slider re-centers on it, so it can be pushed further still
+    slider.setValue(slider.maximum())
+    assert tiny.material.size == pytest.approx(0.2)
+    assert slider.value() == ctrl._SIZE_TICKS // 2
+    assert ctrl._point_size_range == (pytest.approx(0.02), pytest.approx(2.0))
+
+    # Points of a wholly different magnitude get their own range
+    ctrl.active_objects = "big"
+    ctrl._sync_and_show_size_popup()
+    assert ctrl._point_size_range == (pytest.approx(4.0), pytest.approx(400.0))
+    assert slider.value() == ctrl._SIZE_TICKS // 2
+    # ... and merely opening the popup must not change the size
+    assert big.material.size == 40
+
+    slider.setValue(slider.minimum())
+    assert big.material.size == pytest.approx(4.0)
+
+    # A size of zero is not a usable anchor - fall back rather than divide by it
+    big.material.size = 0
+    ctrl._sync_and_show_size_popup()
+    assert ctrl._point_size_range == (
+        pytest.approx(ctrl._SIZE_FALLBACK / ctrl._SIZE_SPAN),
+        pytest.approx(ctrl._SIZE_FALLBACK * ctrl._SIZE_SPAN),
+    )
+    assert big.material.size == 0
+
+    ctrl._point_size_popup.hide()
+    v.close()
+
+
 def _render_point_view(v, cam_height):
     """Render with an ortho camera showing `cam_height` world units.
 
