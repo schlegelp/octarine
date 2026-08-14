@@ -128,6 +128,28 @@ def test_screenshot_restores_state(scene_viewer):
     assert scene_viewer._background.visible
 
 
+@pytest.mark.parametrize("trigger", ("reactive", "active_window"))
+def test_screenshot_forces_a_render(scene_viewer, trigger):
+    """A non-continuous render trigger must not hand back a stale frame."""
+    # Draw an ordinary frame, then put the viewer in the state where neither
+    # trigger would render again on its own: nothing is flagged as stale and
+    # the window is not active (an offscreen canvas is always "active", so
+    # that one we have to fake)
+    scene_viewer.canvas.force_draw()
+    scene_viewer._render_stale = False
+    scene_viewer.canvas.isActiveWindow = lambda: False
+    scene_viewer.render_trigger = trigger
+
+    img = _shot(scene_viewer, pixel_ratio=1, supersample=1, alpha=True)
+    assert img[..., 3].min() == 0  # the background really is gone
+
+    # The trigger must come back untouched - and the canvas must end up showing
+    # an ordinary frame again rather than the one we just captured
+    assert scene_viewer.render_trigger == trigger
+    scene_viewer.canvas.force_draw()
+    assert np.asarray(scene_viewer.renderer.snapshot())[..., 3].min() == 255
+
+
 def test_screenshot_supersample_is_capped(scene_viewer):
     """A factor that would blow past the GPU's texture limit must be reduced."""
     max_size = scene_viewer.renderer.device.limits["max-texture-dimension-2d"]

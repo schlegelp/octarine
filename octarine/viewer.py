@@ -633,12 +633,9 @@ class Viewer:
 
         # Now check if we need to render the scene
         if rm == "active_window":
-            # Note to self: we need to explore how to do this with different backends / Window managers
-            # Not sure if this will work with e.g. Jupyter (does it know when the notebook is active?)
-            if hasattr(self.canvas, "isActiveWindow"):
-                if not self.canvas.isActiveWindow():
-                    self.canvas.request_draw()
-                    return
+            if not self._window_is_active():
+                self.canvas.request_draw()
+                return
         elif rm == "reactive":
             # If we're linked to another viewer, our camera may have been moved
             # by that viewer's controller - in which case none of our own events
@@ -676,6 +673,20 @@ class Viewer:
         self._last_camera_sig = self._camera_sig() if self._linked else None
 
         self.canvas.request_draw()
+
+    def _window_is_active(self):
+        """Whether the canvas' window currently has the focus.
+
+        Note to self: we need to explore how to do this with different backends
+        / window managers. Only the Qt canvas can tell us at all; everything
+        else (offscreen canvases in particular) counts as active. Not sure if
+        this will work with e.g. Jupyter (does it know when the notebook is
+        active?).
+
+        """
+        if not hasattr(self.canvas, "isActiveWindow"):
+            return True
+        return self.canvas.isActiveWindow()
 
     def _refresh_scene(self):
         """Re-fit everything that is derived from the scene as a whole.
@@ -4760,6 +4771,18 @@ class Viewer:
         # of them), so this restores "auto" pixel ratio as well as a fixed one
         opr = (self.renderer._pixel_scale, self.renderer._pixel_ratio)
         scaled = []
+
+        # In the non-continuous trigger modes `_animate` skips the render
+        # itself - nothing has flagged the scene as stale, or the window is not
+        # active (which is exactly the case when the screenshot is taken from
+        # the controls panel). The forced draw below would then simply hand us
+        # back the frame that is already there: at the old size and pixel ratio
+        # and with the background we just hid still in it. So take the trigger
+        # out of the loop for the duration of the capture. N.B. we bypass the
+        # property, which would add/remove event handlers.
+        trigger = self._render_trigger
+        self._render_trigger = "continuous"
+
         try:
             self.renderer.pixel_ratio = out_ratio * supersample
             if supersample > 1:
@@ -4784,6 +4807,16 @@ class Viewer:
                 self._background.visible = vis
             if size:
                 self.size = os
+
+            # What the canvas is showing now is the frame we just captured,
+            # hidden background and all. Flag it as stale so that the next tick
+            # draws a normal one over it - and where there will be no such tick
+            # (an inactive window never redraws), draw it here and now, i.e.
+            # while the trigger is still overridden.
+            self._render_stale = True
+            if trigger == "active_window" and not self._window_is_active():
+                self.canvas.force_draw()
+            self._render_trigger = trigger
 
         return im
 

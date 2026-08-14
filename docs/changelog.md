@@ -127,6 +127,14 @@ _Date: ongoing_
   cost is paid per frame
 
 #### Fixes
+- [`Viewer.screenshot`][octarine.Viewer.screenshot] came out with the background still in it
+  (i.e. not transparent) unless the [render trigger](triggers.md) was `"continuous"`: the other
+  modes skip the render itself unless something flagged the scene as stale or the window has the
+  focus - which it does not when the screenshot is taken from the control panel - so the frame
+  that was read back was the one the canvas had drawn before, background and all. The capture
+  now forces a render no matter the trigger (and draws an ordinary frame afterwards). This also
+  affects recording an [`Animation`][octarine.Animation], which renders frame by frame through
+  the same code
 - control panel: the "Browse..." buttons no longer flash up a file dialog that closes again
   immediately. The static `QFileDialog` helpers are modal, i.e. they run an event loop of their
   own - which does not survive every way of hosting the Qt loop (IPython's Qt input hook quits
