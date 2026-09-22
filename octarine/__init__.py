@@ -5,3 +5,6 @@ from .__version__ import __version__
 from .conversion import register_converter, get_converter
 from .utils import VoxelCloud, VoxelRuns
 from . import plugins
+from . import _patches
+
+_patches.apply_all()
