@@ -356,7 +356,7 @@ def parse_mesh_color(mesh, color, alpha=None):
 
     if is_transparent:
         # The default blend mode is "auto" which will show transparency but is a bit ugly
-        mat_color_kwargs["alpha_mode"] = "add"
+        mat_color_kwargs["alpha_mode"] = "weighted_blend"
 
     return mat_color_kwargs, obj_color_kwargs
 
