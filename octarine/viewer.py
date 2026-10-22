@@ -531,6 +531,11 @@ class Viewer:
         self._show_bounds = False
         self._shadows = False
         self._shadow_fit = None  # (center, radius) of the scene; see `_fit_shadows`
+        # Place the headlight right away: until `_update_headlight` runs, it and
+        # its target both sit at the origin, and a render before the first
+        # regular frame (e.g. a forced one) would aim its shadow camera along a
+        # zero-length vector
+        self._update_headlight()
         # Whether the scene's contents changed since we last fitted anything to
         # them, and whether an `add` asked for the camera to be re-centered;
         # see `Viewer._refresh_scene`
