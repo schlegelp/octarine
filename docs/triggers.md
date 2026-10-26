@@ -50,11 +50,17 @@ down to almost zero when not interacting with the viewer:
 
 **Important:** Reactive rendering has a few caveats! Because we're not greedily rendering new frames whenever we get the
 chance, we have to rely on a complex-ish system of signals that tell our `Viewer` when things have changed and it's time to compute
-a new frame. Basic actions will correctly trigger a re-render but if you encounter a situation where the viewer
-should update but doesn't, please open an [issue on Github](https://github.com/schlegelp/octarine/issues)!
+a new frame. Interacting with the viewer - moving the camera included - will correctly trigger a re-render but if you
+encounter a situation where the viewer should update but doesn't, please open an
+[issue on Github](https://github.com/schlegelp/octarine/issues)!
 
 Also, if you are running e.g. custom animations outside of the `Viewer.add_animations` hook you may have to manually tell the viewer
-to re-render by setting `viewer._render_stale = True`.
+to re-render by setting `viewer._render_stale = True`. That flag doubles as the wake-up call: between frames the canvas
+is allowed to go to sleep entirely, and setting it asks for a new frame.
+
+The same goes for moving the camera from code: methods like `Viewer.set_view` and `Viewer.center_camera` take care of
+it themselves, but if you reach for the camera directly (e.g. `viewer.camera.zoom = 2`) while the canvas is asleep,
+nothing is there to notice - so set `viewer._render_stale = True` afterwards.
 
 !!! example "Active window"
     There is a third option, `active_window`, which pauses rendering when the Window isn't active. However, this currently

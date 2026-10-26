@@ -104,9 +104,26 @@ PIXEL_SCALED_EFFECT_PARAMS = {
 #   - e.g. material.metalness = 2 looks good for background meshes
 #   - metalness = 1 with roughness = 0 makes for funky looking neurons
 #   - m.material.side = "FRONT" makes volumes look better
-# - make Viewer reactive (see reactive_rendering.py) to save
-#   resources when not actively using the viewer - might help in Jupyter?
 # [/] add specialised methods for adding neurons, volumes, etc. to the viewer
+
+# Events after which the frame we last drew no longer shows the truth, and the
+# scene therefore has to be flagged as stale when the render trigger is
+# "reactive" (see `Viewer.render_trigger`). User input may have moved the
+# camera (the controller acts on all of them), dragged the transform gizmo or
+# changed what is highlighted; a resize leaves the pixels we drew at the wrong
+# size. Note that we do not try to work out whether any of that actually
+# happened - a frame drawn for nothing is cheaper than the bookkeeping, and
+# anything the input sets in motion is picked up from there by the camera
+# fingerprint in `Viewer._animate`.
+STALE_EVENTS = (
+    "pointer_down",
+    "pointer_move",
+    "pointer_up",
+    "wheel",
+    "key_down",
+    "key_up",
+    "resize",
+)
 
 # The named views `Viewer.set_view` and `Viewer.get_view` understand, as
 # ``name -> (view_dir, up)``. Prefixing a name with "-" looks from the far side.
@@ -287,7 +304,6 @@ def update_helper(viewer, legend=True, bounds=True):
 
     # Any time we update the viewer, we should set it to stale
     viewer._render_stale = True
-    viewer.canvas.request_draw()
 
 
 class Viewer:
@@ -398,6 +414,10 @@ class Viewer:
         if size is not None:
             defaults["size"] = size
         defaults.update(kwargs)
+
+        # Backs the `_render_stale` property. Set before the headless bail-out
+        # below so that even a viewer without any gfx objects has it.
+        self._render_stale_flag = True
 
         # If we're running in headless mode (primarily for tests on CI) we will
         # simply not initialize the gfx objects. Not ideal but it turns
@@ -564,6 +584,8 @@ class Viewer:
         # Camera links (see `Viewer.link`)
         self._linked = []
         self._link_filter = (None, None)
+        # Fingerprint of the camera the last frame was drawn with; used to
+        # spot movement that nothing flagged us about (see `Viewer._animate`)
         self._last_camera_sig = None
 
         # Widen the shadow filter. The kernel is baked into the shader, so this
@@ -636,48 +658,75 @@ class Viewer:
                 pass  # already removed (e.g. by index or by function)
         self._animations_flagged_for_removal = []
 
-        # Now check if we need to render the scene
-        if rm == "active_window":
-            if not self._window_is_active():
-                self.canvas.request_draw()
-                return
-        elif rm == "reactive":
-            # If we're linked to another viewer, our camera may have been moved
-            # by that viewer's controller - in which case none of our own events
-            # fired and nothing flagged us as stale (see `Viewer.link`)
-            if self._linked and self._camera_sig() != self._last_camera_sig:
-                self._render_stale = True
-            # If the scene is not stale, we can skip rendering
-            if not getattr(self, "_render_stale", False):
-                self.canvas.request_draw()
-                return
+        # Now check if we need to render the scene. `sig_before` is the camera
+        # as it stands going into this frame; we compare it against the camera
+        # coming out of the render further down.
+        if rm == "reactive" or self._linked:
+            sig_before = self._camera_sig()
+        else:
+            sig_before = None
 
-        # The headlight follows the camera but is not parented to it, so it has
-        # to be re-aimed whenever we've moved (see `_update_headlight`)
-        if self._headlight_enabled:
-            self._update_headlight()
+        if rm == "reactive":
+            # Camera movement does not necessarily come through our own event
+            # handlers: a linked viewer's controller may have driven it (see
+            # `Viewer.link`), or the user may have moved it from code while we
+            # were awake. Comparing a cheap fingerprint against the one the
+            # last frame was drawn with catches those without being told. Note
+            # that it cannot catch them while the canvas is asleep - nothing
+            # runs then - which is why the viewer flags itself as stale
+            # wherever it moves the camera itself.
+            render = self._render_stale or sig_before != self._last_camera_sig
+        else:
+            render = rm != "active_window" or self._window_is_active()
 
-        # Now render the scene
-        if self._show_fps:
-            with self.stats:
+        if render:
+            # The headlight follows the camera but is not parented to it, so it
+            # has to be re-aimed whenever we've moved (see `_update_headlight`)
+            if self._headlight_enabled:
+                self._update_headlight()
+
+            # Now render the scene
+            if self._show_fps:
+                with self.stats:
+                    self.renderer.render(self.scene, self.camera, flush=False)
+                    if self.transform_gizmo:
+                        self.renderer.render(
+                            self.transform_gizmo, self.camera, flush=False
+                        )
+                    self.renderer.render(
+                        self.overlay_scene, self.overlay_camera, flush=False
+                    )
+                self.stats.render()
+            else:
                 self.renderer.render(self.scene, self.camera, flush=False)
                 if self.transform_gizmo:
                     self.renderer.render(self.transform_gizmo, self.camera, flush=False)
-                self.renderer.render(
-                    self.overlay_scene, self.overlay_camera, flush=False
-                )
-            self.stats.render()
-        else:
-            self.renderer.render(self.scene, self.camera, flush=False)
-            if self.transform_gizmo:
-                self.renderer.render(self.transform_gizmo, self.camera, flush=False)
-            self.renderer.render(self.overlay_scene, self.overlay_camera)
+                self.renderer.render(self.overlay_scene, self.overlay_camera)
 
-        # Set stale to False
-        self._render_stale = False
-        self._last_camera_sig = self._camera_sig() if self._linked else None
+            # Set stale to False - unless the camera moved while we rendered,
+            # in which case this frame is already out of date again. pygfx'
+            # controllers damp their motion and do their share of it from a
+            # `before_render` handler, i.e. from inside the render above - as
+            # does the transform gizmo. Nothing flags us about that, so we keep
+            # going until the camera has come to a rest.
+            self._render_stale = False
+            if sig_before is not None:
+                sig_after = self._camera_sig()
+                moved = sig_after != sig_before or sig_before != self._last_camera_sig
+                self._last_camera_sig = sig_after
 
-        self.canvas.request_draw()
+                if rm == "reactive":
+                    self._render_stale = sig_after != sig_before
+
+                # Our controller drives the cameras of linked viewers directly
+                # (see `Viewer.link`), so they never hear about this from their
+                # own event handlers - and a reactive one of them is fast
+                # asleep, with nothing running that might notice.
+                if moved and self._linked:
+                    for viewer in self._linked:
+                        viewer._render_stale = True
+
+        self._request_next_frame()
 
     def _window_is_active(self):
         """Whether the canvas' window currently has the focus.
@@ -796,6 +845,51 @@ class Viewer:
         )
 
     @property
+    def _render_stale(self):
+        """Whether the scene has changed since the last frame was drawn."""
+        return self._render_stale_flag
+
+    @_render_stale.setter
+    def _render_stale(self, value):
+        self._render_stale_flag = bool(value)
+        # With a "reactive" trigger the canvas is left to go to sleep between
+        # frames (see `Viewer._request_next_frame`), so flagging the scene is
+        # also what has to wake it up again. This is the only path that does:
+        # anything that wants a new frame flags the scene, from the event
+        # handlers here to `viewer._render_stale = True` in user code.
+        if self._render_stale_flag:
+            self._request_draw()
+
+    def _set_stale(self, event):
+        """Flag the scene as stale; the event handler for `STALE_EVENTS`."""
+        self._render_stale = True
+
+    def _request_draw(self):
+        """Ask the canvas for a frame - a no-op if there is no canvas (yet)."""
+        canvas = getattr(self, "canvas", None)
+        if canvas is not None:
+            canvas.request_draw()
+
+    def _request_next_frame(self):
+        """Keep the render loop going if this trigger needs it to.
+
+        In "reactive" mode we let the canvas fall asleep (rendercanvas only
+        draws on demand) and rely on `_render_stale` to wake it up again. The
+        exception are animations that asked for a render: those tick once per
+        frame, so they need the loop to keep running. Animations that did not
+        (`req_render=False`) are the viewer's own hooks for keeping something
+        in step with a frame that is being drawn anyway - the scale bar, the
+        depth-of-field focus - and must not keep the canvas awake.
+
+        """
+        if self._render_trigger != "reactive" or self._animates_continuously():
+            self._request_draw()
+
+    def _animates_continuously(self):
+        """Whether any animation needs a frame drawn for it on its own."""
+        return any(req_render for _, _, req_render in self._animations.values())
+
+    @property
     def render_trigger(self):
         """Determines when the scene is (re)rendered.
 
@@ -821,26 +915,16 @@ class Viewer:
 
         # Add/remove event handlers as necessary
         if mode == "reactive":
-            self._set_stale_func = lambda event: setattr(self, "_render_stale", True)
-            self.renderer.add_event_handler(
-                self._set_stale_func,
-                "pointer_down",
-                "pointer_move",
-                "pointer_up",
-                "wheel",
-                # "before_render",
-            )
+            self.renderer.add_event_handler(self._set_stale, *STALE_EVENTS)
         elif self._render_trigger == "reactive":
-            self.renderer.remove_event_handler(
-                self._set_stale_func,
-                "pointer_down",
-                "pointer_move",
-                "pointer_up",
-                "wheel",
-                # "before_render",
-            )
+            self.renderer.remove_event_handler(self._set_stale, *STALE_EVENTS)
 
         self._render_trigger = mode
+
+        # A reactive viewer leaves the canvas asleep between frames, so both
+        # settling into and waking up from that mode needs a frame drawn with
+        # the new trigger in place
+        self._request_draw()
 
     @property
     def controls(self):
@@ -1273,6 +1357,7 @@ class Viewer:
         if obj is None:
             if self.transform_gizmo:
                 self.transform_gizmo._object_to_control = None
+                self._render_stale = True
             return
 
         if isinstance(obj, str):
@@ -1290,6 +1375,8 @@ class Viewer:
             self.transform_gizmo.add_default_event_handlers(self.renderer, self.camera)
         else:
             self.transform_gizmo._object_to_control = obj
+
+        self._render_stale = True
 
     @property
     def _is_jupyter(self):
@@ -1535,6 +1622,11 @@ class Viewer:
 
         self._animations[x] = (on_error, run_every, req_render)
 
+        # An animation needs the render loop to keep running, which in
+        # "reactive" mode it only does while there are animations - so if this
+        # was the first one, the loop may have gone to sleep and needs a kick
+        self._request_draw()
+
     def remove_animation(self, x):
         """Remove animation function from the Viewer.
 
@@ -1731,6 +1823,7 @@ class Viewer:
                 for attr in ("_ao_pass", "_outline_pass", "_tonemap_pass"):
                     if p is getattr(self, attr, None):
                         setattr(self, attr, None)
+                self._render_stale = True
             return
 
         if p is None:
@@ -1758,6 +1851,8 @@ class Viewer:
             if effect == "ao":
                 # May have been switched off via `set_ambient_occlusion(False)`
                 p.enabled = True
+
+        self._render_stale = True
 
     def show(self, use_sidecar=False, toolbar=False, start_loop=False):
         """Show viewer.
@@ -1859,6 +1954,7 @@ class Viewer:
             if self._message_text.parent:
                 self.overlay_scene.remove(self._message_text)
             del self._message_text
+            self._render_stale = True
             return
 
         _positions = {
@@ -1887,6 +1983,7 @@ class Viewer:
             self._message_text.material.color = cmap.Color(color).rgba
         self._message_text.material.opacity = 1
         self._message_text.local.position = _positions[position]
+        self._render_stale = True
 
         # When do we need to start fading out?
         if duration:
@@ -2219,6 +2316,8 @@ class Viewer:
         else:
             self.remove_bounds()
 
+        self._render_stale = True
+
     def remove_bounds(self):
         """Remove bounding box visual."""
         self._show_bounds = False
@@ -2283,6 +2382,7 @@ class Viewer:
             self.camera.show_object(
                 self.scene, scale=1, view_dir=(0.0, 0.0, 1.0), up=(0.0, -1.0, 0.0)
             )
+            self._render_stale = True
             self._sync_linked()
 
     @property
@@ -2291,14 +2391,21 @@ class Viewer:
         return tuple(self._linked)
 
     def _camera_sig(self):
-        """Cheap fingerprint of the camera state - used to detect movement."""
+        """Cheap fingerprint of the camera state - used to detect movement.
+
+        This runs (twice) on every reactive frame, hence the raw bytes: they
+        compare just the same but are a good deal cheaper than unpacking the
+        two transforms into boxed scalars.
+
+        """
+        camera = self.camera
         return (
-            *self.camera.local.position,
-            *self.camera.local.rotation,
-            self.camera.width,
-            self.camera.height,
-            self.camera.zoom,
-            self.camera.fov,
+            camera.local.position.tobytes(),
+            camera.local.rotation.tobytes(),
+            camera.width,
+            camera.height,
+            camera.zoom,
+            camera.fov,
         )
 
     def _sync_linked(self):
@@ -2312,7 +2419,6 @@ class Viewer:
             # The other viewers don't know that anything happened, so we have to
             # ask them to re-render themselves
             v._render_stale = True
-            v.canvas.request_draw()
 
     def link(self, *others, sync=None, exclude=None):
         """Keep the camera synchronised with (an)other viewer(s).
@@ -3300,6 +3406,7 @@ class Viewer:
                 o._highlighted = True
                 # Remember the style so e.g. set_colors can re-apply it
                 o._highlight_style = color
+                self._render_stale = True
 
     def unhighlight_objects(self, obj=None):
         """Unhighlight given object(s).
@@ -3354,6 +3461,7 @@ class Viewer:
                 del o._highlighted
                 if hasattr(o, "_highlight_style"):
                     del o._highlight_style
+                self._render_stale = True
 
     def pin_objects(self, obj):
         """Pin given object(s).
@@ -4600,6 +4708,8 @@ class Viewer:
         else:
             self._background.material = gfx.BackgroundMaterial(*colors)
 
+        self._render_stale = True
+
     def set_bg_gradient(
         self,
         preset="graphite",
@@ -4686,6 +4796,8 @@ class Viewer:
             falloff=falloff,
             vignette=vignette,
         )
+
+        self._render_stale = True
 
     def _toggle_fps(self):
         """Switch FPS measurement on and off."""
@@ -4936,6 +5048,10 @@ class Viewer:
         else:
             raise TypeError(f"Unable to set view from {view!r}")
 
+        # Moving the camera from code does not go past any of our event
+        # handlers, so with a sleeping canvas (see `Viewer._request_next_frame`)
+        # nothing would ask for the frame that shows the new view
+        self._render_stale = True
         self._sync_linked()
 
     def get_view(self, view=None):
