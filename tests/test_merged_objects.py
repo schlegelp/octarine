@@ -1036,3 +1036,82 @@ def test_unmerging_by_hand_is_not_counted_as_erosion(qt_controls):
     # ... whereas a style that cannot be held per object is erosion
     v.set_silhouette(3, objects=["bar1"])
     assert v.merge_stats.split_outs == 1
+
+
+# ------------------------------------------------------------ colour space
+
+
+# Deliberately mid-tones. Merging moves a colour from the material into the
+# geometry, and the two live in different colour spaces - but sRGB and
+# physical agree at 0 and 1, so pure red/green/blue cannot catch it.
+_MIDTONES = ((0.5, 0.5, 0.5, 1.0), (0.5, 0.2, 0.2, 1.0), (0.2, 0.5, 0.2, 1.0))
+
+
+def _tinted(v, colors=_MIDTONES, shader="basic"):
+    for i, color in enumerate(colors):
+        mesh = tm.creation.box((160, 20, 20))
+        mesh.vertices = mesh.vertices + (0, 60 - i * 40, 0)
+        v.add_mesh(mesh, name=f"b{i}", color=color, shader=shader, center=False)
+    return _frame(v)
+
+
+def _pixels(v):
+    return np.asarray(v.screenshot(filename=None))[..., :3].astype(int)
+
+
+@pytest.mark.parametrize("shader", ["basic", "phong"])
+def test_merging_does_not_change_brightness(shader):
+    """A merged object must render exactly as it did on its own.
+
+    pygfx decodes a material's uniform colour from sRGB in the shader but
+    takes a vertex colour to be physical already. Merging moves colour from
+    the one to the other, so without converting on the way everything comes
+    out lighter.
+
+    """
+    plain = _tinted(_viewer(merge=False), shader=shader)
+    merged = _tinted(_viewer(merge=True), shader=shader)
+
+    assert len(plain.visuals) == 3 and len(merged.visuals) == 1
+    assert np.array_equal(_pixels(plain), _pixels(merged))
+
+    plain.close()
+    merged.close()
+
+
+def test_recoloring_a_merged_object_matches_unmerged():
+    """... and the same for a colour written after the merge."""
+    plain = _tinted(_viewer(merge=False))
+    merged = _tinted(_viewer(merge=True))
+
+    for v in (plain, merged):
+        v.set_colors({"b0": (0.4, 0.6, 0.3, 1.0), "b1": (0.25, 0.25, 0.25, 1.0)})
+
+    assert np.array_equal(_pixels(plain), _pixels(merged))
+    plain.close()
+    merged.close()
+
+
+def test_colour_round_trips_through_a_handle():
+    """What `material.color` reports back must be what was set."""
+    v = _tinted(_viewer(merge=True))
+
+    for color in ((0.5, 0.5, 0.5, 1.0), (0.2, 0.7, 0.4, 1.0), (1.0, 0.0, 0.0, 1.0)):
+        v.set_colors({"b2": color})
+        np.testing.assert_allclose(
+            v.objects["b2"][0].material.color.rgba, color, atol=1e-3
+        )
+    v.close()
+
+
+def test_splitting_out_preserves_brightness():
+    """Coming back out of a merge must not shift the colour either."""
+    v = _tinted(_viewer(merge=True))
+    v.set_colors({"b1": (0.35, 0.45, 0.55, 1.0)})
+    before = _pixels(v)
+
+    v.unmerge_objects()
+
+    assert len(v.visuals) == 3
+    assert np.array_equal(before, _pixels(v))
+    v.close()
