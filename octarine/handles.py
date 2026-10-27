@@ -52,7 +52,14 @@ from pygfx.utils.bounds import points_to_bounds
 
 from . import utils
 from .config import get_logger
-from .merge import _COLOR, _mode, merge_visuals, split_visual
+from .merge import (
+    _COLOR,
+    _color_from_physical,
+    _color_to_physical,
+    _mode,
+    merge_visuals,
+    split_visual,
+)
 
 logger = get_logger(__name__)
 
@@ -394,10 +401,11 @@ class SubVisualHandle:
         if colors is None:
             # Still a single colour for the whole merged visual
             return self.visual.material.color
-        return colors.data[self.sub.offset]
+        # The buffer holds physical values; a colour hands back sRGB
+        return _color_from_physical(colors.data[self.sub.offset])
 
     def _write_color(self, value):
-        rgba = np.asarray(gfx.Color(value).rgba, dtype=np.float32)
+        rgba = _color_to_physical(value)
         # Writing one member's colour is what forces a merged visual off its
         # shared colour, so the buffer may have to be created here.
         colors = self._manager._ensure_vertex_colors(self.visual)
@@ -1061,7 +1069,7 @@ class MergeManager:
 
         if colors is None:
             n = len(geometry.positions.data)
-            rgba = np.asarray(gfx.Color(material.color).rgba, dtype=np.float32)
+            rgba = _color_to_physical(material.color)
             colors = gfx.Buffer(np.tile(rgba, (n, 1)))
             geometry.colors = colors
 

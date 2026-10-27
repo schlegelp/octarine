@@ -266,6 +266,26 @@ def _buffer(geometry, name):
     return None if buffer is None else buffer.data
 
 
+def _color_to_physical(color):
+    """An sRGB colour as the (r, g, b, a) a vertex colour buffer wants.
+
+    pygfx decodes a material's uniform colour from sRGB in the shader, but
+    takes a *vertex* colour to be in physical (linear) space already - see
+    `mesh.wgsl`, "The vertex color should already in physical space". So a
+    colour moving from the material into the geometry has to be decoded on the
+    way, or the object renders lighter than it did before it was merged.
+
+    """
+    color = gfx.Color(color)
+    return np.asarray((*color.to_physical(), color.a), dtype=np.float32)
+
+
+def _color_from_physical(values):
+    """The inverse: a vertex colour back to a colour a material can hold."""
+    r, g, b, a = (float(v) for v in values)
+    return gfx.Color.from_physical(r, g, b, a)
+
+
 def _as_rgba(colors):
     """Normalise a per-vertex color array to (N, 4) float32 RGBA.
 
@@ -308,7 +328,8 @@ def _absorbable_values(vis, attr):
 
     value = getattr(vis.material, attr.value)
     if attr.channels == 4:
-        return np.asarray(gfx.Color(value).rgba, dtype=np.float32)
+        # i.e. a colour: into the geometry it goes as physical, not sRGB
+        return _color_to_physical(value)
     return np.asarray([value], dtype=np.float32)
 
 
@@ -353,7 +374,10 @@ def _absorb(members, subs, n_vertices, attrs):
         else:
             value = members[0].attrs[attr.value]
             material_kwargs[attr.value] = (
-                gfx.Color(tuple(value)) if attr.channels == 4 else float(value[0])
+                # Back out of physical space: this one is going on the material
+                _color_from_physical(value)
+                if attr.channels == 4
+                else float(value[0])
             )
             material_kwargs[attr.mode] = "uniform"
 
