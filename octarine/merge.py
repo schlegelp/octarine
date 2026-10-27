@@ -28,6 +28,16 @@ What merging costs is the per-object handle. `material.color`,
 visual becomes a range of vertices recorded in `visual._sub_visuals`, and
 per-object operations become writes to that range. See `SubVisual`.
 
+`split_visual` undoes all of this, member by member, which is what lets an
+object leave a merged visual when something is asked of it that a merged
+object cannot express. `sub_visual_at` goes the other way, turning the index
+a pick reports back into the member it belongs to.
+
+Everything here is one-shot and stateless. The live layer on top - deciding
+when to merge, handing out the per-object handles that stand in for the
+objects that went into a merged visual, and keeping a hidden object hidden
+across rebuilds - is `octarine.handles`.
+
 """
 
 import uuid
@@ -41,7 +51,7 @@ from functools import lru_cache
 
 from . import utils
 
-__all__ = ["merge_visuals", "SubVisual"]
+__all__ = ["merge_visuals", "split_visual", "sub_visual_at", "SubVisual"]
 
 
 # Ceiling on the size of a single merged visual, deliberately conservative:
@@ -85,7 +95,7 @@ _THICKNESS = _Absorbable("thickness", "thickness_mode", "thicknesses", 1)
 _SIZE = _Absorbable("size", "size_mode", "sizes", 1)
 
 _Member = namedtuple("_Member", ["object_id", "group", "positions", "attrs"])
-_Merger = namedtuple("_Merger", ["key", "members", "merge"])
+_Merger = namedtuple("_Merger", ["key", "members", "merge", "kind"])
 
 
 @dataclass
@@ -722,9 +732,9 @@ _MESH = _Kind(
 # Keyed by exact type: subclasses (`BoxHelper`, `InstancedMesh`, octarine's
 # `TubeVisual`) come with semantics of their own and are left alone.
 _MERGERS = {
-    gfx.Line: _Merger(_line_key, _line_members, _merge_lines),
-    gfx.Points: _Merger(_points_key, _points_members, _merge_points),
-    gfx.Mesh: _Merger(_mesh_key, _mesh_members, _merge_meshes),
+    gfx.Line: _Merger(_line_key, _line_members, _merge_lines, _LINE),
+    gfx.Points: _Merger(_points_key, _points_members, _merge_points, _POINTS),
+    gfx.Mesh: _Merger(_mesh_key, _mesh_members, _merge_meshes, _MESH),
 }
 
 
@@ -818,3 +828,204 @@ def merge_visuals(visuals, max_size=None, max_nodes=_MAX_MERGED_NODES):
             merged.append(merger.merge(group[0], batch))
 
     return merged
+
+
+# ------------------------------------------------------------------- split
+
+
+def _strip_if_whole(visual):
+    """Drop `_sub_visuals` from a visual that holds exactly one member.
+
+    A visual with a single member spanning all of its vertices is, for every
+    purpose outside this module, a plain unmerged visual - and the point of
+    splitting is to hand back something indistinguishable from one. Leaving
+    the list on would have the viewer keep addressing it through a sub-visual
+    handle, and `_sub_visuals_of` reconstructs the same single member from the
+    buffers anyway.
+
+    """
+    subs = getattr(visual, "_sub_visuals", None)
+    if subs is not None and len(subs) == 1:
+        del visual._sub_visuals
+    return visual
+
+
+def _collapse_members(members, kind):
+    """Turn a member's constant per-vertex values back into a single value.
+
+    `_absorb` keeps an absorbed property per-vertex whenever any member
+    carries it per-vertex, without inspecting the values - on the merge path
+    that is the right trade, since the alternative is comparing every vertex
+    of every member (see `_differs`).
+
+    Splitting has to inspect them, though. A member coming back out of a
+    merged visual always carries per-vertex values, so without this a
+    split-out visual would keep `color_mode="vertex"` - and `material.color`
+    on a vertex-coloured visual is silently ignored by the shader, which is
+    exactly the handle the viewer reaches for once an object is on its own
+    again. The cost is only paid when splitting, which is rare.
+
+    """
+    for member in members:
+        for attr in kind.attrs:
+            values = member.attrs[attr.value]
+            if values.ndim == 2 and len(values) and (values == values[0]).all():
+                member.attrs[attr.value] = values[0]
+
+
+def split_visual(merged, object_ids=None, extract=True):
+    """Split members back out of a merged visual.
+
+    The inverse of `merge_visuals`, to the extent that one exists: the
+    members are decomposed exactly as a re-merge would decompose them and
+    rebuilt as visuals of their own. What is *not* restored is the material
+    class a member had before merging - a `gfx.LineMaterial` line that merged
+    into a `FlexLineMaterial` splits back out as a `FlexLineMaterial`, since
+    the merged visual is all the split has to go on.
+
+    Members sharing an `object_id` stay together in one visual, because that
+    is what the viewer addresses as a single object.
+
+    Parameters
+    ----------
+    merged :        pygfx visual
+                    A visual produced by `merge_visuals`, i.e. one carrying
+                    `_sub_visuals`.
+    object_ids :    hashable | list thereof | None
+                    The `object_id`(s) to extract. `None` (default) extracts
+                    every member, leaving no remainder. IDs that aren't in
+                    this visual are ignored.
+    extract :       bool
+                    Whether to build the extracted visuals at all. `False`
+                    returns only the remainder, for a caller that is throwing
+                    the extracted members away (removing them, say) - building
+                    one visual per member is the expensive half of a split.
+
+    Returns
+    -------
+    remainder :     pygfx visual | None
+                    A visual holding the members that were not extracted, or
+                    `None` if none were left.
+    extracted :     list of pygfx visuals
+                    One visual per extracted `object_id`, in the order the
+                    ids first appear in `merged._sub_visuals`. Empty if
+                    `extract` is False.
+
+    See Also
+    --------
+    merge_visuals
+                    The operation this undoes.
+
+    """
+    merger = _MERGERS.get(type(merged))
+    subs = getattr(merged, "_sub_visuals", None)
+    if merger is None or not subs:
+        raise ValueError(
+            f"{type(merged).__name__} is not a merged visual - nothing to split."
+        )
+
+    if object_ids is None:
+        wanted = {sub.object_id for sub in subs}
+    else:
+        wanted = set(utils.make_iterable(object_ids))
+
+    # `members` comes back in `_sub_visuals` order, so grouping by id as we go
+    # preserves first-appearance order for the extracted visuals.
+    keep, taken = [], {}
+    for member in merger.members(merged):
+        if member.object_id in wanted:
+            taken.setdefault(member.object_id, []).append(member)
+        else:
+            keep.append(member)
+
+    # Both sides: a remainder whose members turn out to agree should go back
+    # to a uniform value just as a fresh merge of them would.
+    _collapse_members(keep, merger.kind)
+
+    # N.B. `merged` is the template for both sides: it is where the shared
+    # material and object state the members have to keep living now lives.
+    extracted = []
+    if extract:
+        for group in taken.values():
+            _collapse_members(group, merger.kind)
+            extracted.append(_strip_if_whole(merger.merge(merged, group)))
+    remainder = _strip_if_whole(merger.merge(merged, keep)) if keep else None
+
+    return remainder, extracted
+
+
+# ------------------------------------------------------------------ picking
+
+
+def _pick_offsets(merged, faces):
+    """Cached array of the members' start offsets, for `sub_visual_at`.
+
+    Picking happens per pointer event, so this is on an interactive path; a
+    merged points visual can hold a hundred thousand members and rebuilding
+    the array for each event would be felt. The offsets only change when the
+    visual is rebuilt, and a rebuild produces a *new* visual, so caching on
+    the visual needs no invalidation beyond the length check.
+
+    """
+    # One cache slot, not two: whether a visual picks by face or by vertex is
+    # fixed by its type, so it only ever asks one of the two questions.
+    subs = merged._sub_visuals
+    cached = getattr(merged, "_sub_visual_pick_offsets", None)
+    if cached is not None and len(cached) == len(subs):
+        return cached
+
+    offsets = np.array(
+        [(sub.face_offset if faces else sub.offset) for sub in subs], dtype=np.int64
+    )
+    merged._sub_visual_pick_offsets = offsets
+    return offsets
+
+
+def sub_visual_at(merged, pick_info):
+    """Which member of a merged visual a pick landed on.
+
+    Picking reports the merged visual as the world object, so the member has
+    to be recovered from the index that comes with it: the face index for
+    meshes, which is what the merged `indices` buffer is laid out by, and the
+    vertex index for points and lines.
+
+    Parameters
+    ----------
+    merged :    pygfx visual
+                The world object the pick reported.
+    pick_info : dict
+                The event's `pick_info`.
+
+    Returns
+    -------
+    SubVisual | None
+                The member that was hit, or `None` if `merged` isn't a merged
+                visual, carries no usable index, or the index falls in one of
+                the gap vertices between members.
+
+    """
+    subs = getattr(merged, "_sub_visuals", None)
+    if not subs:
+        return None
+
+    # Meshes index by face, everything else by vertex. Note that `face_index`
+    # is also absent on a mesh whose material doesn't write pick info.
+    faces = isinstance(merged, gfx.Mesh)
+    index = pick_info.get("face_index" if faces else "vertex_index")
+    if index is None:
+        return None
+
+    offsets = _pick_offsets(merged, faces)
+    at = int(np.searchsorted(offsets, index, side="right")) - 1
+    if at < 0:
+        return None
+
+    sub = subs[at]
+    count = sub.face_count if faces else sub.count
+    # A line's members are separated by a NaN vertex, which belongs to no
+    # member - an index pointing at one lands past the end of the member
+    # before it.
+    if index >= (sub.face_offset if faces else sub.offset) + count:
+        return None
+
+    return sub

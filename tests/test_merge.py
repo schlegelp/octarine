@@ -5,7 +5,8 @@ import pygfx as gfx
 import trimesh as tm
 import numpy as np
 
-from octarine.merge import merge_visuals
+from octarine.merge import merge_visuals, split_visual, sub_visual_at
+from conftest import bands as _bands, make_flat_viewer
 
 np.random.seed(0)
 
@@ -26,6 +27,15 @@ def _points(n=4, **kwargs):
 
     kwargs.setdefault("color", "red")
     return points2gfx(np.random.rand(n, 3).astype(np.float32), **kwargs)
+
+
+def _box(y, color):
+    """A wide, flat box at a given height - one readable band per box."""
+    from octarine.visuals import mesh2gfx
+
+    mesh = tm.creation.box((160, 20, 20))
+    mesh.vertices = mesh.vertices + (0, y, 0)
+    return mesh2gfx(mesh, color=color, shader="basic")
 
 
 def _mesh(**kwargs):
@@ -348,42 +358,9 @@ def test_merge_object_ids():
 # ------------------------------------------------------------------ render
 
 
-def _bands(v):
-    """Contiguous runs of lit rows, as (height, color) pairs.
-
-    The colour is sampled in the middle of the run, well away from the caps
-    and outlines that the renderer's supersampling leaves half-covered.
-
-    """
-    img = np.asarray(v.screenshot(filename=None))[..., :3].astype(int)
-    lit = img.sum(2) > 40
-
-    runs = []
-    for row in np.where(lit.any(1))[0]:
-        if runs and row == runs[-1][1] + 1:
-            runs[-1][1] = row
-        else:
-            runs.append([row, row])
-
-    bands = []
-    for lo, hi in runs:
-        mid = (lo + hi) // 2
-        cols = np.where(lit[mid])[0]
-        bands.append((hi - lo + 1, tuple(img[mid, cols[len(cols) // 2]])))
-    return bands
-
-
 def _flat_viewer():
-    v = oc.Viewer(offscreen=True, size=(200, 200))
-    v.renderer.pixel_ratio = 1
-    v.renderer.ppaa = "none"  # keep the band edges crisp so we can count rows
-    cam = v.camera
-    cam.width = cam.height = 200
-    cam.zoom = 1
-    cam.depth_range = (1, 1000)
-    cam.local.position = (0, 0, 120)
-    cam.look_at((0, 0, 0))
-    return v
+    """An offscreen viewer whose output can be read row by row."""
+    return make_flat_viewer(oc.Viewer(offscreen=True, size=(200, 200)))
 
 
 def _hide(merged, index):
@@ -419,15 +396,8 @@ def test_merge_lines_render():
 
 def test_merge_meshes_render():
     """A merged mesh must draw its members in their own place and color."""
-    from octarine.visuals import mesh2gfx
-
-    def box(y, color):
-        mesh = tm.creation.box((160, 20, 20))
-        mesh.vertices = mesh.vertices + (0, y, 0)
-        return mesh2gfx(mesh, color=color, shader="basic")
-
     v = _flat_viewer()
-    (merged,) = merge_visuals([box(40, "red"), box(-40, "blue")])
+    (merged,) = merge_visuals([_box(40, "red"), _box(-40, "blue")])
     v.scene.add(merged)
 
     assert _bands(v) == [(20, (255, 0, 0)), (20, (0, 0, 255))]
@@ -461,5 +431,239 @@ def test_merge_points_render():
 
     _hide(merged, 0)
     assert [c for _, c in _bands(v)] == [(0, 0, 255)]
+
+    v.close()
+
+
+# ------------------------------------------------------------------- split
+
+
+def _ids(visual):
+    """The object ids a visual holds, merged or not."""
+    subs = getattr(visual, "_sub_visuals", None)
+    if subs is None:
+        return [visual._object_id]
+    return [sub.object_id for sub in subs]
+
+
+@pytest.mark.parametrize("make", [_line, _points, _mesh])
+def test_split_roundtrip(make):
+    """Splitting every member out must give back what was merged."""
+    originals = []
+    for i, color in enumerate(("red", "blue", "green")):
+        vis = make(color=color)
+        vis._object_id = f"obj{i}"
+        originals.append(vis)
+
+    (merged,) = merge_visuals(list(originals))
+    remainder, extracted = split_visual(merged)
+
+    assert remainder is None
+    assert [_ids(v) for v in extracted] == [["obj0"], ["obj1"], ["obj2"]]
+
+    for original, split in zip(originals, extracted):
+        # Same geometry, in the same place ...
+        np.testing.assert_allclose(
+            split.geometry.positions.data, original.geometry.positions.data
+        )
+        # ... and the same color, back on the material where it started
+        assert split.material.color_mode == "uniform"
+        np.testing.assert_allclose(
+            np.asarray(split.material.color.rgba),
+            np.asarray(gfx.Color(original.material.color).rgba),
+        )
+        # A split-out visual must be indistinguishable from an unmerged one
+        assert not hasattr(split, "_sub_visuals")
+
+
+@pytest.mark.parametrize("make", [_line, _points, _mesh])
+def test_split_middle_member(make):
+    """Splitting one member must leave the others merged and intact."""
+    visuals = []
+    for i, color in enumerate(("red", "blue", "green")):
+        vis = make(color=color)
+        vis._object_id = f"obj{i}"
+        visuals.append(vis)
+
+    (merged,) = merge_visuals(list(visuals))
+    remainder, extracted = split_visual(merged, "obj1")
+
+    assert _ids(remainder) == ["obj0", "obj2"]
+    assert [_ids(v) for v in extracted] == [["obj1"]]
+
+    # The remainder still disagrees on color, so it keeps a vertex buffer ...
+    assert remainder.material.color_mode == "vertex"
+    np.testing.assert_allclose(
+        remainder.geometry.positions.data[remainder._sub_visuals[1].slice],
+        visuals[2].geometry.positions.data,
+    )
+    # ... and the extracted one is back to a uniform blue
+    assert extracted[0].material.color_mode == "uniform"
+    np.testing.assert_allclose(
+        np.asarray(extracted[0].material.color.rgba), (0.0, 0.0, 1.0, 1.0)
+    )
+
+
+def test_split_mesh_faces_are_rebased():
+    """A split-out mesh's faces must index into its own vertices."""
+    a, b = _mesh(color="red"), _mesh(color="blue")
+    a._object_id, b._object_id = "a", "b"
+
+    (merged,) = merge_visuals([a, b])
+    _, extracted = split_visual(merged, ["a", "b"])
+
+    for split, original in zip(extracted, (a, b)):
+        indices = split.geometry.indices.data
+        assert indices.max() < len(split.geometry.positions.data)
+        np.testing.assert_array_equal(indices, original.geometry.indices.data)
+
+
+def test_split_keeps_shared_state():
+    """A split must carry the merged visual's shared material state over."""
+    a, b = _mesh(color="red"), _mesh(color="blue")
+    a._object_id, b._object_id = "a", "b"
+    for vis in (a, b):
+        vis.material.flat_shading = True
+        vis.material.opacity = 0.5
+
+    (merged,) = merge_visuals([a, b])
+    remainder, (extracted,) = split_visual(merged, "a")
+
+    for vis in (remainder, extracted):
+        assert vis.material.flat_shading is True
+        assert vis.material.opacity == 0.5
+        assert vis._object_type == "mesh"
+
+
+def test_split_groups_members_by_object_id():
+    """Members sharing an object id must split out together."""
+    a, b, c = _mesh(color="red"), _mesh(color="blue"), _mesh(color="green")
+    a._object_id = b._object_id = "pair"
+    c._object_id = "lonely"
+
+    (merged,) = merge_visuals([a, b, c])
+    remainder, extracted = split_visual(merged, "pair")
+
+    assert _ids(remainder) == ["lonely"]
+    # Both members stay in one visual, which therefore keeps its sub-visuals
+    assert len(extracted) == 1
+    assert _ids(extracted[0]) == ["pair", "pair"]
+    assert extracted[0].material.color_mode == "vertex"
+
+
+def test_split_unknown_ids_and_errors():
+    """Unknown ids are ignored; an unmerged visual cannot be split."""
+    a, b = _mesh(color="red"), _mesh(color="blue")
+    a._object_id, b._object_id = "a", "b"
+    (merged,) = merge_visuals([a, b])
+
+    remainder, extracted = split_visual(merged, "nope")
+    assert extracted == []
+    assert _ids(remainder) == ["a", "b"]
+
+    with pytest.raises(ValueError, match="not a merged visual"):
+        split_visual(_mesh())
+
+
+def test_split_restores_line_widths():
+    """Widths absorbed into the geometry must come back onto the material."""
+    a = _line(color="red", linewidth=2, linewidth_space="world")
+    b = _line(color="red", linewidth=7, linewidth_space="world")
+    a._object_id, b._object_id = "a", "b"
+
+    (merged,) = merge_visuals([a, b])
+    assert merged.material.thickness_mode == "vertex"
+
+    _, extracted = split_visual(merged, ["a", "b"])
+    assert [v.material.thickness for v in extracted] == [2, 7]
+    # With the width back on the material there is nothing left that needs
+    # octarine's own material, so a split-out line returns to stock pygfx -
+    # which is also what `lines2gfx` built it as in the first place.
+    assert all(type(v.material) is gfx.LineMaterial for v in extracted)
+    assert all("thicknesses" not in v.geometry.keys() for v in extracted)
+
+
+# ------------------------------------------------------------------ picking
+
+
+def test_sub_visual_at_mesh():
+    """A mesh pick must resolve to the member owning that face."""
+    a, b, c = _mesh(color="red"), _mesh(color="blue"), _mesh(color="green")
+    a._object_id, b._object_id, c._object_id = "a", "b", "c"
+    (merged,) = merge_visuals([a, b, c])
+
+    for sub in merged._sub_visuals:
+        # First, last and a middle face of every member
+        for face in (sub.face_offset, sub.face_offset + sub.face_count - 1,
+                     sub.face_offset + sub.face_count // 2):
+            hit = sub_visual_at(merged, {"face_index": face})
+            assert hit.object_id == sub.object_id
+
+    # Past the end of the last member
+    total = sum(s.face_count for s in merged._sub_visuals)
+    assert sub_visual_at(merged, {"face_index": total}) is None
+
+
+@pytest.mark.parametrize("make", [_points, _line])
+def test_sub_visual_at_vertex(make):
+    """Points and lines must resolve a pick by vertex index."""
+    a, b = make(color="red"), make(color="blue")
+    a._object_id, b._object_id = "a", "b"
+    (merged,) = merge_visuals([a, b])
+
+    for sub in merged._sub_visuals:
+        for vertex in (sub.offset, sub.offset + sub.count - 1):
+            hit = sub_visual_at(merged, {"vertex_index": vertex})
+            assert hit.object_id == sub.object_id
+
+
+def test_sub_visual_at_line_gap():
+    """The NaN vertex between two merged lines belongs to no member."""
+    a, b = _line(color="red"), _line(color="blue")
+    a._object_id, b._object_id = "a", "b"
+    (merged,) = merge_visuals([a, b])
+
+    first = merged._sub_visuals[0]
+    gap = first.offset + first.count
+    assert np.all(np.isnan(merged.geometry.positions.data[gap]))
+    assert sub_visual_at(merged, {"vertex_index": gap}) is None
+
+
+def test_sub_visual_at_non_merged():
+    """Picking something that was never merged must simply report nothing."""
+    assert sub_visual_at(_mesh(), {"face_index": 0}) is None
+    assert sub_visual_at(_points(), {"vertex_index": 0}) is None
+
+
+def test_sub_visual_at_without_index():
+    """A pick carrying no usable index must not raise."""
+    a, b = _mesh(color="red"), _mesh(color="blue")
+    a._object_id, b._object_id = "a", "b"
+    (merged,) = merge_visuals([a, b])
+
+    assert sub_visual_at(merged, {}) is None
+
+
+def test_split_meshes_render():
+    """Splitting a member out must not change what the scene looks like."""
+    a, b = _box(40, "red"), _box(-40, "blue")
+    a._object_id, b._object_id = "a", "b"
+
+    v = _flat_viewer()
+    (merged,) = merge_visuals([a, b])
+    v.scene.add(merged)
+    before = _bands(v)
+    assert before == [(20, (255, 0, 0)), (20, (0, 0, 255))]
+
+    # Split "a" back out and put both halves on the scene in its place
+    remainder, (extracted,) = split_visual(merged, "a")
+    v.scene.remove(merged)
+    v.scene.add(remainder, extracted)
+
+    assert _bands(v) == before
+
+    # And the split-out mesh is addressable the plain way again
+    extracted.material.color = "lime"
+    assert _bands(v) == [(20, (0, 255, 0)), (20, (0, 0, 255))]
 
     v.close()
