@@ -7,8 +7,11 @@ import numpy as np
 import octarine as oc
 
 # N.B. the Qt binding is pinned in tests/conftest.py, which has to run before
-# anything else can load one - see the comment there.
-pytest.importorskip("PySide6")
+# anything else can load one - see the comment there. Importing a submodule
+# (and allowing a plain ImportError) is deliberate: when another binding has
+# got in first, `PySide6` itself imports fine and only its extension modules
+# fail to load.
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
 
 @pytest.fixture()
@@ -169,6 +172,46 @@ def test_legend_group_membership_updates_in_place(viewer, controls):
     group._group_checkbox.click()
     assert sorted(viewer.visible) == ["g1", "g2"]
     assert all(r._legend_checkbox.isChecked() for r in group._member_rows.values())
+
+
+def test_legend_group_member_rows_follow_member_order(viewer, controls):
+    """Rows must be laid out in member order, not just appended as they arrive.
+
+    Removing an object and adding it back lands it at the end of the group's
+    members while its row is still sitting where it was, so the ordering pass
+    has to cover the rows that were already there.
+    """
+    for name in ("g1", "g2", "g3"):
+        viewer.add(_points(), name=name, group="G")
+    controls.flush_legend()
+    group = controls._legend_rows["group::G"].widget
+    group._group_header.setChecked(True)  # expand
+
+    def layout_order():
+        layout = group._group_content.layout()
+        return [layout.itemAt(i).widget().objectName() for i in range(layout.count())]
+
+    assert layout_order() == group._member_names == ["g1", "g2", "g3"]
+
+    # Re-adding moves g1 to the end of the group
+    viewer.remove_objects(["g1"])
+    viewer.add(_points(), name="g1", group="G")
+    controls.flush_legend()
+    assert group._member_names == ["g2", "g3", "g1"]
+    assert layout_order() == ["g2", "g3", "g1"]
+
+    # A plain append still goes where it belongs ...
+    viewer.add(_points(), name="g4", group="G")
+    controls.flush_legend()
+    assert layout_order() == group._member_names == ["g2", "g3", "g1", "g4"]
+
+    # ... and so does a removal from the middle
+    viewer.remove_objects(["g3"])
+    controls.flush_legend()
+    assert layout_order() == group._member_names == ["g2", "g1", "g4"]
+
+    # No row may be left in the layout twice, or orphaned from the bookkeeping
+    assert sorted(layout_order()) == sorted(group._member_rows)
 
 
 def test_legend_group_checkbox_does_not_get_stuck(viewer, controls):
