@@ -97,18 +97,22 @@ def fix_native_color_picker(picker, qcolor):
         pass
 
 
-def set_swatch_color(button, color):
+# Fallback for a swatch whose object has no usable color (e.g. per-vertex)
+_BLACK_CSS = gfx.Color("k").css
+
+
+def set_swatch_color(button, css):
     """Paint a legend color swatch, skipping the restyle if nothing changed.
 
-    `setStyleSheet` is not cheap (it re-polishes the widget's style) and
-    `update_legend` re-applies every swatch on every update, so on a legend with
-    hundreds of entries this guard is worth having.
+    `css` is a CSS color string, as `gfx.Color.css` hands out. `setStyleSheet`
+    is not cheap - it re-polishes the widget's style - so a swatch remembers
+    what it was last painted with and skips the call when nothing moved.
     """
-    css = f"background-color: {gfx.Color(color).css}"
-    if getattr(button, "_swatch_css", None) == css:
+    style = f"background-color: {css}"
+    if button._swatch_css == style:
         return
-    button.setStyleSheet(css)
-    button._swatch_css = css
+    button.setStyleSheet(style)
+    button._swatch_css = style
 
 
 def next_numbered_file(directory, prefix="screenshot", suffix=".png", digits=4):
@@ -138,6 +142,30 @@ def set_viewer_stale(func):
     return wrapper
 
 
+class _LegendRow:
+    """What the legend knows about one of its rows.
+
+    `state` is a snapshot of everything the row displays, so a refresh can skip
+    the rows that have not changed (see `Controls._entry_state`). `filter_key`
+    and `member_keys` are the lower-cased names `Controls.filter_legend`
+    matches on, kept here rather than rebuilt for every row on every keystroke.
+    """
+
+    __slots__ = ("widget", "is_group", "filter_key", "member_keys", "state")
+
+    def __init__(self, widget, is_group, filter_key):
+        self.widget = widget
+        self.is_group = is_group
+        self.filter_key = filter_key
+        self.member_keys = ()
+        self.state = None
+
+
+def _member_filter_keys(members):
+    """`(lower-cased name, member key)` pairs for `filter_legend` to match on."""
+    return tuple((str(member).lower(), str(member)) for member in members)
+
+
 class Controls(AnimationControlsMixin, QtWidgets.QWidget):
     _shared_color_picker = None
     _active_color_controls = None
@@ -152,6 +180,15 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
     _SIZE_TICKS = 100
     _SIZE_SPAN = 10.0
     _SIZE_FALLBACK = 2.0  # anchor to fall back on if the size is zero/invalid
+
+    # Number of new legend rows from which on it is worth hiding the list to
+    # insert them - see `Controls._refresh_legend`. Hiding and re-showing the
+    # list costs ~0.05 ms per row already in it, while inserting into a
+    # visible list costs ~0.0005 ms per new row per row already in it, which
+    # puts the break-even between 85 and 150 new rows fairly independently of
+    # how long the legend already is. Taking the hidden path too early is the
+    # more expensive mistake, so round down.
+    _LEGEND_BULK_INSERT = 100
 
     def __init__(self, viewer, width=300, height=400):
         super().__init__()
@@ -200,6 +237,25 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         # # Build legend
         # self.build_gui()
 
+        # Legend bookkeeping: an entry id onto what we know about its row, so
+        # adding, removing and refreshing rows is a dict lookup rather than a
+        # scan of the whole list. See `_LegendRow`.
+        self._legend_rows = {}
+        # Row size hints and the compact height of grouped rows force a layout
+        # pass to compute but are the same for every row, so cache them.
+        self._legend_row_hint = None
+        self._legend_member_height = None
+        # Legend refreshes are coalesced onto the event loop - see
+        # `Controls.update_legend`.
+        self._legend_dirty = False
+        # Hover filters queued while rows are built - see
+        # `_install_hover_highlight`.
+        self._pending_hover_installs = []
+        self._legend_timer = QtCore.QTimer(self)
+        self._legend_timer.setSingleShot(True)
+        self._legend_timer.setInterval(0)
+        self._legend_timer.timeout.connect(self.flush_legend)
+
         # Build gui
         self.build_legend_gui()
         self.build_controls_gui()
@@ -229,7 +285,16 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         edge until the view lays out its item widgets again (e.g. on resize).
         """
         super().showEvent(event)
+        # Refreshes are skipped while we are hidden, so catch up now.
+        self.flush_legend()
         QtCore.QTimer.singleShot(0, self.legend.doItemsLayout)
+
+    def changeEvent(self, event):
+        """Drop the cached row metrics when they stop being representative."""
+        if event.type() in (QtCore.QEvent.FontChange, QtCore.QEvent.StyleChange):
+            self._legend_row_hint = None
+            self._legend_member_height = None
+        super().changeEvent(event)
 
     @classmethod
     def _get_shared_color_picker(cls):
@@ -2047,12 +2112,6 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         list_widget.installEventFilter(self)
         list_widget.viewport().installEventFilter(self)
 
-        # Add some example items (for debugging only)
-        # for i, c in enumerate(["red", "green", "blue"]):
-        #     item, item_widget = self.make_legend_entry(f"Item {i}", color=c)
-        #     list_widget.addItem(item)
-        #     list_widget.setItemWidget(item, item_widget)
-
         if index is not None:
             self.tab1_layout.insertWidget(index, list_widget)
         else:
@@ -2068,7 +2127,8 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         name :      str
                     Name of the entry.
         color :     str | tuple | array
-                    Color of the entry.
+                    Color of the entry. Rows built for the legend itself leave
+                    this empty and are painted by the refresh that follows.
 
         Returns
         -------
@@ -2088,7 +2148,6 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         # the visibility toggle + color control are never pushed out of view; the
         # full name is available via the tooltip.
         line_text = ElidedLabel(f"{name}")
-        line_text.setProperty("legend_role", "label")
 
         # Generate the checkbox
         line_checkbox = QtWidgets.QCheckBox()
@@ -2111,7 +2170,6 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
             line_push_button = self.create_volume_btn(name, callback=None)
         else:
             line_push_button = self.create_color_btn(name, color=color, callback=None)
-        line_push_button.setProperty("legend_role", "control")
 
         # Generate item layout
         item_layout = QtWidgets.QHBoxLayout()
@@ -2127,102 +2185,130 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
 
         # Set layout
         item_widget.setLayout(item_layout)
-        item.setSizeHint(item_widget.sizeHint())
+
+        # Keep the row's controls to hand: a refresh touches them on every row
+        # it syncs and `findChild` would walk the widget tree for each of them.
+        item_widget._legend_label = line_text
+        item_widget._legend_checkbox = line_checkbox
+        item_widget._legend_control = line_push_button
+
+        # `QWidget.sizeHint()` forces a layout pass on the row, which on a
+        # legend with thousands of entries is the most expensive part of
+        # building them. Every row has the same geometry, so measure one.
+        # N.B. the row is not in the list yet, so it would be measured with
+        # the application's default font rather than the legend's - give it
+        # the font it is about to be shown in, or it comes out too short.
+        if self._legend_row_hint is None:
+            item_widget.setFont(self.legend.font())
+            self._legend_row_hint = item_widget.sizeHint()
+        item.setSizeHint(self._legend_row_hint)
 
         # Highlight the underlying object while hovering this row.
-        self._install_hover_highlight(item_widget, name)
+        self._install_hover_highlight(
+            item_widget, name, (line_text, line_checkbox, line_push_button)
+        )
 
         return item, item_widget
 
-    def _make_group_member_row(self, name):
-        """Build one compact group-member row widget for `name`.
+    def _make_group_member_row(self, name, visuals):
+        """Build one compact, unpainted group-member row widget for `name`.
 
         Returns the child QWidget ready to be inserted into a group's content
-        layout. Used both when first building a group and when incrementally
-        adding members in `update_legend`.
+        layout; the caller seeds its state with `_sync_single_row`. Used both
+        when a group is first expanded and when members are added to it later.
         """
-        color = None
-        vis_type = None
-        if name in self.viewer.objects and self.viewer.objects[name]:
-            try:
-                color = self.viewer.objects[name][0].material.color
-            except BaseException:
-                color = "k"
-            vis_type = type(self.viewer.objects[name][0])
-
-        _, child_widget = self.make_legend_entry(name, color=color, type=vis_type)
-        child_widget.setProperty("legend_role", "group_member")
+        _, child_widget = self.make_legend_entry(
+            name, type=type(visuals[0]) if visuals else None
+        )
 
         child_layout = child_widget.layout()
-        if child_layout is not None:
-            child_layout.setContentsMargins(0, 0, 0, 0)
-            child_layout.setSpacing(0)
+        child_layout.setContentsMargins(0, 0, 0, 0)
+        child_layout.setSpacing(0)
 
         # Keep rows compact but let Qt compute a non-clipping height.
         child_widget.setSizePolicy(
             QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred
         )
 
-        # Apply mild compression: reduce excess row padding without clipping text.
-        compact_height = max(20, child_widget.sizeHint().height() - 8)
-        child_widget.setMinimumHeight(compact_height)
-        child_widget.setMaximumHeight(compact_height)
+        # Apply mild compression: reduce excess row padding without clipping
+        # text. Rows are uniform, so compute the height off the first one only
+        # - with the legend's font, as in `make_legend_entry`.
+        if self._legend_member_height is None:
+            child_widget.setFont(self.legend.font())
+            self._legend_member_height = max(20, child_widget.sizeHint().height() - 8)
+        child_widget.setMinimumHeight(self._legend_member_height)
+        child_widget.setMaximumHeight(self._legend_member_height)
 
         return child_widget
+
+    def _insert_member_rows(self, item_widget, names, visible, selected):
+        """Build rows for `names` and slot them into their group at their index.
+
+        One place builds, paints and places a group's member rows, whether
+        they are being materialized on first expand or added to a group that
+        grew. `visible` and `selected` are the viewer's current sets, passed in
+        because deriving them walks every object in the scene.
+        """
+        objects = self.viewer.objects
+        rows = {}
+        for name in names:
+            visuals = objects.get(name, ())
+            row = self._make_group_member_row(name, visuals)
+            self._sync_single_row(
+                row, self._single_state(name, visuals, visible, selected)
+            )
+            rows[str(name)] = row
+
+        item_widget._member_rows.update(rows)
+        content_layout = item_widget._group_content.layout()
+        for idx, member in enumerate(item_widget._member_names):
+            row = rows.get(str(member))
+            if row is not None:
+                content_layout.insertWidget(idx, row)
 
     def _materialize_group_members(self, item_widget):
         """Build a group's member rows on first expand (lazy materialization).
 
-        Rows are created from `item_widget._member_names` and seeded with the
-        current visibility/selection state so they match the viewer without
-        waiting for the next `update_legend` call. No-op if already materialized.
+        Rows are created from `item_widget._member_names`, so they match the
+        viewer without waiting for the next refresh. No-op once they exist.
         """
-        if getattr(item_widget, "_materialized", False):
+        if item_widget._member_rows:
             return
 
-        content_widget = item_widget.findChild(QtWidgets.QWidget, "group_content")
-        if content_widget is None:
-            return
+        self._insert_member_rows(
+            item_widget,
+            item_widget._member_names,
+            set(self.viewer.visible),
+            set(self.viewer.selected or []),
+        )
+        self._install_pending_hover_highlights()
 
-        visible = self.viewer.visible
-        selected = self.viewer.selected
-        for member_name in item_widget._member_names:
-            row = self._make_group_member_row(member_name)
-            content_widget.layout().addWidget(row)
-
-            # Seed checkbox state without retriggering the per-row callback.
-            checkbox = row.findChild(QtWidgets.QCheckBox, str(member_name))
-            if checkbox is not None:
-                checkbox.blockSignals(True)
-                checkbox.setChecked(member_name in visible)
-                checkbox.blockSignals(False)
-
-            # Seed selection highlight on the label.
-            label = next(
-                (
-                    widget
-                    for widget in row.findChildren(ElidedLabel)
-                    if widget.property("legend_role") == "label"
-                ),
-                None,
-            )
-            if label is not None:
-                label.setSelected(bool(selected and member_name in selected))
-
-        item_widget._materialized = True
-
-    def _install_hover_highlight(self, widget, target):
-        """Highlight `target` object(s) while the cursor is over `widget`.
+    def _install_hover_highlight(self, widget, target, children):
+        """Arrange for `target` to be highlighted while the cursor is on `widget`.
 
         `target` is a raw object id or a (live) list of ids accepted by
-        `Viewer.highlight_objects`. The filter is installed on `widget` and all
-        of its current children so hovering any sub-control (label, checkbox,
-        color button) is treated as hovering the row.
+        `Viewer.highlight_objects`. The filter goes on `widget` and on each of
+        its interactive `children` so hovering any sub-control (label,
+        checkbox, color button) counts as hovering the row: Qt sends the Enter
+        to whichever widget is under the cursor, not to the row.
+
+        The filters are queued rather than installed here. Inserting rows and
+        laying the list out sends a storm of move/resize/polish events at every
+        row - some 40 per row - and routing those through `eventFilter` costs
+        more than building the rows does. They go on once the rows are in place
+        (see `_install_pending_hover_highlights`), still before control returns
+        to the event loop, so no hover can slip through in between.
         """
         widget._hover_target = target
-        widget.installEventFilter(self)
-        for child in widget.findChildren(QtWidgets.QWidget):
-            child.installEventFilter(self)
+        self._pending_hover_installs.append((widget, children))
+
+    def _install_pending_hover_highlights(self):
+        """Install the hover filters queued by `_install_hover_highlight`."""
+        for widget, children in self._pending_hover_installs:
+            widget.installEventFilter(self)
+            for child in children:
+                child.installEventFilter(self)
+        self._pending_hover_installs.clear()
 
     def _find_hover_target(self, widget):
         """Walk up from `widget` to the nearest row carrying a hover target."""
@@ -2265,7 +2351,9 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
             # the cursor leaves the list (or moves onto its empty background).
             if obj is self.legend or obj is self.legend.viewport():
                 self._set_hover_highlight(None)
-        return super().eventFilter(obj, event)
+        # N.B. `QObject.eventFilter` is a no-op returning False; this runs for
+        # every event of every legend row, so skip the round trip.
+        return False
 
     def make_grouped_legend_entry(self, names, group_name=None):
         """Generate a collapsible legend entry for grouped objects.
@@ -2297,8 +2385,10 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         # Bare group label kept around so the header text (which also shows the
         # member count) can be rebuilt when membership changes.
         item_widget._group_name = group_name
-        # Member rows are built lazily on first expand; see _materialize_group_members.
-        item_widget._materialized = False
+        # Member rows are built lazily on first expand; see
+        # `_materialize_group_members`. Until then `_member_rows` is empty,
+        # which is also how "not materialized yet" is spelled.
+        item_widget._member_rows = {}
         item_layout = QtWidgets.QVBoxLayout(item_widget)
         item_layout.setContentsMargins(0, 0, 0, 0)
         item_layout.setSpacing(0)
@@ -2333,56 +2423,52 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
 
         # Group name + member count. Clicking it toggles the group, mirroring the
         # arrow button.
-        header_label = ElidedLabel(f"{group_name} ({len(names)})")
-        header_label.setProperty("legend_role", "group_label")
+        header_label = ElidedLabel()
         header_label.clicked.connect(header.toggle)
+        item_widget._group_label = header_label
+        self._update_group_header_text(item_widget)
 
         group_checkbox = QtWidgets.QCheckBox()
-        group_checkbox.setProperty("legend_role", "group_visibility")
         group_checkbox.setTristate(True)
         group_checkbox.setMaximumWidth(40)
         group_checkbox.setToolTip("Toggle visibility for all group members")
 
         def toggle_group_visibility(*args):
-            is_visible = group_checkbox.isChecked()
-            for member_name in item_widget._member_names:
-                for vis in self.viewer.objects.get(member_name, []):
-                    vis.visible = is_visible
-
-                # Mirror the group toggle on each member checkbox without
-                # retriggering each member's callback.
-                member_checkbox = item_widget.findChild(
-                    QtWidgets.QCheckBox, str(member_name)
-                )
-                if member_checkbox is not None:
-                    member_checkbox.blockSignals(True)
-                    member_checkbox.setChecked(is_visible)
-                    member_checkbox.blockSignals(False)
-            self.viewer._render_stale = True
-
-        def coerce_group_checkbox_click_state(*args):
-            # Partial is an indicator-only state; user clicks should skip it.
+            # Partial is an indicator-only state: a click that lands on it (or
+            # leaves it) means "show everything". N.B. this has to hang off
+            # `clicked` rather than `toggled`, which does not fire when the
+            # state goes from partially to fully checked.
             if group_checkbox.checkState() == QtCore.Qt.PartiallyChecked:
                 group_checkbox.blockSignals(True)
                 group_checkbox.setCheckState(QtCore.Qt.Checked)
                 group_checkbox.blockSignals(False)
-                toggle_group_visibility()
 
-        group_checkbox.toggled.connect(toggle_group_visibility)
-        group_checkbox.clicked.connect(coerce_group_checkbox_click_state)
+            is_visible = group_checkbox.isChecked()
+            objects = self.viewer.objects
+            for member_name in item_widget._member_names:
+                for vis in objects.get(member_name, []):
+                    vis.visible = is_visible
 
-        group_color = None
-        first_name = names[0]
-        if first_name in self.viewer.objects and self.viewer.objects[first_name]:
-            try:
-                group_color = self.viewer.objects[first_name][0].material.color
-            except BaseException:
-                group_color = "k"
+                # Mirror the group toggle on each member checkbox without
+                # retriggering each member's callback.
+                member_row = item_widget._member_rows.get(str(member_name))
+                if member_row is not None:
+                    member_row._legend_checkbox.blockSignals(True)
+                    member_row._legend_checkbox.setChecked(is_visible)
+                    member_row._legend_checkbox.blockSignals(False)
+            self.viewer._render_stale = True
+            # The rows are up to date, but the snapshot a refresh compares
+            # against is not - without this the group would keep showing the
+            # state it had before this click.
+            self.update_legend()
 
+        group_checkbox.clicked.connect(toggle_group_visibility)
+
+        # The swatch is painted by the refresh that follows this entry being
+        # added, so there is no point looking the color up here.
         group_color_button = self.create_color_btn(
-            f"group::{group_name}", color=group_color, callback=None
+            f"group::{group_name}", color=None, callback=None
         )
-        group_color_button.setProperty("legend_role", "group_control")
         group_color_button.setToolTip("Click to change color for entire group")
         # Share the canonical list so the color picker always targets the current
         # members; incremental updates mutate this list in place.
@@ -2398,11 +2484,14 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
 
         # Hovering the group header highlights all members. Pass the live member
         # list so the highlight always reflects the current membership.
-        self._install_hover_highlight(header_row, item_widget._member_names)
+        self._install_hover_highlight(
+            header_row,
+            item_widget._member_names,
+            (header, header_label, group_checkbox, group_color_button),
+        )
 
         # Child container with one standard legend row per member.
         content_widget = QtWidgets.QWidget()
-        content_widget.setObjectName("group_content")
         content_layout = QtWidgets.QVBoxLayout(content_widget)
         content_layout.setContentsMargins(18, 0, 0, 0)
         content_layout.setSpacing(0)
@@ -2420,15 +2509,18 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
                 self._materialize_group_members(item_widget)
             content_widget.setVisible(expanded)
 
-            # Keep parent QListWidgetItem height in sync with expanded/collapsed state.
-            if hasattr(self, "legend"):
-                for i in range(self.legend.count()):
-                    legend_item = self.legend.item(i)
-                    if self.legend.itemWidget(legend_item) is item_widget:
-                        legend_item.setSizeHint(item_widget.sizeHint())
-                        break
+            # Keep parent QListWidgetItem height in sync with expanded/collapsed
+            # state. `_legend_item` is set before the group can be clicked.
+            item_widget._legend_item.setSizeHint(item_widget.sizeHint())
 
         header.toggled.connect(toggle_group)
+
+        # Kept to hand for the same reason as the single-row controls: a refresh
+        # reaches for them on every group it syncs.
+        item_widget._group_header = header
+        item_widget._group_checkbox = group_checkbox
+        item_widget._group_control = group_color_button
+        item_widget._group_content = content_widget
 
         return item_widget
 
@@ -2448,47 +2540,33 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
           collapsed.
         """
         text = text.strip().lower()
-        for i in range(self.legend.count()):
-            item = self.legend.item(i)
-            item_widget = self.legend.itemWidget(item)
-            is_group = hasattr(item_widget, "_member_names")
+        for row in self._legend_rows.values():
+            item = row.widget._legend_item
 
             # Cleared filter -> reset everything and collapse all groups.
             if not text:
                 item.setHidden(False)
-                if is_group:
-                    self._set_group_filter_state(
-                        item, item_widget, expanded=False, visible_members=None
-                    )
+                if row.is_group:
+                    self._set_group_filter_state(row, False, None)
                 continue
 
             # Single entry.
-            if not is_group:
-                item.setHidden(text not in str(item._id).lower())
+            if not row.is_group:
+                item.setHidden(text not in row.filter_key)
                 continue
 
             # Group: match the group name first (wins over member matching).
-            group_name = str(item._id)[len("group::") :]
-            if text in group_name.lower():
+            if text in row.filter_key:
                 item.setHidden(False)
-                self._set_group_filter_state(
-                    item, item_widget, expanded=False, visible_members=None
-                )
+                self._set_group_filter_state(row, False, None)
                 continue
 
-            matches = [m for m in item_widget._member_names if text in str(m).lower()]
+            matches = {key for name, key in row.member_keys if text in name}
+            item.setHidden(not matches)
             if matches:
-                item.setHidden(False)
-                self._set_group_filter_state(
-                    item,
-                    item_widget,
-                    expanded=True,
-                    visible_members={str(m) for m in matches},
-                )
-            else:
-                item.setHidden(True)
+                self._set_group_filter_state(row, True, matches)
 
-    def _set_group_filter_state(self, item, item_widget, expanded, visible_members):
+    def _set_group_filter_state(self, row, expanded, visible_members):
         """Expand/collapse a group and set per-member-row visibility for filtering.
 
         `visible_members` is a set of stringified member ids to keep visible, or
@@ -2496,351 +2574,346 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         than via the header's ``toggled`` signal, which would not fire when the
         checked state is unchanged.
         """
-        header = item_widget.findChild(QtWidgets.QToolButton)
-        if header is not None:
-            header.blockSignals(True)
-            header.setChecked(expanded)
-            header.setArrowType(
-                QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow
-            )
-            header.blockSignals(False)
+        item_widget = row.widget
+        header = item_widget._group_header
+        header.blockSignals(True)
+        header.setChecked(expanded)
+        header.setArrowType(QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow)
+        header.blockSignals(False)
 
         # Member rows are built lazily on first expand; ensure they exist before
         # we try to toggle their visibility.
         if expanded:
             self._materialize_group_members(item_widget)
 
-        content_widget = item_widget.findChild(QtWidgets.QWidget, "group_content")
-        if content_widget is not None:
-            content_widget.setVisible(expanded)
+        item_widget._group_content.setVisible(expanded)
 
-        for row in item_widget.findChildren(QtWidgets.QWidget):
-            if row.property("legend_role") != "group_member":
-                continue
-            row.setVisible(
-                visible_members is None or row.objectName() in visible_members
+        for member_name, member_row in item_widget._member_rows.items():
+            member_row.setVisible(
+                visible_members is None or member_name in visible_members
             )
 
-        item.setSizeHint(item_widget.sizeHint())
+        item_widget._legend_item.setSizeHint(item_widget.sizeHint())
 
     def _update_group_header_text(self, item_widget):
         """Refresh a group header's label, including its member count."""
-        label = next(
-            (
-                widget
-                for widget in item_widget.findChildren(ElidedLabel)
-                if widget.property("legend_role") == "group_label"
-            ),
-            None,
-        )
-        if label is not None:
-            count = len(item_widget._member_names)
-            label.setText(f"{item_widget._group_name} ({count})")
+        count = len(item_widget._member_names)
+        item_widget._group_label.setText(f"{item_widget._group_name} ({count})")
 
     def update_legend(self):
-        """Update legend with objects in current scene."""
-        # Get visuals in scene
-        visuals = self.viewer.visuals
+        """Schedule a refresh of the legend.
 
-        # Collect ungrouped visuals by object id and grouped visuals by group name.
-        object_ids = {}
-        grouped_ids = {}
+        The refresh is coalesced rather than run on the spot: `update_helper`
+        asks for one per object added, so building a scene one `Viewer.add` at
+        a time would otherwise run a full pass per object - quadratic in the
+        number of objects. Flagging the legend dirty here instead means the
+        work happens once, as soon as control returns to the event loop.
+        """
+        self._legend_dirty = True
+        # Nothing to refresh while the panel is hidden; `showEvent` catches up.
+        if self.isVisible() and not self._legend_timer.isActive():
+            self._legend_timer.start()
+
+    def flush_legend(self):
+        """Apply a pending legend refresh now."""
+        self._legend_timer.stop()
+        if self._legend_dirty:
+            self._refresh_legend()
+
+    @staticmethod
+    def _visual_color(vis, is_selected):
+        """A visual's true color, looking through any active highlight.
+
+        Both selection (yellow) and hover (brightened) highlights swap
+        `material.color` and stash the real color away, so reading
+        `material.color` directly would report the highlight color.
+        """
+        if is_selected and hasattr(vis, "_stored_color"):
+            color = vis._stored_color
+        elif getattr(vis, "_highlighted", False):
+            color = vis.material._original_color
+        else:
+            color = vis.material.color
+        return color if isinstance(color, gfx.Color) else gfx.Color(color)
+
+    def _first_color(self, visuals, is_selected):
+        """True color of the first of `visuals`, or None if none has one."""
         for vis in visuals:
-            if not hasattr(vis, "_object_id"):
+            try:
+                return self._visual_color(vis, is_selected)
+            except BaseException:
+                # E.g. per-vertex colors; try the next visual.
+                # Note to self: need to make sure we also cater for color arrays
+                # which are in the geometry object
                 continue
+        return None
 
-            object_id = vis._object_id
-            object_group = getattr(vis, "_object_group", None)
+    def _entry_color(self, visuals, is_selected):
+        """CSS color for a swatch standing for `visuals`."""
+        color = self._first_color(visuals, is_selected)
+        return _BLACK_CSS if color is None else color.css
 
-            if object_group is None:
-                object_ids[object_id] = object_ids.get(object_id, []) + [vis]
-                continue
+    def _collect_legend_entries(self):
+        """Describe what the legend should currently show.
 
-            grouped_ids[object_group] = grouped_ids.get(object_group, {})
-            grouped_ids[object_group][object_id] = grouped_ids[object_group].get(
-                object_id, []
-            ) + [vis]
+        Returns a ``{entry_id: spec}`` map, where `entry_id` is an object id for
+        ungrouped objects and ``f"group::{name}"`` for a group.
+        """
+        objects = self.viewer.objects
+        grouped = self.viewer.objects_grouped
+        in_group = {member for members in grouped.values() for member in members}
 
-        # Build a unified legend spec for add/update/remove bookkeeping.
         legend_entries = {}
-        for object_id, obj_visuals in object_ids.items():
-            legend_entries[object_id] = dict(
-                kind="single",
-                members=[object_id],
-                visuals=obj_visuals,
-            )
-        for group_name, member_dict in grouped_ids.items():
-            group_key = f"group::{group_name}"
-            members = list(member_dict.keys())
-            flattened = []
-            for member in members:
-                flattened.extend(member_dict[member])
-            legend_entries[group_key] = dict(
+        for object_id, visuals in objects.items():
+            if object_id not in in_group:
+                legend_entries[object_id] = dict(
+                    kind="single", members=[object_id], visuals=visuals
+                )
+        for group_name, members in grouped.items():
+            legend_entries[f"group::{group_name}"] = dict(
                 kind="group",
                 members=members,
-                member_visuals=member_dict,
-                visuals=flattened,
+                member_visuals={member: objects[member] for member in members},
                 group_name=group_name,
             )
+        return legend_entries
 
-        # Go over existing items
-        N_items = self.legend.count()
-        present = []
-        for i in list(range(N_items))[::-1]:
-            # Get this item
-            item = self.legend.item(i)
+    def _single_state(self, object_id, visuals, visible, selected):
+        """Snapshot what one object's row displays: color, visibility, selection."""
+        is_selected = object_id in selected
+        return (
+            self._entry_color(visuals, is_selected),
+            object_id in visible,
+            is_selected,
+        )
 
-            # Clear item if not present anymore
-            if item._id not in legend_entries:
-                self.legend.takeItem(i)
-                continue
-            else:
-                present.append(item._id)
+    def _entry_state(self, entry, visible, selected, with_colors=True):
+        """Snapshot everything a legend row displays, for change detection.
 
-            entry = legend_entries[item._id]
-            item_widget = self.legend.itemWidget(item)
+        Re-applying state a row already shows costs a handful of Qt calls per
+        row, which on a legend with thousands of entries is most of the work of
+        a refresh. Comparing cheap Python tuples skips all of it.
 
-            if entry["kind"] == "single":
-                try:
-                    color = entry["visuals"][0].material.color
-                except BaseException:
-                    color = gfx.Color("k")
+        `with_colors` is False for a group whose member rows have not been
+        built yet: there is nothing to paint them onto, and deriving a color
+        per member is the expensive part of snapshotting a large group. The
+        member colors are then left None, which only `_sync_group_row` sees -
+        and only on the path it skips for exactly that group.
+        """
+        members = entry["members"]
+        if entry["kind"] == "single":
+            return self._single_state(members[0], entry["visuals"], visible, selected)
 
-                line_push_button = next(
-                    (
-                        button
-                        for button in item_widget.findChildren(QtWidgets.QPushButton)
-                        if button.property("legend_role") == "control"
-                    ),
-                    None,
+        member_visuals = entry["member_visuals"]
+        return (
+            # The group swatch follows its first member, as its color does.
+            self._entry_color(member_visuals[members[0]], members[0] in selected),
+            tuple(
+                (
+                    member,
+                    self._entry_color(member_visuals[member], member in selected)
+                    if with_colors
+                    else None,
+                    member in visible,
+                    member in selected,
                 )
-                if line_push_button:
-                    set_swatch_color(line_push_button, color)
-            else:
-                # Object ids may be non-strings (e.g. uuid.UUID), so keep raw ids
-                # for building rows / highlighting and only stringify for matching
-                # against widget objectNames.
-                expected_members = {str(member) for member in entry["members"]}
+                for member in members
+            ),
+        )
 
-                if not item_widget._materialized:
-                    # Rows haven't been built yet (group never expanded). Just track
-                    # the current membership; the rows will be built from this list
-                    # on first expand, so no widget work is needed here.
-                    item_widget._member_names[:] = list(entry["members"])
-                else:
-                    current_members = {
-                        w.objectName()
-                        for w in item_widget.findChildren(QtWidgets.QWidget)
-                        if w.property("legend_role") == "group_member"
-                    }
+    def _refresh_legend(self):
+        """Bring the legend in line with the objects currently in the scene."""
+        self._legend_dirty = False
+        entries = self._collect_legend_entries()
 
-                    # Keep grouped rows in sync when members are added/removed by
-                    # editing only the changed rows in place, rather than rebuilding
-                    # the entire group widget (expensive for large groups).
-                    if current_members != expected_members:
-                        content_widget = item_widget.findChild(
-                            QtWidgets.QWidget, "group_content"
-                        )
+        # Drop rows whose objects are gone. `QListWidget.row()` is itself a
+        # scan, so removals are done in one reverse pass over the list - and
+        # skipped entirely when nothing was removed, which is the common case.
+        stale = {entry_id for entry_id in self._legend_rows if entry_id not in entries}
+        if stale:
+            for i in reversed(range(self.legend.count())):
+                if self.legend.item(i)._id in stale:
+                    self.legend.takeItem(i)
+            for entry_id in stale:
+                del self._legend_rows[entry_id]
 
-                        # Remove rows for members no longer in the group.
-                        for member_name in current_members - expected_members:
-                            row = content_widget.findChild(
-                                QtWidgets.QWidget, member_name
-                            )
-                            if row is not None:
-                                content_widget.layout().removeWidget(row)
-                                row.deleteLater()
+        # Add rows for objects that are new. Qt repositions every item widget
+        # in the list on each insertion, which makes adding rows one at a time
+        # quadratic; a hidden list skips that, so a batch is inserted with the
+        # list taken off screen and laid out once at the end. The threshold is
+        # only there to keep small, routine updates off that path.
+        new_entries = [
+            (entry_id, entry)
+            for entry_id, entry in entries.items()
+            if entry_id not in self._legend_rows
+        ]
+        bulk = len(new_entries) > self._LEGEND_BULK_INSERT
+        if bulk:
+            scroll_position = self.legend.verticalScrollBar().value()
+            self.legend.setVisible(False)
 
-                        # Insert new rows (raw id) at their canonical index.
-                        for idx, member in enumerate(entry["members"]):
-                            if str(member) not in current_members:
-                                content_widget.layout().insertWidget(
-                                    idx, self._make_group_member_row(member)
-                                )
-
-                        # Mutate the shared list in place (raw ids) so the group
-                        # color button's `_id` and `toggle_group_visibility` stay
-                        # in sync.
-                        item_widget._member_names[:] = list(entry["members"])
-
-                        item.setSizeHint(item_widget.sizeHint())
-
-                # Keep the header's member count in sync with the current members.
-                self._update_group_header_text(item_widget)
-
-                for member_name in entry["members"]:
-                    try:
-                        color = entry["member_visuals"][member_name][0].material.color
-                    except BaseException:
-                        color = gfx.Color("k")
-
-                    member_widget = item_widget.findChild(
-                        QtWidgets.QWidget, str(member_name)
-                    )
-                    if not member_widget:
-                        continue
-                    line_push_button = next(
-                        (
-                            button
-                            for button in member_widget.findChildren(
-                                QtWidgets.QPushButton
-                            )
-                            if button.property("legend_role") == "control"
-                        ),
-                        None,
-                    )
-                    if line_push_button:
-                        set_swatch_color(line_push_button, color)
-
-                group_color_btn = next(
-                    (
-                        button
-                        for button in item_widget.findChildren(QtWidgets.QPushButton)
-                        if button.property("legend_role") == "group_control"
-                    ),
-                    None,
+        for entry_id, entry in new_entries:
+            is_group = entry["kind"] == "group"
+            if is_group:
+                item = QtWidgets.QListWidgetItem()
+                item._id = entry_id
+                item_widget = self.make_grouped_legend_entry(
+                    entry["members"], group_name=entry["group_name"]
                 )
-                if group_color_btn:
-                    try:
-                        group_color = entry["visuals"][0].material.color
-                    except BaseException:
-                        group_color = gfx.Color("k")
-                    set_swatch_color(group_color_btn, group_color)
+                item.setSizeHint(item_widget.sizeHint())
+                filter_key = str(entry["group_name"]).lower()
+            else:
+                # No color: the sync pass below paints every new row's swatch.
+                item, item_widget = self.make_legend_entry(
+                    entry_id, type=type(entry["visuals"][0])
+                )
+                filter_key = str(entry_id).lower()
 
-        # Add new items
-        for entry_id, entry in legend_entries.items():
-            if entry_id not in present:
-                try:
-                    color = entry["visuals"][0].material.color
-                except BaseException:
-                    # Note to self: need to make sure we also cater for color arrays
-                    # which are in the geometry object
-                    color = "k"
+            # Lets a row resize or hide itself without scanning the list.
+            item_widget._legend_item = item
+            row = _LegendRow(item_widget, is_group, filter_key)
+            if is_group:
+                row.member_keys = _member_filter_keys(entry["members"])
+            self._legend_rows[entry_id] = row
 
-                if entry["kind"] == "group":
-                    item = QtWidgets.QListWidgetItem()
-                    item._id = entry_id
-                    item_widget = self.make_grouped_legend_entry(
-                        entry["members"], group_name=entry["group_name"]
-                    )
-                    item.setSizeHint(item_widget.sizeHint())
-                else:
-                    item, item_widget = self.make_legend_entry(
-                        entry_id,
-                        color=color,
-                        type=type(entry["visuals"][0]),
-                    )
+            self.legend.addItem(item)
+            self.legend.setItemWidget(item, item_widget)
 
-                self.legend.addItem(item)
-                self.legend.setItemWidget(item, item_widget)
+        if bulk:
+            self.legend.setVisible(True)
+            # Rows added to a hidden list keep the pre-show viewport width,
+            # which clips their controls off the right edge until the view
+            # lays its item widgets out again (same as `Controls.showEvent`).
+            self.legend.doItemsLayout()
+            self.legend.verticalScrollBar().setValue(scroll_position)
 
-        # Check visibility and selected status of objects. Both are looked up
-        # once per legend row below, so use sets rather than the lists the
-        # viewer hands out - otherwise this loop alone is quadratic.
+        # Sync color, visibility and selection onto the rows that changed. Both
+        # are looked up once per row below, so use sets rather than the lists
+        # the viewer hands out - otherwise this loop alone is quadratic.
         visible = set(self.viewer.visible)
         selected = set(self.viewer.selected or [])
-        for i in range(self.legend.count()):
-            item = self.legend.item(i)
-            item_widget = self.legend.itemWidget(item)
-            entry = legend_entries.get(item._id)
-
-            if entry is None:
+        for entry_id, entry in entries.items():
+            row = self._legend_rows[entry_id]
+            state = self._entry_state(
+                entry,
+                visible,
+                selected,
+                with_colors=not row.is_group or bool(row.widget._member_rows),
+            )
+            if row.state == state:
                 continue
+            row.state = state
 
-            if entry["kind"] == "group":
-                member_ids = entry["members"]
-
-                group_checkbox = next(
-                    (
-                        checkbox
-                        for checkbox in item_widget.findChildren(QtWidgets.QCheckBox)
-                        if checkbox.property("legend_role") == "group_visibility"
-                    ),
-                    None,
-                )
-                if group_checkbox is not None:
-                    visible_count = sum(
-                        member_id in visible for member_id in member_ids
-                    )
-                    is_mixed = 0 < visible_count < len(member_ids)
-
-                    group_checkbox.blockSignals(True)
-                    if is_mixed:
-                        group_checkbox.setCheckState(QtCore.Qt.PartiallyChecked)
-                    elif visible_count > 0:
-                        group_checkbox.setCheckState(QtCore.Qt.Checked)
-                    else:
-                        group_checkbox.setCheckState(QtCore.Qt.Unchecked)
-
-                    if is_mixed:
-                        group_checkbox.setToolTip(
-                            "Some objects in this group are hidden"
-                        )
-                    else:
-                        group_checkbox.setToolTip(
-                            "Toggle visibility for all group members"
-                        )
-                    group_checkbox.blockSignals(False)
+            if row.is_group:
+                self._sync_group_row(row, entry["members"], state, visible, selected)
             else:
-                member_ids = [item._id]
-
-            for member_id in member_ids:
-                line_checkbox = item_widget.findChild(
-                    QtWidgets.QCheckBox, str(member_id)
-                )
-                if line_checkbox:
-                    # N.B. signals must be blocked here: the visuals already
-                    # have the visibility we are about to display (that is where
-                    # `visible` came from), so this is a display-only sync. Let
-                    # it emit `toggled` and the checkbox's own callback calls
-                    # `update_legend` again, once per row that changed state -
-                    # which makes hiding/showing everything quadratic (and
-                    # recurse once per object).
-                    line_checkbox.blockSignals(True)
-                    line_checkbox.setChecked(member_id in visible)
-                    line_checkbox.blockSignals(False)
-
-                member_widget = item_widget.findChild(QtWidgets.QWidget, str(member_id))
-                if member_widget is None:
-                    member_widget = item_widget
-
-                line_text = next(
-                    (
-                        widget
-                        for widget in member_widget.findChildren(ElidedLabel)
-                        if widget.property("legend_role") == "label"
-                    ),
-                    None,
-                )
-                if not line_text:
-                    continue
-
-                line_text.setSelected(member_id in selected)
+                self._sync_single_row(row.widget, state)
 
         # Re-apply an active filter so rows added/removed above stay consistent
         # with the current search text.
-        if (
-            getattr(self, "legend_filter", None) is not None
-            and self.legend_filter.text()
-        ):
+        if self.legend_filter.text():
             self.filter_legend(self.legend_filter.text())
+
+        # Everything is in place and laid out; now the rows can start listening.
+        self._install_pending_hover_highlights()
+
+    def _sync_single_row(self, item_widget, state):
+        """Push one entry's color, visibility and selection onto its row."""
+        css, is_visible, is_selected = state
+
+        set_swatch_color(item_widget._legend_control, css)
+
+        # N.B. signals must be blocked here: the visuals already have the
+        # visibility we are about to display (that is where `visible` came
+        # from), so this is a display-only sync. Let it emit `toggled` and the
+        # checkbox's own callback flags the legend dirty again, once per row
+        # that changed state - which makes hiding/showing everything quadratic
+        # (and recurse once per object).
+        checkbox = item_widget._legend_checkbox
+        checkbox.blockSignals(True)
+        checkbox.setChecked(is_visible)
+        checkbox.blockSignals(False)
+
+        item_widget._legend_label.setSelected(is_selected)
+
+    def _sync_group_row(self, row, members, state, visible, selected):
+        """Push a group's membership and per-member state onto its row."""
+        item_widget = row.widget
+        group_css, member_states = state
+
+        if item_widget._member_names != members:
+            self._sync_group_members(row, members, visible, selected)
+
+        set_swatch_color(item_widget._group_control, group_css)
+
+        visible_count = sum(is_visible for _, _, is_visible, _ in member_states)
+        is_mixed = 0 < visible_count < len(member_states)
+        group_checkbox = item_widget._group_checkbox
+        group_checkbox.blockSignals(True)
+        if is_mixed:
+            group_checkbox.setCheckState(QtCore.Qt.PartiallyChecked)
+            group_checkbox.setToolTip("Some objects in this group are hidden")
+        else:
+            group_checkbox.setCheckState(
+                QtCore.Qt.Checked if visible_count else QtCore.Qt.Unchecked
+            )
+            group_checkbox.setToolTip("Toggle visibility for all group members")
+        group_checkbox.blockSignals(False)
+
+        # Member rows only exist once the group has been expanded - and until
+        # then the snapshot carries no colors for them either. `_member_rows`
+        # is kept in step with the membership just above, so every member in
+        # the snapshot has a row here.
+        if item_widget._member_rows:
+            for member, css, is_visible, is_selected in member_states:
+                member_row = item_widget._member_rows[str(member)]
+                self._sync_single_row(member_row, (css, is_visible, is_selected))
+
+    def _sync_group_members(self, row, members, visible, selected):
+        """Bring a group's member rows in line with `members`.
+
+        Only the rows that changed are edited - rebuilding the whole group
+        widget is expensive for large groups. A group that has never been
+        expanded has no rows yet; there we only track the membership and the
+        rows get built from it on first expand.
+        """
+        item_widget = row.widget
+        materialized = bool(item_widget._member_rows)
+        if materialized:
+            # Remove rows for members no longer in the group.
+            expected = {str(member) for member in members}
+            content_layout = item_widget._group_content.layout()
+            for member_name in set(item_widget._member_rows) - expected:
+                member_row = item_widget._member_rows.pop(member_name)
+                content_layout.removeWidget(member_row)
+                member_row.deleteLater()
+
+        # Mutate the shared list in place (raw ids) so the group color button's
+        # `_id` and `toggle_group_visibility` stay in sync.
+        added = [m for m in members if str(m) not in item_widget._member_rows]
+        item_widget._member_names[:] = members
+        row.member_keys = _member_filter_keys(members)
+
+        if materialized and added:
+            self._insert_member_rows(item_widget, added, visible, selected)
+
+        self._update_group_header_text(item_widget)
+        item_widget._legend_item.setSizeHint(item_widget.sizeHint())
 
     @connect_color_picker
     def color_button_clicked(self):
         """Set the active object to be the buttons target."""
-        sender = self.sender()
-        push_button = self.findChild(QtWidgets.QPushButton, sender.objectName())
-        # print(f'click: {push_button.objectName()}')
+        # N.B. the sender is the button itself; looking it up by object name
+        # would both scan the whole widget tree and - since a grouped object
+        # has a row inside its group as well - risk finding the wrong one.
+        push_button = self.sender()
         self.active_objects = push_button._id
         self._sync_and_show_size_popup(anchor=push_button)
         self._show_color_picker()
 
     def volume_button_clicked(self):
         """Set the active object to be the buttons target."""
-        sender = self.sender()
-        push_button = self.findChild(QtWidgets.QPushButton, sender.objectName())
-        # print(f'click: {push_button.objectName()}')
-        self.active_volume = push_button.objectName()
+        self.active_volume = self.sender().objectName()
         self.volume_controls.show()
 
     @set_viewer_stale
@@ -2897,25 +2970,14 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         return None
 
     def _object_color(self, name):
-        """Return an object's true color, looking through any active highlight.
+        """Return an object's true color, or None if it has no single color.
 
-        Both selection (yellow) and hover (brightened) highlights swap
-        `material.color` and stash the real color away. The legend entry is
-        typically still hovered when the color picker is opened, so reading
-        `material.color` directly would sync the highlight color instead.
+        See `Controls._visual_color` on what "true" means here: the legend
+        entry is typically still hovered when the color picker is opened, so
+        reading `material.color` directly would sync the highlight color.
         """
-        selected = self.viewer.selected or []
-        for vis in self.viewer.objects.get(name, []):
-            try:
-                if name in selected and hasattr(vis, "_stored_color"):
-                    return gfx.Color(vis._stored_color)
-                if getattr(vis, "_highlighted", False):
-                    return gfx.Color(vis.material._original_color)
-                return gfx.Color(vis.material.color)
-            except BaseException:
-                # E.g. per-vertex colors; try the next visual.
-                continue
-        return None
+        is_selected = name in (self.viewer.selected or [])
+        return self._first_color(self.viewer.objects.get(name, ()), is_selected)
 
     def _show_color_picker(self):
         """Pre-fill the picker with the active objects' color and show it."""
@@ -3153,18 +3215,18 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         # Set tooltip
         color_btn.setToolTip("Click to change color")
 
-        # Set color (will be updated subsequently via controls.update_legend())
-        if color is None:
-            color = "w"
-        color = gfx.Color(color)
-        set_swatch_color(color_btn, color)
+        # Legend rows pass no color and are painted by the refresh that
+        # follows, which spares every new row a second `setStyleSheet`.
+        color_btn._swatch_css = None
+        if color is not None:
+            set_swatch_color(color_btn, gfx.Color(color).css)
 
         # Connect callback (this just sets the active object)
         color_btn.clicked.connect(self.color_button_clicked)
 
         return color_btn
 
-    def create_volume_btn(self, name, callback=None, color="w"):
+    def create_volume_btn(self, name, callback=None, color=None):
         """Generate a button to bring up the volume control."""
         # Generate button
         volume_btn = QtWidgets.QPushButton()
@@ -3177,11 +3239,10 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         # Set tooltip
         volume_btn.setToolTip("Click to adjust volume")
 
-        # Set color (will be updated subsequently via controls.update_legend())
-        if color is None:
-            color = "w"
-        color = gfx.Color(color)
-        set_swatch_color(volume_btn, color)
+        # See `Controls.create_color_btn` on the color being left to the refresh
+        volume_btn._swatch_css = None
+        if color is not None:
+            set_swatch_color(volume_btn, gfx.Color(color).css)
 
         # Connect callback (this just sets the active object)
         volume_btn.clicked.connect(self.volume_button_clicked)
