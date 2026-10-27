@@ -57,6 +57,7 @@ from .merge import (
     _color_from_physical,
     _color_to_physical,
     _mode,
+    colors_are_physical,
     merge_visuals,
     split_visual,
 )
@@ -401,11 +402,18 @@ class SubVisualHandle:
         if colors is None:
             # Still a single colour for the whole merged visual
             return self.visual.material.color
-        # The buffer holds physical values; a colour hands back sRGB
-        return _color_from_physical(colors.data[self.sub.offset])
+        stored = colors.data[self.sub.offset]
+        # Whether the buffer holds physical or sRGB values depends on the
+        # visual type - see `merge.colors_are_physical`.
+        if colors_are_physical(self.visual):
+            return _color_from_physical(stored)
+        return gfx.Color(stored)
 
     def _write_color(self, value):
-        rgba = _color_to_physical(value)
+        if colors_are_physical(self.visual):
+            rgba = _color_to_physical(value)
+        else:
+            rgba = np.asarray(gfx.Color(value).rgba, dtype=np.float32)
         # Writing one member's colour is what forces a merged visual off its
         # shared colour, so the buffer may have to be created here.
         colors = self._manager._ensure_vertex_colors(self.visual)
@@ -1069,7 +1077,10 @@ class MergeManager:
 
         if colors is None:
             n = len(geometry.positions.data)
-            rgba = _color_to_physical(material.color)
+            if colors_are_physical(visual):
+                rgba = _color_to_physical(material.color)
+            else:
+                rgba = np.asarray(gfx.Color(material.color).rgba, dtype=np.float32)
             colors = gfx.Buffer(np.tile(rgba, (n, 1)))
             geometry.colors = colors
 

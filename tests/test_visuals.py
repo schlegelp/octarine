@@ -2512,3 +2512,33 @@ def test_colormap_is_clamped():
     for hide_zero in (True, False):
         tm = to_colormap("red", hide_zero=hide_zero)
         assert tm.wrap_s == "clamp"
+
+
+def test_vertex_colors_match_uniform_colors():
+    """The same colour must render the same given per vertex or on the material.
+
+    pygfx's mesh shader decodes the material's colour from sRGB but takes a
+    vertex colour to be physical already, so a caller-supplied per-vertex
+    colour has to be converted on the way in. Mid-tones on purpose: sRGB and
+    physical agree at 0 and 1, so primaries cannot catch this.
+
+    """
+    import pygfx as gfx
+
+    from octarine.visuals import mesh2gfx
+
+    color = (0.45, 0.45, 0.45, 1.0)
+    box = tm.creation.box((160, 20, 20))
+
+    uniform = mesh2gfx(box, color=color, shader="basic")
+    per_vertex = mesh2gfx(
+        box, color=np.tile(color, (len(box.vertices), 1)), shader="basic"
+    )
+
+    assert uniform.material.color_mode != "vertex"
+    assert per_vertex.material.color_mode == "vertex"
+    np.testing.assert_allclose(
+        per_vertex.geometry.colors.data[0],
+        (*gfx.Color(color).to_physical(), 1.0),
+        atol=1e-5,
+    )

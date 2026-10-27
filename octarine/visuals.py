@@ -332,11 +332,14 @@ def parse_mesh_color(mesh, color, alpha=None):
         if color.dtype in (np.float64,):
             color = color.astype(np.float32, copy=False)
 
+        # N.B. into the geometry a colour goes physical, not sRGB - see
+        # `utils.srgb2physical`. Without this the same colour renders lighter
+        # here than it does when set on the material.
         if len(color) == len(mesh.vertices):
-            obj_color_kwargs = dict(colors=color)
+            obj_color_kwargs = dict(colors=utils.srgb2physical(color))
             mat_color_kwargs = dict(color_mode="vertex")
         elif len(color) == len(mesh.faces):
-            obj_color_kwargs = dict(colors=color)
+            obj_color_kwargs = dict(colors=utils.srgb2physical(color))
             mat_color_kwargs = dict(color_mode="face")
         else:
             raise ValueError(
@@ -1007,6 +1010,7 @@ def tubes2gfx(
             raise ValueError("Expected colors to have 3 or 4 channels.")
         if alpha is not None:
             colors[:, -1] = alpha
+        colors = utils.srgb2physical(colors)
         mat_kwargs["color_mode"] = "vertex"
         is_transparent = bool(np.any(colors[:, -1] < 1))
     else:
@@ -1225,6 +1229,10 @@ def points2gfx(
         if len(color) != n_points:
             raise ValueError(f"Got {len(color)} colors for {n_points} points.")
         color = color.astype(np.float32, copy=False)
+        # N.B. no colourspace conversion here, unlike meshes: the points
+        # shader decodes the colour it ends up with whether that came from
+        # the material or the geometry (points.wgsl), so a vertex colour
+        # stays sRGB.
         geometry_kwargs["colors"] = color
         material_kwargs["color_mode"] = "vertex"
     else:
@@ -1397,6 +1405,8 @@ def lines2gfx(lines, color, linewidth=1, linewidth_space="screen", dash_pattern=
         # that we also include `None` for the breaks in the segments
         color = _pad_at_breaks(color, lines, np.nan, "colors")
         color = color.astype(np.float32, copy=False)
+        # As for points: the line shader decodes whatever colour it ends up
+        # with (line.wgsl), so this stays sRGB.
         geometry_kwargs["colors"] = color
         material_kwargs["color_mode"] = "vertex"
     else:
