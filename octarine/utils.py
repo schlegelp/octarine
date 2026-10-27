@@ -117,6 +117,47 @@ def make_iterable(x, force_type=None):
     return np.asarray(x, dtype=force_type)
 
 
+def srgb2physical(colors):
+    """Convert sRGB colour values to the physical space pygfx shaders expect.
+
+    pygfx decodes a material's uniform colour from sRGB in the shader, but
+    takes a *vertex* colour to be physical (linear) already - see
+    `mesh.wgsl`: "The vertex color should already in physical space". So a
+    colour handed to us the way a user writes one has to be decoded before it
+    goes into a geometry, or the object renders lighter than the same colour
+    set on the material would.
+
+    Only the colour channels are converted; alpha is a weight rather than a
+    colour and is left as it is. Non-finite values pass through untouched,
+    which matters for lines, whose colour buffer carries NaN at the breaks
+    between segments.
+
+    pygfx's own `_srgb2physical` handles one value at a time; this is the same
+    curve over an array.
+
+    """
+    colors = np.asarray(colors, dtype=np.float32)
+    out = colors.copy()
+    rgb = out[..., :3]
+    with np.errstate(invalid="ignore"):
+        out[..., :3] = np.where(
+            rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4
+        )
+    return out
+
+
+def physical2srgb(colors):
+    """The inverse of `srgb2physical`."""
+    colors = np.asarray(colors, dtype=np.float32)
+    out = colors.copy()
+    rgb = out[..., :3]
+    with np.errstate(invalid="ignore"):
+        out[..., :3] = np.where(
+            rgb <= 0.0031308, rgb * 12.92, 1.055 * rgb ** (1 / 2.4) - 0.055
+        )
+    return out
+
+
 def as_color_list(*colors):
     """Turn one or more color specs into a list of `pygfx.Color`.
 

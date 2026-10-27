@@ -1059,6 +1059,69 @@ def _pixels(v):
     return np.asarray(v.screenshot(filename=None))[..., :3].astype(int)
 
 
+def _tinted_lines(v, colors=_MIDTONES):
+    for i, color in enumerate(colors):
+        pts = np.zeros((5, 3), dtype=np.float32)
+        pts[:, 0] = np.linspace(-70, 70, 5)
+        pts[:, 1] = 60 - i * 40
+        v.add_lines(
+            pts,
+            name=f"b{i}",
+            color=color,
+            linewidth=8,
+            linewidth_space="world",
+            center=False,
+        )
+    return _frame(v)
+
+
+def _tinted_points(v, colors=_MIDTONES):
+    for i, color in enumerate(colors):
+        v.add_points(
+            np.array([[0.0, 60 - i * 40, 0.0]], dtype=np.float32),
+            name=f"b{i}",
+            color=color,
+            size=30,
+            size_space="world",
+            center=False,
+        )
+    return _frame(v)
+
+
+@pytest.mark.parametrize("build", [_tinted, _tinted_lines, _tinted_points])
+def test_merging_does_not_change_brightness_per_type(build):
+    """Whether a vertex colour is sRGB or physical depends on the visual type.
+
+    The mesh shader takes one to be physical already and decodes only the
+    material's; the line and point shaders decode whichever they end up with.
+    Get it the wrong way round for a type and merging shifts its brightness.
+
+    """
+    plain, merged = build(_viewer(merge=False)), build(_viewer(merge=True))
+
+    assert len(plain.visuals) == 3 and len(merged.visuals) == 1
+    assert np.array_equal(_pixels(plain), _pixels(merged))
+
+    plain.close()
+    merged.close()
+
+
+@pytest.mark.parametrize("build", [_tinted, _tinted_lines, _tinted_points])
+def test_per_object_colour_matches_unmerged_per_type(build):
+    """... and the same for a colour written through a handle afterwards."""
+    plain, merged = build(_viewer(merge=False)), build(_viewer(merge=True))
+
+    for v in (plain, merged):
+        v.set_colors({"b1": (0.3, 0.6, 0.45, 1.0)})
+
+    assert np.array_equal(_pixels(plain), _pixels(merged))
+    np.testing.assert_allclose(
+        merged.objects["b1"][0].material.color.rgba, (0.3, 0.6, 0.45, 1.0), atol=1e-3
+    )
+    plain.close()
+    merged.close()
+
+
 @pytest.mark.parametrize("shader", ["basic", "phong"])
 def test_merging_does_not_change_brightness(shader):
     """A merged object must render exactly as it did on its own.

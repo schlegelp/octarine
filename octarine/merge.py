@@ -51,7 +51,13 @@ from functools import lru_cache
 
 from . import utils
 
-__all__ = ["merge_visuals", "split_visual", "sub_visual_at", "SubVisual"]
+__all__ = [
+    "merge_visuals",
+    "split_visual",
+    "sub_visual_at",
+    "colors_are_physical",
+    "SubVisual",
+]
 
 
 # Ceiling on the size of a single merged visual, deliberately conservative:
@@ -266,6 +272,16 @@ def _buffer(geometry, name):
     return None if buffer is None else buffer.data
 
 
+def colors_are_physical(visual):
+    """Whether this visual's shader wants its vertex colours in physical space.
+
+    See `_Kind.physical_colors`: meshes yes, lines and points no.
+
+    """
+    merger = _MERGERS.get(type(visual))
+    return merger.kind.physical_colors if merger is not None else False
+
+
 def _color_to_physical(color):
     """An sRGB colour as the (r, g, b, a) a vertex colour buffer wants.
 
@@ -312,7 +328,7 @@ def _as_rgba(colors):
     return rgba
 
 
-def _absorbable_values(vis, attr):
+def _absorbable_values(vis, attr, physical_colors=False):
     """This visual's values for one absorbable property.
 
     Always shaped (n_vertices, channels) when the visual carries them per
@@ -328,8 +344,12 @@ def _absorbable_values(vis, attr):
 
     value = getattr(vis.material, attr.value)
     if attr.channels == 4:
-        # i.e. a colour: into the geometry it goes as physical, not sRGB
-        return _color_to_physical(value)
+        # i.e. a colour. Whether it has to be decoded on the way into the
+        # geometry depends on the visual type - see `_Kind.physical_colors`.
+        if physical_colors:
+            return _color_to_physical(value)
+        color = gfx.Color(value)
+        return np.asarray(color.rgba, dtype=np.float32)
     return np.asarray([value], dtype=np.float32)
 
 
@@ -349,7 +369,7 @@ def _differs(members, attr):
     return False
 
 
-def _absorb(members, subs, n_vertices, attrs):
+def _absorb(members, subs, n_vertices, kind):
     """Route each absorbable property into the geometry or the material.
 
     Returns the geometry and material kwargs for the merged visual: a buffer
@@ -359,7 +379,7 @@ def _absorb(members, subs, n_vertices, attrs):
     """
     geometry_kwargs, material_kwargs = {}, {}
 
-    for attr in attrs:
+    for attr in kind.attrs:
         if _differs(members, attr):
             # The gap vertices between members keep their zero. They are never
             # drawn (their position is NaN), and unlike NaN a zero cannot leak
@@ -373,12 +393,13 @@ def _absorb(members, subs, n_vertices, attrs):
             material_kwargs[attr.mode] = "vertex"
         else:
             value = members[0].attrs[attr.value]
-            material_kwargs[attr.value] = (
-                # Back out of physical space: this one is going on the material
-                _color_from_physical(value)
-                if attr.channels == 4
-                else float(value[0])
-            )
+            if attr.channels != 4:
+                material_kwargs[attr.value] = float(value[0])
+            elif kind.physical_colors:
+                # Back out of physical space: this one is going on a material
+                material_kwargs[attr.value] = _color_from_physical(value)
+            else:
+                material_kwargs[attr.value] = gfx.Color(tuple(value))
             material_kwargs[attr.mode] = "uniform"
 
     return geometry_kwargs, material_kwargs
@@ -461,7 +482,10 @@ def _members(vis, kind, face_count=None, extra=None):
 
     """
     positions = _buffer(vis.geometry, "positions")
-    values = {attr.value: _absorbable_values(vis, attr) for attr in kind.attrs}
+    values = {
+        attr.value: _absorbable_values(vis, attr, kind.physical_colors)
+        for attr in kind.attrs
+    }
 
     for sub in _sub_visuals_of(vis, len(positions), face_count):
         attrs = {
@@ -559,9 +583,7 @@ def _merge_lines(template, members):
     source = template.material
 
     subs, positions = _layout(members, gap=_LINE.gap)
-    geometry_kwargs, material_kwargs = _absorb(
-        members, subs, len(positions), _LINE.attrs
-    )
+    geometry_kwargs, material_kwargs = _absorb(members, subs, len(positions), _LINE)
 
     if isinstance(source, gfx.LineThinMaterial):
         # Thin lines are one physical pixel wide whatever the material says,
@@ -629,9 +651,7 @@ def _merge_points(template, members):
 
     # Points are independent primitives, so they simply concatenate
     subs, positions = _layout(members, gap=_POINTS.gap)
-    geometry_kwargs, material_kwargs = _absorb(
-        members, subs, len(positions), _POINTS.attrs
-    )
+    geometry_kwargs, material_kwargs = _absorb(members, subs, len(positions), _POINTS)
 
     material = type(source)(**material_kwargs)
     _copy_material_state(source, material, _POINTS.absorbed)
@@ -692,9 +712,7 @@ def _merge_meshes(template, members):
 
     # Triangles are independent, so the vertices simply concatenate ...
     subs, positions = _layout(members, gap=_MESH.gap)
-    geometry_kwargs, material_kwargs = _absorb(
-        members, subs, len(positions), _MESH.attrs
-    )
+    geometry_kwargs, material_kwargs = _absorb(members, subs, len(positions), _MESH)
 
     # ... but the faces index into that concatenated buffer and so have to be
     # rebased onto it, by however far the member moved.
@@ -733,12 +751,28 @@ class _Kind:
     `auto_reads_colors` whether this type's shader reads `geometry.colors`
     under `color_mode="auto"` (see `_mergeable`).
 
+    `physical_colors` is whether this type's shader takes a *vertex* colour to
+    be in physical space already. The mesh shader does (mesh.wgsl: "The vertex
+    color should already in physical space") where it decodes the material's
+    uniform colour from sRGB, so a colour absorbed into the geometry has to be
+    decoded on the way or the object renders lighter. The line and point
+    shaders decode whatever colour they end up with, so for those a vertex
+    colour stays exactly as the material held it.
+
     """
 
-    def __init__(self, attrs, extra_buffers=(), gap=0, auto_reads_colors=False):
+    def __init__(
+        self,
+        attrs,
+        extra_buffers=(),
+        gap=0,
+        auto_reads_colors=False,
+        physical_colors=False,
+    ):
         self.attrs = attrs
         self.gap = gap
         self.auto_reads_colors = auto_reads_colors
+        self.physical_colors = physical_colors
         self.absorbed = frozenset(
             name for attr in attrs for name in (attr.value, attr.mode)
         )
@@ -751,6 +785,7 @@ _MESH = _Kind(
     (_COLOR,),
     extra_buffers=("indices", "normals", "texcoords"),
     auto_reads_colors=True,
+    physical_colors=True,
 )
 
 # Keyed by exact type: subclasses (`BoxHelper`, `InstancedMesh`, octarine's
