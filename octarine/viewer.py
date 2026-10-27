@@ -36,6 +36,8 @@ from .visuals import (
     tubes2gfx,
 )
 from .conversion import get_converter
+from .handles import MergeManager, SubVisualHandle, as_visual, member_ids
+from .merge import sub_visual_at
 from . import utils, config
 
 
@@ -169,6 +171,25 @@ def update_viewer(legend=True, bounds=True):
         return inner
 
     return outer
+
+
+# Alpha modes that already draw an opaque color opaquely, so that writing
+# "solid" over one of them changes nothing about how it renders.
+_OPAQUE_ALPHA_MODES = ("auto", "opaque", "solid")
+
+
+def _visual_label(visual):
+    """How to name a visual in a message meant for the user.
+
+    A merged visual stands for many objects and its own `_object_id` is a
+    generated one, so naming it that way would mean nothing to anyone.
+
+    """
+    subs = getattr(visual, "_sub_visuals", None)
+    if subs:
+        names = ", ".join(str(sub.object_id) for sub in subs[:3])
+        return names if len(subs) <= 3 else f"{names}, ... (+{len(subs) - 3})"
+    return str(getattr(visual, "_object_id", visual))
 
 
 def _brighten_color(color, amount=0.3):
@@ -339,6 +360,15 @@ class Viewer:
                 Whether to darken creases, cavities and the points where objects
                 touch. On by default with settings derived from the scene; use
                 `Viewer.set_ambient_occlusion` to tune them.
+    merge :     bool | int
+                Whether to merge objects into shared pygfx objects, which is
+                much faster to render for scenes of many small objects. `False`
+                (default) never merges, `True` merges whenever there is
+                anything to merge, and an integer only starts merging once the
+                canvas holds that many objects. Merged objects stay individually
+                addressable, but `Viewer.objects` then reports handles standing
+                in for them rather than the visuals themselves - see
+                `Viewer.merge_objects` and `octarine.handles`.
     show :      "auto" (default) | bool
                 Whether to immediately show the viewer. When set to "auto" (default),
                 will immmediately show the viewer if:
@@ -369,6 +399,7 @@ class Viewer:
         headlight=True,
         shadows=True,
         ambient_occlusion=True,
+        merge=False,
         **kwargs,
     ):
         # We need to import WgpuCanvas before we (potentially) start the event loop
@@ -580,6 +611,12 @@ class Viewer:
         self._objects_pickable = False
         self._selected = []
         self._render_trigger = "continuous"
+
+        # Merging objects into fewer pygfx objects (see `octarine.handles`).
+        # Off by default: it changes `Viewer.objects` from returning visuals to
+        # returning handles that stand in for them, which code outside octarine
+        # may not expect.
+        self._merge = MergeManager(self, auto_merge=merge)
 
         # Camera links (see `Viewer.link`)
         self._linked = []
@@ -795,6 +832,16 @@ class Viewer:
             # ... and new meshes have to be lit by the environment like the rest
             if self._env_map is not None:
                 self._update_environment()
+
+            # Merging comes last, once everything that applies shared state to
+            # new visuals has run. Two objects only merge if they agree on
+            # that state, so merging a freshly added visual *before*
+            # `_update_shadows` has given it the canvas's `cast_shadow` would
+            # put it in a bucket of its own - and it would stay there, since
+            # from then on there is nothing new to merge. Merged visuals
+            # inherit the state from the members they are built out of (see
+            # `merge._finalize`), so running after costs nothing.
+            self._merge.maybe_apply()
         finally:
             self._refreshing_scene = False
             self._scene_stale = False
@@ -1322,6 +1369,54 @@ class Viewer:
 
         return np.vstack((mn, mx)).T
 
+    def _style_targets(self, object_ids):
+        """Real pygfx visuals to apply a per-material style to.
+
+        Styles like silhouettes, subsurface scattering and matcaps replace a
+        material outright, which is something a merged visual can only do for
+        every one of its members at once. So a merged visual all of whose
+        members are targeted is handed back as itself - applying the style
+        once there is the same thing, and much cheaper - while members that
+        only partly cover theirs are split back out into visuals of their own
+        first (see `MergeManager.split_out`).
+
+        Pinned objects are dropped, which is also why they cannot keep a
+        merged visual "fully covered": a style applied to the merged material
+        would reach them too.
+
+        """
+        objects = self.objects
+        pinned = set(self.pinned)
+        wanted = [n for n in object_ids if n in objects and n not in pinned]
+
+        covered = set(wanted)
+        partial = []
+        for vis in self._merge.merged_visuals():
+            members = set(member_ids(vis))
+            hit = members & covered
+            if hit and hit != members:
+                partial.extend(hit)
+
+        if partial:
+            self._merge.split_out(partial)
+            self._merge.note_erosion(len(partial))
+            # N.B. the cache has to be dropped first: `Viewer.objects` is
+            # memoised, and the entry it is holding describes the scene as it
+            # was *before* the split - handles pointing into a merged visual
+            # that is no longer on the canvas. Styling those would write into
+            # a discarded object and appear to do nothing at all.
+            self._objects.cache_clear()
+            objects = self.objects
+
+        targets, seen = [], set()
+        for n in wanted:
+            for v in objects.get(n, []):
+                target = as_visual(v)
+                if id(target) not in seen:
+                    seen.add(id(target))
+                    targets.append(target)
+        return targets
+
     def _resolve_visuals(self, obj):
         """Turn name(s)/index(es)/visual(s) into a flat list of visuals."""
         objects = obj if utils.is_iterable(obj) else [obj]
@@ -1334,7 +1429,7 @@ class Viewer:
                 visuals += list(all_objects[ob])
             elif isinstance(ob, int):
                 visuals += list(list(all_objects.values())[ob])
-            elif isinstance(ob, gfx.WorldObject):
+            elif isinstance(ob, (gfx.WorldObject, SubVisualHandle)):
                 visuals.append(ob)
             else:
                 raise ValueError(f"Unable to find object(s) for {ob}")
@@ -1403,12 +1498,15 @@ class Viewer:
 
     @property
     def _object_ids(self):
-        """All object IDs on this canvas in order of addition."""
-        obj_ids = []
-        for v in self.visuals:
-            if hasattr(v, "_object_id"):
-                obj_ids.append(v._object_id)
-        return sorted(set(obj_ids), key=lambda x: obj_ids.index(x))
+        """All object IDs on this canvas in order of addition.
+
+        N.B. via `Viewer.objects` rather than the scene's children: a merged
+        visual stands for many objects and carries one generated id of its
+        own, so walking the children would report one id per *visual* and
+        `len(viewer)` would count merged visuals instead of objects.
+
+        """
+        return list(self.objects)
 
     @property
     def objects(self):
@@ -1416,14 +1514,41 @@ class Viewer:
 
     @lru_cache(maxsize=1)
     def _objects(self):
-        """Ordered dictionary {name->[visuals]} of all objects in order of addition."""
+        """Ordered dictionary {name->[visuals]} of all objects in order of addition.
+
+        A merged visual holds many objects and so appears here not as itself
+        but as one `SubVisualHandle` per object it holds. Handles are shaped
+        like visuals and write into the vertex range their object owns, which
+        is what lets everything that acts on an object - hiding, recoloring,
+        the legend, box selection - stay the same whether or not the scene has
+        been merged. See `octarine.handles`.
+
+        """
+        # The handle registry has to follow the scene; this is the one place
+        # that is guaranteed to run after visuals come and go, because every
+        # such change clears this cache (see `update_helper`). `sync` is a
+        # no-op unless a merged visual has actually been replaced.
+        if self._merge.enabled:
+            self._merge.sync()
+
         objects = OrderedDict()
         for v in self.visuals:
-            if hasattr(v, "_object_id"):
-                if v._object_id in objects:
-                    objects[v._object_id].append(v)
-                else:
-                    objects[v._object_id] = [v]
+            if getattr(v, "_sub_visuals", None):
+                for handle in self._merge.handles_for(v):
+                    objects.setdefault(handle._object_id, []).append(handle)
+            elif hasattr(v, "_object_id"):
+                objects.setdefault(v._object_id, []).append(v)
+
+        if self._merge._order_stale:
+            # Splitting an object out puts its new visual on the end of the
+            # scene, so the scene's order is no longer the order things were
+            # added in - which this dictionary promises and the legend relies
+            # on. Until something is split, scene order *is* addition order,
+            # so this is skipped. See `MergeManager.order_key`.
+            order = self._merge._order
+            objects = OrderedDict(
+                sorted(objects.items(), key=lambda kv: order.get(kv[0], len(order)))
+            )
 
         return objects
 
@@ -1454,13 +1579,17 @@ class Viewer:
 
         self._objects_pickable = v
 
-        # Set pick_write to new value for all materials
-        for objects in self.objects.values():
-            for ob in objects:
-                try:
-                    ob.material.pick_write = v
-                except AttributeError:
-                    pass
+        # Set pick_write to new value for all materials. This covers every
+        # object on the canvas, so merged visuals can take it on their shared
+        # material rather than coming apart over it.
+        all_objects = self.objects
+        with self._merge.bulk_shared_write(all_objects):
+            for objects in all_objects.values():
+                for ob in objects:
+                    try:
+                        ob.material.pick_write = v
+                    except AttributeError:
+                        pass
 
     @property
     def highlighted(self):
@@ -2273,13 +2402,32 @@ class Viewer:
         # Remove everything but the lights and backgrounds
         self.scene.remove(*self.visuals)
 
+        # The merge bookkeeping is all about objects that are now gone
+        self._merge.reset()
+
         # Rset the transform gizmo
         self.transform_gizmo = None
 
     @update_viewer(legend=True, bounds=True)
     def remove_objects(self, to_remove):
         """Remove given neurons/visuals from canvas."""
-        to_remove = utils.make_iterable(to_remove)
+        # A handle stands in for an object inside a merged visual and is
+        # neither a scene child nor an id, so neither test below would match
+        # it. `Viewer.pop` hands us whatever `Viewer.objects` holds, so this
+        # is a normal way to arrive here, not a corner case.
+        to_remove = set(
+            getattr(vis, "_object_id", vis) for vis in utils.make_iterable(to_remove)
+        )
+
+        # Objects living inside a merged visual have to be split back out
+        # before they can be removed - there is no object to take off the
+        # scene until they are. `erosion=False` because this is not a merge
+        # being eaten away, which is what `merge_stats.split_outs` reports.
+        # N.B. not gated on the merge policy: `Viewer.merge_objects` merges on
+        # request whatever the policy says, so a canvas can hold merged visuals
+        # with merging otherwise off. `drop` is cheap when there are none.
+        self._merge.drop(to_remove)
+        self._merge.forget(to_remove)
 
         for vis in self.scene.children:
             if vis in to_remove:
@@ -2558,7 +2706,7 @@ class Viewer:
                 v._link_filter = (None, None)
 
     @update_viewer(legend=True, bounds=True)
-    def add(self, x, name=None, group=None, center=True, clear=False, **kwargs):
+    def add(self, x, name=None, group=None, center=True, clear=False, merge=None, **kwargs):
         """Add object to canvas.
 
         This function is a general entry point for adding objects to the canvas.
@@ -2579,6 +2727,12 @@ class Viewer:
                     If True, re-center camera to all objects on canvas.
         clear :     bool, optional
                     If True, clear canvas before adding new objects.
+        merge :     bool, optional
+                    Whether these objects may be merged into a shared pygfx
+                    object (see the `merge` parameter of `Viewer`). `None`
+                    (default) follows the canvas; `False` keeps them out of
+                    any merge, which is what you want for an object you mean
+                    to style or move on its own.
         **kwargs
                     Keyword arguments passed to the conversion functions when
                     generating visuals.
@@ -2594,7 +2748,9 @@ class Viewer:
         converter = get_converter(x, raise_missing=False)
         if utils.is_iterable(x) and not converter:
             for xx in x:
-                self.add(xx, center=False, clear=False, name=name, **kwargs)
+                self.add(
+                    xx, center=False, clear=False, name=name, merge=merge, **kwargs
+                )
             if center:
                 self._request_center()
             return
@@ -2624,6 +2780,8 @@ class Viewer:
 
             v._object_group = group
 
+            self._merge.register(v, merge)
+
             self.scene.add(v)
 
         # Note this is deferred to just before the next frame rather than done
@@ -2632,11 +2790,13 @@ class Viewer:
             self._request_center()
 
     @update_viewer(legend=True, bounds=True)
-    def _add_to_scene(self, visual, center=True):
+    def _add_to_scene(self, visual, center=True, merge=None):
         """Add visual to scene.
 
         This is just a convenient collection point for us to trigger a bunch of updates in one go,
         """
+        self._merge.register(visual, merge)
+
         # If we need objects to be pickable, set the material accordingly
         if self.objects_pickable:
             try:
@@ -2656,6 +2816,7 @@ class Viewer:
         mesh,
         name=None,
         group=None,
+        merge=None,
         color=None,
         alpha=None,
         silhouette=None,
@@ -2676,6 +2837,11 @@ class Viewer:
                     Name for the visual.
         group :     str, optional
                     Group for the visual.
+        merge :     bool, optional
+                    Whether this visual may be merged into a shared pygfx
+                    object (see the `merge` parameter of `Viewer`). `None`
+                    (default) follows the canvas; `False` keeps it out of
+                    any merge.
         color :     str | tuple, optional
                     Color to use for plotting. If multiple colors,
                     must be a list of colors with the same length as
@@ -2764,13 +2930,14 @@ class Viewer:
         visual._object_id = name if name else uuid.uuid4()
         visual._object_group = group
 
-        self._add_to_scene(visual, center)
+        self._add_to_scene(visual, center, merge=merge)
 
     def add_points(
         self,
         points,
         name=None,
         group=None,
+        merge=None,
         color=None,
         marker=None,
         size=2,
@@ -2794,6 +2961,11 @@ class Viewer:
                     Name for the visual.
         group :     str, optional
                     Group for the visual.
+        merge :     bool, optional
+                    Whether this visual may be merged into a shared pygfx
+                    object (see the `merge` parameter of `Viewer`). `None`
+                    (default) follows the canvas; `False` keeps it out of
+                    any merge.
         color :     str | tuple, optional
                     Color to use for plotting. Can be the name of
                     a colormap or a single color.
@@ -2870,13 +3042,14 @@ class Viewer:
         )
         visual._object_id = name if name else uuid.uuid4()
         visual._object_group = group
-        self._add_to_scene(visual, center)
+        self._add_to_scene(visual, center, merge=merge)
 
     def add_lines(
         self,
         lines,
         name=None,
         group=None,
+        merge=None,
         color=None,
         linewidth=1,
         linewidth_space="screen",
@@ -2896,6 +3069,11 @@ class Viewer:
                     Name for the visual.
         group :     str, optional
                     Group for the visual.
+        merge :     bool, optional
+                    Whether this visual may be merged into a shared pygfx
+                    object (see the `merge` parameter of `Viewer`). `None`
+                    (default) follows the canvas; `False` keeps it out of
+                    any merge.
         color :     str | tuple, optional
                     Color to use for plotting. Can be a single color
                     or one for every point in the line(s).
@@ -2945,7 +3123,7 @@ class Viewer:
         )
         visual._object_id = name if name else uuid.uuid4()
         visual._object_group = group
-        self._add_to_scene(visual, center)
+        self._add_to_scene(visual, center, merge=merge)
 
     def add_volume(
         self,
@@ -3440,7 +3618,10 @@ class Viewer:
         # Important note: it looks like any attribute we added previously
         # will (at some point) have been silently renamed to "_Viewer{attribute}"
         if obj is None:
-            obj = [v for v in self.visuals if getattr(v, "_highlighted", False)]
+            # N.B. via `highlighted` rather than `self.visuals`: the flag is
+            # set on whatever `Viewer.objects` hands out, which for a merged
+            # object is a handle and not the visual it lives in.
+            obj = list(self.highlighted)
 
         if not utils.is_iterable(obj):
             objects = [obj]
@@ -3473,6 +3654,111 @@ class Viewer:
                 if hasattr(o, "_highlight_style"):
                     del o._highlight_style
                 self._render_stale = True
+
+    @property
+    def merge(self):
+        """Get/set whether objects on this canvas are merged.
+
+        The same values the `merge` parameter of `Viewer` takes: `False` to
+        never merge, `True` to merge whenever there is anything to merge, or a
+        count to only start merging once the canvas holds that many objects.
+
+        Setting it takes effect there and then rather than at the next frame,
+        so that what the canvas holds always matches what this says. Turning
+        it off unmerges everything that is currently merged - leaving a canvas
+        half merged with merging "off" would be a strange thing to hand back.
+
+        See Also
+        --------
+        Viewer.merge_objects
+                    Merge on demand, whatever this is set to.
+
+        """
+        return self._merge.auto_merge
+
+    @merge.setter
+    def merge(self, value):
+        if value == self._merge.auto_merge:
+            return
+
+        self._merge.auto_merge = value
+        if self._merge.enabled:
+            self._merge.maybe_apply()
+        else:
+            # N.B. *not* `unmerge_objects`, which marks what it splits as
+            # "the user wants this kept apart" so that a later `add` cannot
+            # undo it. Switching the policy off is not that: switching it back
+            # on again has to be able to merge these.
+            self._merge.split_out(None)
+        update_helper(self, legend=True, bounds=False)
+
+    @update_viewer(legend=True, bounds=False)
+    def merge_objects(self):
+        """Merge what can be merged on this canvas into fewer pygfx objects.
+
+        Every object in a scene costs the renderer a fixed slice of CPU time
+        per frame whatever its size, so a few hundred small objects cost far
+        more than one large one. Merging trades them for a handful of shared
+        objects; the objects themselves stay addressable - `Viewer.objects`
+        reports a handle per object that writes into the merged buffers (see
+        `octarine.handles`).
+
+        Objects are merged only if they agree on everything a single pygfx
+        object can hold once: the material's blend and depth state, the
+        transform, visibility and render order. Color, line width and point
+        size are the exceptions, and move into the geometry where they differ.
+        Volumes, text and tubes are never merged.
+
+        Normally you do not call this - set `merge` on the `Viewer` and let it
+        happen before the next frame. Use this to merge on demand.
+
+        See Also
+        --------
+        Viewer.unmerge_objects
+                    Split objects back out into visuals of their own.
+        Viewer.merge_stats
+                    What merging currently costs and saves.
+
+        """
+        # An explicit request to merge overrides an earlier `unmerge_objects`
+        # (but not `add(..., merge=False)`, which is about the object itself).
+        for vis in self.visuals:
+            if getattr(vis, "_no_merge", False) and not getattr(vis, "_never_merge", False):
+                del vis._no_merge
+        self._merge.apply()
+
+    @update_viewer(legend=True, bounds=False)
+    def unmerge_objects(self, obj=None):
+        """Split given object(s) back out into visuals of their own.
+
+        Parameters
+        ----------
+        obj :   str | list | None
+                Object(s) to split out. If `None`, splits out everything,
+                leaving the canvas with no merged visuals.
+
+        See Also
+        --------
+        Viewer.merge_objects
+                    The operation this undoes.
+
+        """
+        # `keep_apart`: the user asked for these to be separate, so they must
+        # not be folded back in by the next `add`. `Viewer.merge_objects`
+        # clears that again.
+        self._merge.split_out(obj, keep_apart=True)
+
+    @property
+    def merge_stats(self):
+        """What merging currently costs and saves on this canvas.
+
+        See `octarine.handles.MergeStats`. Most useful for telling whether a
+        merge is being eroded: `split_outs` climbing during normal use means
+        something is being asked of individual objects that a merged object
+        cannot express.
+
+        """
+        return self._merge.stats
 
     def pin_objects(self, obj):
         """Pin given object(s).
@@ -3533,13 +3819,18 @@ class Viewer:
         if objects is None:
             objects = list(self.objects)
 
-        for n in objects:
-            for v in self.objects[n]:
-                if getattr(v, "_pinned", False):
-                    continue
-                if not hasattr(v, "material"):
-                    continue
-                v.material.alpha_mode = mode
+        # N.B. pinned objects are left out of the bulk, not just skipped by
+        # the loop: the bulk says "every one of these is getting this value",
+        # and a merged visual holding a pinned member is not. Leaving them in
+        # would let the shared write reach the very objects pinning protects.
+        with self._merge.bulk_shared_write(set(objects) - set(self.pinned)):
+            for n in objects:
+                for v in self.objects[n]:
+                    if getattr(v, "_pinned", False):
+                        continue
+                    if not hasattr(v, "material"):
+                        continue
+                    v.material.alpha_mode = mode
 
     @update_viewer(legend=False, bounds=False)
     def set_silhouette(self, silhouette, objects=None):
@@ -3572,53 +3863,53 @@ class Viewer:
         else:
             objects = utils.make_iterable(objects)
 
-        for n in objects:
-            for v in self.objects[n]:
-                if getattr(v, "_pinned", False):
+        # N.B. real visuals, not the per-object handles `self.objects`
+        # hands out: swapping a material is not something a merged visual
+        # can do for one member. See `Viewer._style_targets`.
+        for v in self._style_targets(objects):
+            if not isinstance(v, gfx.Mesh):
+                continue
+            mat = v.material
+            if isinstance(mat, SilhouetteMeshMaterial):
+                mat.silhouette = silhouette
+                if silhouette > 0:
+                    if not hasattr(mat, "_pre_silhouette_alpha_mode"):
+                        mat._pre_silhouette_alpha_mode = mat.alpha_mode
+                    mat.alpha_mode = "weighted_blend"
+                elif hasattr(mat, "_pre_silhouette_alpha_mode"):
+                    mat.alpha_mode = mat._pre_silhouette_alpha_mode
+                    del mat._pre_silhouette_alpha_mode
+            elif isinstance(mat, gfx.MeshPhongMaterial):
+                if silhouette == 0:
                     continue
-                if not isinstance(v, gfx.Mesh):
-                    continue
-                mat = v.material
-                if isinstance(mat, SilhouetteMeshMaterial):
-                    mat.silhouette = silhouette
-                    if silhouette > 0:
-                        if not hasattr(mat, "_pre_silhouette_alpha_mode"):
-                            mat._pre_silhouette_alpha_mode = mat.alpha_mode
-                        mat.alpha_mode = "weighted_blend"
-                    elif hasattr(mat, "_pre_silhouette_alpha_mode"):
-                        mat.alpha_mode = mat._pre_silhouette_alpha_mode
-                        del mat._pre_silhouette_alpha_mode
-                elif isinstance(mat, gfx.MeshPhongMaterial):
-                    if silhouette == 0:
-                        continue
-                    # Swap in a silhouette material, carrying over the
-                    # relevant properties of the old one
-                    props = {
-                        p: getattr(mat, p)
-                        for p in (
-                            "color",
-                            "color_mode",
-                            "map",
-                            "opacity",
-                            "pick_write",
-                            "side",
-                            "flat_shading",
-                            "shininess",
-                            "specular",
-                            "emissive",
-                            "alpha_test",
-                        )
-                        if getattr(mat, p, None) is not None
-                    }
-                    new_mat = SilhouetteMeshMaterial(silhouette=silhouette, **props)
-                    new_mat._pre_silhouette_alpha_mode = mat.alpha_mode
-                    new_mat.alpha_mode = "weighted_blend"
-                    v.material = new_mat
-                elif silhouette > 0:
-                    logger.warning(
-                        f'Skipped mesh "{n}": silhouette rendering requires a '
-                        f"Phong-based material, got {type(mat).__name__}."
+                # Swap in a silhouette material, carrying over the
+                # relevant properties of the old one
+                props = {
+                    p: getattr(mat, p)
+                    for p in (
+                        "color",
+                        "color_mode",
+                        "map",
+                        "opacity",
+                        "pick_write",
+                        "side",
+                        "flat_shading",
+                        "shininess",
+                        "specular",
+                        "emissive",
+                        "alpha_test",
                     )
+                    if getattr(mat, p, None) is not None
+                }
+                new_mat = SilhouetteMeshMaterial(silhouette=silhouette, **props)
+                new_mat._pre_silhouette_alpha_mode = mat.alpha_mode
+                new_mat.alpha_mode = "weighted_blend"
+                v.material = new_mat
+            elif silhouette > 0:
+                logger.warning(
+                    f'Skipped mesh "{_visual_label(v)}": silhouette rendering '
+                    f"requires a Phong-based material, got {type(mat).__name__}."
+                )
 
     @update_viewer(legend=False, bounds=False)
     def set_subsurface(self, subsurface=1.0, objects=None, **kwargs):
@@ -3674,58 +3965,58 @@ class Viewer:
         else:
             objects = utils.make_iterable(objects)
 
-        for n in objects:
-            for v in self.objects[n]:
-                if getattr(v, "_pinned", False):
+        # N.B. real visuals, not the per-object handles `self.objects`
+        # hands out: swapping a material is not something a merged visual
+        # can do for one member. See `Viewer._style_targets`.
+        for v in self._style_targets(objects):
+            if not isinstance(v, gfx.Mesh):
+                continue
+            mat = v.material
+            if not isinstance(mat, SubsurfaceMeshMaterial):
+                if subsurface == 0:
                     continue
-                if not isinstance(v, gfx.Mesh):
+                if not isinstance(mat, gfx.MeshPhongMaterial):
+                    logger.warning(
+                        f'Skipped mesh "{_visual_label(v)}": subsurface scattering '
+                        f"requires a Phong-based material, got {type(mat).__name__}."
+                    )
                     continue
-                mat = v.material
-                if not isinstance(mat, SubsurfaceMeshMaterial):
-                    if subsurface == 0:
-                        continue
-                    if not isinstance(mat, gfx.MeshPhongMaterial):
-                        logger.warning(
-                            f'Skipped mesh "{n}": subsurface scattering requires a '
-                            f"Phong-based material, got {type(mat).__name__}."
-                        )
-                        continue
-                    # Swap in a subsurface material, carrying over the
-                    # relevant properties of the old one. Note that
-                    # SubsurfaceMeshMaterial derives from the silhouette
-                    # material, so an already-silhouetted mesh keeps its
-                    # silhouette (and its pre-silhouette alpha mode).
-                    props = {
-                        p: getattr(mat, p)
-                        for p in (
-                            "color",
-                            "color_mode",
-                            "map",
-                            "opacity",
-                            "pick_write",
-                            "side",
-                            "flat_shading",
-                            "shininess",
-                            "specular",
-                            "emissive",
-                            "alpha_test",
-                            "alpha_mode",
-                        )
-                        if getattr(mat, p, None) is not None
-                    }
-                    if isinstance(mat, SilhouetteMeshMaterial):
-                        props["silhouette"] = mat.silhouette
-                    new_mat = SubsurfaceMeshMaterial(**props)
-                    if hasattr(mat, "_pre_silhouette_alpha_mode"):
-                        new_mat._pre_silhouette_alpha_mode = (
-                            mat._pre_silhouette_alpha_mode
-                        )
-                    v.material = new_mat
-                    mat = new_mat
+                # Swap in a subsurface material, carrying over the
+                # relevant properties of the old one. Note that
+                # SubsurfaceMeshMaterial derives from the silhouette
+                # material, so an already-silhouetted mesh keeps its
+                # silhouette (and its pre-silhouette alpha mode).
+                props = {
+                    p: getattr(mat, p)
+                    for p in (
+                        "color",
+                        "color_mode",
+                        "map",
+                        "opacity",
+                        "pick_write",
+                        "side",
+                        "flat_shading",
+                        "shininess",
+                        "specular",
+                        "emissive",
+                        "alpha_test",
+                        "alpha_mode",
+                    )
+                    if getattr(mat, p, None) is not None
+                }
+                if isinstance(mat, SilhouetteMeshMaterial):
+                    props["silhouette"] = mat.silhouette
+                new_mat = SubsurfaceMeshMaterial(**props)
+                if hasattr(mat, "_pre_silhouette_alpha_mode"):
+                    new_mat._pre_silhouette_alpha_mode = (
+                        mat._pre_silhouette_alpha_mode
+                    )
+                v.material = new_mat
+                mat = new_mat
 
-                mat.subsurface = subsurface
-                for prop, value in kwargs.items():
-                    setattr(mat, prop, value)
+            mat.subsurface = subsurface
+            for prop, value in kwargs.items():
+                setattr(mat, prop, value)
 
     @update_viewer(legend=False, bounds=False)
     def set_matcap(self, matcap="pearl", objects=None, *, tint=None, **overrides):
@@ -3826,13 +4117,14 @@ class Viewer:
 
         if matcap is None:
             restored = []
-            for n in objects:
-                for v in self.objects[n]:
-                    previous = getattr(v, "_pre_matcap_material", None)
-                    if previous is not None:
-                        v.material = previous
-                        del v._pre_matcap_material
-                        restored.append(v)
+            # Real visuals again: the matcap was applied to one of those, and
+            # that is where the material it replaced was put aside.
+            for v in self._style_targets(objects):
+                previous = getattr(v, "_pre_matcap_material", None)
+                if previous is not None:
+                    v.material = previous
+                    del v._pre_matcap_material
+                    restored.append(v)
             # A matcap is exempt from the environment; now that it is gone,
             # these meshes have to be lit like the rest again
             self._update_environment(objects=restored)
@@ -3847,41 +4139,41 @@ class Viewer:
             )
             tint = recipe.get("tint", 1.0) if isinstance(recipe, dict) else 1.0
 
-        for n in objects:
-            for v in self.objects[n]:
-                if getattr(v, "_pinned", False):
-                    continue
-                if not isinstance(v, gfx.Mesh):
-                    continue
-                mat = v.material
-                if isinstance(mat, MatcapMeshMaterial):
-                    mat.matcap = tex_map
-                    mat.tint = tint
-                    continue
+        # N.B. real visuals, not the per-object handles `self.objects`
+        # hands out: swapping a material is not something a merged visual
+        # can do for one member. See `Viewer._style_targets`.
+        for v in self._style_targets(objects):
+            if not isinstance(v, gfx.Mesh):
+                continue
+            mat = v.material
+            if isinstance(mat, MatcapMeshMaterial):
+                mat.matcap = tex_map
+                mat.tint = tint
+                continue
 
-                # Swap in a matcap material, carrying over the relevant
-                # properties of the old one. The old material is kept so
-                # that `set_matcap(None)` can put it back - including any
-                # silhouette or subsurface settings it may have had.
-                props = {
-                    p: getattr(mat, p)
-                    for p in (
-                        "color",
-                        "color_mode",
-                        "map",
-                        "opacity",
-                        "pick_write",
-                        "side",
-                        "flat_shading",
-                        "alpha_test",
-                        "alpha_mode",
-                        "wireframe",
-                    )
-                    if getattr(mat, p, None) is not None
-                }
-                new_mat = MatcapMeshMaterial(matcap=tex_map, tint=tint, **props)
-                v._pre_matcap_material = mat
-                v.material = new_mat
+            # Swap in a matcap material, carrying over the relevant
+            # properties of the old one. The old material is kept so
+            # that `set_matcap(None)` can put it back - including any
+            # silhouette or subsurface settings it may have had.
+            props = {
+                p: getattr(mat, p)
+                for p in (
+                    "color",
+                    "color_mode",
+                    "map",
+                    "opacity",
+                    "pick_write",
+                    "side",
+                    "flat_shading",
+                    "alpha_test",
+                    "alpha_mode",
+                    "wireframe",
+                )
+                if getattr(mat, p, None) is not None
+            }
+            new_mat = MatcapMeshMaterial(matcap=tex_map, tint=tint, **props)
+            v._pre_matcap_material = mat
+            v.material = new_mat
 
     @update_viewer(legend=False, bounds=False)
     def set_environment(
@@ -4603,53 +4895,71 @@ class Viewer:
         else:
             raise TypeError(f'Unable to use colors of type "{type(c)}"')
 
-        for n in objects:
-            if n in cmap:
-                for v in objects[n]:
-                    if getattr(v, "_pinned", False):
-                        continue
-                    if not hasattr(v, "material"):
-                        continue
-                    # Note: there is currently a bug where removing or adding an alpha
-                    # channel from a color will break the rendering pipeline
-                    if len(v.material.color) == 4:
-                        new_c = gfx.Color(cmap[n]).rgba
-                    else:
-                        new_c = gfx.Color(cmap[n]).rgb
-
-                    if n in self._selected and hasattr(v, "_stored_color"):
-                        # Selected objects wear the selection highlight;
-                        # update the color they revert to on deselection
-                        # instead of overwriting the highlight.
-                        v._stored_color = gfx.Color(new_c)
-                    elif getattr(v, "_highlighted", False):
-                        # Hover-highlighted objects wear a brightened color;
-                        # update the underlying color and re-apply the
-                        # highlight so it survives un-highlighting.
-                        v.material._original_color = gfx.Color(new_c)
-                        style = getattr(v, "_highlight_style", 0.3)
-                        if isinstance(style, (float, int)):
-                            v.material.color = _brighten_color(new_c, style)
+        # Wrapped so that the `alpha_mode` write below, which is shared by
+        # every member of a merged visual, lands on the merged material
+        # rather than splitting each object out of it.
+        # Pinned objects are skipped by the loop below, so they must not be
+        # counted as covered by the bulk - see `set_alpha_mode`.
+        with self._merge.bulk_shared_write(set(cmap) - set(self.pinned)):
+            for n in objects:
+                if n in cmap:
+                    for v in objects[n]:
+                        if getattr(v, "_pinned", False):
+                            continue
+                        if not hasattr(v, "material"):
+                            continue
+                        # Note: there is currently a bug where removing or adding an alpha
+                        # channel from a color will break the rendering pipeline
+                        if len(v.material.color) == 4:
+                            new_c = gfx.Color(cmap[n]).rgba
                         else:
-                            v.material.color = gfx.Color(style)
-                    else:
-                        v.material.color = gfx.Color(new_c)
+                            new_c = gfx.Color(cmap[n]).rgb
 
-                    # Determine if we consider this transparent
-                    if len(new_c) == 4 and new_c[3] < 1:
-                        is_transparent = True
-                    elif v.material.opacity < 1:
-                        is_transparent = True
-                    else:
-                        is_transparent = False
-
-                    if alpha_mode == "auto":
-                        if is_transparent:
-                            v.material.alpha_mode = "add"
+                        if n in self._selected and hasattr(v, "_stored_color"):
+                            # Selected objects wear the selection highlight;
+                            # update the color they revert to on deselection
+                            # instead of overwriting the highlight.
+                            v._stored_color = gfx.Color(new_c)
+                        elif getattr(v, "_highlighted", False):
+                            # Hover-highlighted objects wear a brightened color;
+                            # update the underlying color and re-apply the
+                            # highlight so it survives un-highlighting.
+                            v.material._original_color = gfx.Color(new_c)
+                            style = getattr(v, "_highlight_style", 0.3)
+                            if isinstance(style, (float, int)):
+                                v.material.color = _brighten_color(new_c, style)
+                            else:
+                                v.material.color = gfx.Color(style)
                         else:
-                            v.material.alpha_mode = "solid"
-                    elif alpha_mode:
-                        v.material.alpha_mode = alpha_mode
+                            v.material.color = gfx.Color(new_c)
+
+                        # Determine if we consider this transparent
+                        if len(new_c) == 4 and new_c[3] < 1:
+                            is_transparent = True
+                        elif v.material.opacity < 1:
+                            is_transparent = True
+                        else:
+                            is_transparent = False
+
+                        if alpha_mode == "auto":
+                            if is_transparent:
+                                v.material.alpha_mode = "add"
+                            elif v.material.alpha_mode in _OPAQUE_ALPHA_MODES:
+                                # Already draws an opaque color opaquely, so
+                                # pinning "solid" over it would change nothing
+                                # - and on a merged object it is a shared
+                                # write, which would split this object out of
+                                # its merged visual for no gain. Say what we
+                                # want anyway: staying silent would let a
+                                # transparent object in the same pass claim
+                                # the shared blend mode for all of us.
+                                self._merge.note_shared_intent(
+                                    v, "alpha_mode", "solid"
+                                )
+                            else:
+                                v.material.alpha_mode = "solid"
+                        elif alpha_mode:
+                            v.material.alpha_mode = alpha_mode
 
     def colorize(self, palette="seaborn:tab10", objects=None, randomize=True):
         """Colorize objects using a color palette.
@@ -5151,9 +5461,15 @@ def handle_object_event(event, viewer, actions):
     # Parse the object (this will be e.g. a Mesh visual)
     obj = event.pick_info["world_object"]
 
-    # Get the ID of the object
-    new_hover_id = [k for k, v in viewer.objects.items() if obj in v]
-    new_hover_id = new_hover_id[0] if new_hover_id else None
+    # Get the ID of the object. A merged visual stands for many objects, so
+    # which one was hit has to come from the index the pick reports - the
+    # scan below would only ever find the merged visual itself.
+    sub = sub_visual_at(obj, event.pick_info)
+    if sub is not None:
+        new_hover_id = sub.object_id
+    else:
+        new_hover_id = [k for k, v in viewer.objects.items() if obj in v]
+        new_hover_id = new_hover_id[0] if new_hover_id else None
 
     if new_hover_id:
         if "hide" in actions:
