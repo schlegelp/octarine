@@ -2260,12 +2260,17 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         return child_widget
 
     def _insert_member_rows(self, item_widget, names, visible, selected):
-        """Build rows for `names` and slot them into their group at their index.
+        """Build rows for `names` and lay the group's rows out in member order.
 
         One place builds, paints and places a group's member rows, whether
         they are being materialized on first expand or added to a group that
         grew. `visible` and `selected` are the viewer's current sets, passed in
         because deriving them walks every object in the scene.
+
+        The ordering pass covers the rows that were already there, not just the
+        new ones: removing an object and adding it back lands it at the end of
+        `_member_names` while its row is still sitting where it was, so without
+        this the group would show its members in an order of its own.
         """
         objects = self.viewer.objects
         rows = {}
@@ -2279,10 +2284,20 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
 
         item_widget._member_rows.update(rows)
         content_layout = item_widget._group_content.layout()
+        member_rows = item_widget._member_rows
         for idx, member in enumerate(item_widget._member_names):
-            row = rows.get(str(member))
-            if row is not None:
-                content_layout.insertWidget(idx, row)
+            row = member_rows.get(str(member))
+            if row is None:
+                continue
+            at_idx = content_layout.itemAt(idx)
+            if at_idx is not None and at_idx.widget() is row:
+                continue
+            # A row that has moved has to be taken out of the layout first -
+            # re-inserting one that is still in it would add it twice.
+            current = content_layout.indexOf(row)
+            if current != -1:
+                content_layout.takeAt(current)
+            content_layout.insertWidget(idx, row)
 
     def _materialize_group_members(self, item_widget):
         """Build a group's member rows on first expand (lazy materialization).
@@ -2912,7 +2927,10 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         item_widget._member_names[:] = members
         row.member_keys = _member_filter_keys(members)
 
-        if materialized and added:
+        # N.B. this runs even with nothing to add: the members may just have
+        # been reordered, and `_insert_member_rows` is what puts the rows back
+        # in step with them.
+        if materialized:
             self._insert_member_rows(item_widget, added, visible, selected)
 
         self._update_group_header_text(item_widget)
