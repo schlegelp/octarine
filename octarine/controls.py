@@ -10,12 +10,30 @@ from pathlib import Path
 
 from . import utils
 
+# Qt bindings each ship their own copy of the Qt libraries under the same
+# names, so only one of them can be loaded into a given process - whichever
+# got there first is what every later binding is resolved against.
+OTHER_QT_BINDINGS = ("PyQt6", "PyQt5", "PySide2")
+
 try:
     from PySide6 import QtWidgets, QtCore, QtGui
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "Showing controls requires PySide6. Please install it via:\n `pip install PySide6`."
-    )
+    ) from None
+except ImportError as e:
+    # PySide6 is installed but will not load. By far the most likely reason is
+    # that another binding beat it to it (see above), which otherwise surfaces
+    # as a bare "symbol not found" naming libraries the caller never asked for.
+    clashing = [name for name in OTHER_QT_BINDINGS if name in sys.modules]
+    if not clashing:
+        raise
+    raise ImportError(
+        f"Showing controls requires PySide6, but {' and '.join(clashing)} "
+        "is already loaded in this process and the two cannot share it. "
+        "Import octarine's controls before anything that uses another Qt "
+        f"binding, or run without {' / '.join(clashing)}.\n\nPySide6 said: {e}"
+    ) from e
 
 # N.B. this must come after the import above - it pulls in PySide6 itself and
 # would pre-empt the friendly error message with a bare ImportError
