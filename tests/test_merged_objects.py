@@ -49,6 +49,23 @@ def qt_controls():
     v.close()
 
 
+@pytest.fixture()
+def qt_controls_unmerged():
+    """The same, but with merging off, for exercising the toggle itself."""
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    from PySide6 import QtWidgets
+
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from octarine.controls import Controls
+
+    v = _viewer(merge=False)
+    controls = Controls(v)
+    controls.show()
+    yield v, controls
+    controls.close()
+    v.close()
+
+
 def _viewer(merge=False, **kwargs):
     """An offscreen viewer set up so that rendered bands are crisp."""
     v = oc.Viewer(offscreen=True, size=(200, 200), merge=merge, **kwargs)
@@ -930,3 +947,92 @@ def test_per_object_state_survives_being_split_out():
     assert v.highlighted == []
     assert _colors(v) == [RED, LIME, BLUE]
     v.close()
+
+
+# ---------------------------------------------------------------- controls
+
+
+def test_controls_toggle_merging(qt_controls_unmerged):
+    """The controls checkbox must switch merging on and off."""
+    v, controls = qt_controls_unmerged
+    _bars(v)
+    controls.flush_legend()
+
+    assert controls.merge_checkbox.isChecked() is False
+    assert len(v.visuals) == 3
+
+    controls.merge_checkbox.setChecked(True)
+    assert v.merge is True
+    assert len(v.visuals) == 1
+    # The objects are still listed one per row
+    assert list(v.objects) == ["bar0", "bar1", "bar2"]
+
+    controls.merge_checkbox.setChecked(False)
+    assert v.merge is False
+    assert len(v.visuals) == 3
+
+
+def test_controls_toggle_is_reversible(qt_controls_unmerged):
+    """Switching merging off must not stop it being switched back on.
+
+    Turning it off splits everything out, and the flag that keeps a *user*
+    unmerge from being undone by the next `add` would make that permanent.
+
+    """
+    v, controls = qt_controls_unmerged
+    _bars(v)
+
+    for _ in range(3):
+        controls.merge_checkbox.setChecked(True)
+        assert v.merge_stats.merged == 1
+        controls.merge_checkbox.setChecked(False)
+        assert v.merge_stats.merged == 0
+
+
+def test_controls_merge_readout_follows_the_canvas(qt_controls):
+    """The readout must track merging, splitting and objects coming and going."""
+    v, controls = qt_controls
+    _bars(v)
+    controls.flush_legend()
+    assert controls.merge_status_label.text() == "3 objects drawn as 1"
+
+    # A style a merged object cannot hold erodes the merge, and says so
+    v.set_silhouette(3, objects=["bar1"])
+    controls.flush_legend()
+    assert controls.merge_status_label.text() == "3 objects drawn as 2 (1 split out)"
+
+    v.remove_objects("bar0")
+    controls.flush_legend()
+    assert controls.merge_status_label.text().startswith("2 objects")
+
+
+def test_controls_checkbox_follows_the_viewer(qt_controls_unmerged):
+    """Setting `Viewer.merge` from code must move the checkbox with it."""
+    v, controls = qt_controls_unmerged
+    _bars(v)
+
+    v.merge = True
+    controls.flush_legend()
+    assert controls.merge_checkbox.isChecked() is True
+    assert controls.merge_status_label.text() == "3 objects drawn as 1"
+
+    v.merge = False
+    controls.flush_legend()
+    assert controls.merge_checkbox.isChecked() is False
+    assert controls.merge_status_label.text() == "3 objects, not merged"
+
+
+def test_unmerging_by_hand_is_not_counted_as_erosion(qt_controls):
+    """`split_outs` reports a merge being eaten away, not deliberate splits."""
+    v, _ = qt_controls
+    _bars(v)
+
+    v.unmerge_objects()
+    v.merge_objects()
+    v.merge = False
+    v.merge = True
+    assert v.merge_stats.split_outs == 0
+
+    # ... whereas a style that cannot be held per object is erosion
+    v.set_silhouette(3, objects=["bar1"])
+    assert v.merge_stats.split_outs == 1
