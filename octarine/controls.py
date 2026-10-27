@@ -459,6 +459,32 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         )
         self.tab2_layout.addWidget(self.fps_checkbox)
 
+        # Add button to toggle merging
+        self.merge_checkbox = QtWidgets.QCheckBox("Merge Objects")
+        self.merge_checkbox.setToolTip(
+            "Draw objects that agree on their material as a single object, "
+            "which is much faster for scenes of many small objects. They stay "
+            "individually addressable; settings a merged object cannot hold "
+            "per object - a silhouette, a matcap, a blend mode - take that "
+            "object back out of the merge."
+        )
+        self.merge_checkbox.setChecked(bool(self.viewer.merge))
+        self.merge_checkbox.toggled.connect(
+            lambda x: (setattr(self.viewer, "merge", x), self.sync_merge_status())
+        )
+        self.tab2_layout.addWidget(self.merge_checkbox)
+
+        # ... and a readout of what it is currently saving
+        self.merge_status_label = QtWidgets.QLabel("")
+        self.merge_status_label.setWordWrap(True)
+        self.merge_status_label.setToolTip(
+            "How many objects the canvas holds, against how many objects the "
+            "renderer actually has to walk - the number merging brings down."
+        )
+        self.merge_status_label.setEnabled(False)  # a readout, not a control
+        self.tab2_layout.addWidget(self.merge_status_label)
+        self.sync_merge_status()
+
         # Horizontal divider
         self.tab2_layout.addWidget(QHLine())
 
@@ -676,6 +702,33 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         # This would make it so the widgets do not stretch when
         # we resize the window vertically
         self.tab3_layout.addStretch(1)
+
+    def sync_merge_status(self):
+        """Bring the merge toggle and its readout in line with the viewer.
+
+        Both because the toggle is not the only way merging gets switched on
+        (`Viewer.merge` can be set from code, and `Viewer.merge_objects` merges
+        on request) and because the readout follows objects being added and
+        removed. Called from the legend refresh, which already runs on every
+        such change.
+
+        """
+        stats = self.viewer.merge_stats
+
+        # N.B. signals blocked: this is a display-only sync, and letting it
+        # emit `toggled` would re-apply the setting the viewer already has -
+        # which for `merge=False` means unmerging the canvas on every refresh.
+        self.merge_checkbox.blockSignals(True)
+        self.merge_checkbox.setChecked(bool(self.viewer.merge))
+        self.merge_checkbox.blockSignals(False)
+
+        if not stats.merged:
+            text = f"{stats.objects} objects, not merged"
+        else:
+            text = f"{stats.objects} objects drawn as {stats.visuals}"
+            if stats.split_outs:
+                text += f" ({stats.split_outs} split out)"
+        self.merge_status_label.setText(text)
 
     def _update_screenshot_size_label(self):
         """Refresh the label showing the current canvas (=screenshot) size."""
@@ -2797,6 +2850,10 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
                 filter_key = str(entry["group_name"]).lower()
             else:
                 # No color: the sync pass below paints every new row's swatch.
+                # A merged object is reported as a handle standing in for it
+                # rather than as the visual it lives in, so this is not the
+                # pygfx type there. That is fine: only volumes are checked for
+                # and volumes are never merged.
                 item, item_widget = self.make_legend_entry(
                     entry_id, type=type(entry["visuals"][0])
                 )
@@ -2846,6 +2903,10 @@ class Controls(AnimationControlsMixin, QtWidgets.QWidget):
         # with the current search text.
         if self.legend_filter.text():
             self.filter_legend(self.legend_filter.text())
+
+        # This runs on every change to what is on the canvas, which is exactly
+        # when the merge readout goes out of date.
+        self.sync_merge_status()
 
         # Everything is in place and laid out; now the rows can start listening.
         self._install_pending_hover_highlights()
