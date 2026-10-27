@@ -628,7 +628,7 @@ class Viewer:
             self._animations_frame_counter = 0
         # N.B. we're iterating over the list because the user might add / remove
         # animations during the loop
-        for i, (func, (on_error, run_every, req_render)) in enumerate(
+        for i, (func, (on_error, run_every, req_render, _)) in enumerate(
             list(self._animations.items())
         ):
             # Skip if we're not supposed to run this frame
@@ -875,19 +875,24 @@ class Viewer:
 
         In "reactive" mode we let the canvas fall asleep (rendercanvas only
         draws on demand) and rely on `_render_stale` to wake it up again. The
-        exception are animations that asked for a render: those tick once per
-        frame, so they need the loop to keep running. Animations that did not
-        (`req_render=False`) are the viewer's own hooks for keeping something
-        in step with a frame that is being drawn anyway - the scale bar, the
-        depth-of-field focus - and must not keep the canvas awake.
+        exception are animations: those are called once per frame, so the loop
+        has to keep running for them whether or not anything is rendered -
+        including the ones that don't themselves dirty the scene
+        (`req_render=False`), since those are typically polling for work that
+        will (adding objects as they finish loading, say).
+
+        The viewer's own hooks are registered as `_passive=True` and are
+        exempt: they only keep something in step with a frame that is being
+        drawn anyway - the scale bar, the depth-of-field focus - so holding
+        the canvas awake for them would defeat the whole trigger.
 
         """
-        if self._render_trigger != "reactive" or self._animates_continuously():
+        if self._render_trigger != "reactive" or self._has_active_animations():
             self._request_draw()
 
-    def _animates_continuously(self):
-        """Whether any animation needs a frame drawn for it on its own."""
-        return any(req_render for _, _, req_render in self._animations.values())
+    def _has_active_animations(self):
+        """Whether any animation needs frames to keep coming on its own."""
+        return any(not passive for *_, passive in self._animations.values())
 
     @property
     def render_trigger(self):
@@ -1594,7 +1599,9 @@ class Viewer:
 
         self._on_double_click = v
 
-    def add_animation(self, x, on_error="remove", run_every=None, req_render=True):
+    def add_animation(
+        self, x, on_error="remove", run_every=None, req_render=True, _passive=False
+    ):
         """Add animation function to the Viewer.
 
         Parameters
@@ -1609,10 +1616,10 @@ class Viewer:
         run_every : int, optional
                     Use to run the function every n frames.
         req_render : bool, optional
-                    Whether this animation requires a re-render of the scene.
-                    This is mainly a flag to help the viewer to decide
-                    whether/when to trigger a render. See also the `render_trigger`
-                    property.
+                    Whether running this animation leaves the scene in need of
+                    a re-render. Note that this is about the render only: the
+                    animation is called once per frame either way. See also the
+                    `render_trigger` property.
 
         """
         if not callable(x):
@@ -1620,11 +1627,13 @@ class Viewer:
 
         assert on_error in ["remove", "ignore", "raise", "log"]
 
-        self._animations[x] = (on_error, run_every, req_render)
+        self._animations[x] = (on_error, run_every, req_render, _passive)
 
         # An animation needs the render loop to keep running, which in
         # "reactive" mode it only does while there are animations - so if this
         # was the first one, the loop may have gone to sleep and needs a kick
+        # (a passive one does not keep it running, but it still has to be run
+        # on whatever frame comes next)
         self._request_draw()
 
     def remove_animation(self, x):
@@ -2133,7 +2142,9 @@ class Viewer:
         # in between two frames.
         if self._update_scalebar in self._animations_flagged_for_removal:
             self._animations_flagged_for_removal.remove(self._update_scalebar)
-        self.add_animation(self._update_scalebar, on_error="log", req_render=False)
+        self.add_animation(
+            self._update_scalebar, on_error="log", req_render=False, _passive=True
+        )
         self._update_scalebar()
         self._render_stale = True
 
@@ -4236,7 +4247,9 @@ class Viewer:
         self._dof_pass.enabled = True
         # This keeps re-rendering (in "reactive" mode) while a smooth
         # re-focus transition is still settling
-        self.add_animation(self._dof_smooth_tick, on_error="log", req_render=False)
+        self.add_animation(
+            self._dof_smooth_tick, on_error="log", req_render=False, _passive=True
+        )
 
     def _dof_smooth_tick(self):
         """Animation hook: re-render while a smooth re-focus is settling."""

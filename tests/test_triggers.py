@@ -129,11 +129,16 @@ def test_stale_scene_wakes_the_canvas(viewer, monkeypatch):
     assert len(requests) == 1
 
 
-def test_animations_keep_the_loop_running(viewer, monkeypatch):
+@pytest.mark.parametrize("req_render", [True, False])
+def test_animations_keep_the_loop_running(viewer, monkeypatch, req_render):
+    # Animations are called once per frame, so they need frames to keep coming
+    # whether or not running them dirties the scene: a `req_render=False` one
+    # is typically polling for work that will (loading objects in the
+    # background, say) and must not be left asleep
     requests = _count_draw_requests(viewer, monkeypatch)
 
     # Adding the first animation has to wake the sleeping canvas...
-    viewer.add_animation(lambda: None, req_render=True)
+    viewer.add_animation(lambda: None, req_render=req_render)
     assert len(requests) == 1
 
     # ... and from then on the loop has to keep itself going
@@ -223,7 +228,7 @@ def test_linked_viewer_is_woken_by_the_other_one(viewers, monkeypatch):
 
 def test_passive_animations_do_not_keep_the_canvas_awake(viewer, monkeypatch):
     # The scale bar only keeps itself in step with frames that are drawn
-    # anyway (`req_render=False`), so it must not hold the loop open
+    # anyway (`_passive=True`), so it must not hold the loop open
     viewer.set_scalebar(True)
     viewer._animate()
     requests = _count_draw_requests(viewer, monkeypatch)

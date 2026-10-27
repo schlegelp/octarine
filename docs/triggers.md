@@ -58,6 +58,12 @@ Also, if you are running e.g. custom animations outside of the `Viewer.add_anima
 to re-render by setting `viewer._render_stale = True`. That flag doubles as the wake-up call: between frames the canvas
 is allowed to go to sleep entirely, and setting it asks for a new frame.
 
+Animations registered via `Viewer.add_animation` keep the loop running for you: they are called once per frame, so the
+canvas is kept awake for as long as one is registered - whether or not it asked for a re-render (`req_render=False` only
+says that *running* it doesn't dirty the scene, which is what you want for an animation that polls for work and adds
+objects when it finds some). The flip side is that a registered animation stops the viewer from ever idling, so remove
+it again once it's done its job.
+
 The same goes for moving the camera from code: methods like `Viewer.set_view` and `Viewer.center_camera` take care of
 it themselves, but if you reach for the camera directly (e.g. `viewer.camera.zoom = 2`) while the canvas is asleep,
 nothing is there to notice - so set `viewer._render_stale = True` afterwards.
