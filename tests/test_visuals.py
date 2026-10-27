@@ -849,14 +849,18 @@ def test_effects_controls_qt(mesh):
     # The radius is in world units, so it must be fitted to the scene
     assert ao.radius == pytest.approx(v._default_ao_radius(), rel=0.02)
 
-    # ... and it must follow the scene as long as the slider is untouched
+    # ... and it must follow the scene as long as the slider is untouched.
+    # N.B. everything fitted to the scene as a whole is re-fitted once, at the
+    # top of the next frame, not inside `add` - see `Viewer._refresh_scene`.
     slider = ctrl.ao_radius_slider
     big = mesh.copy()
     big.apply_scale(100)
     v.add_mesh(big, name="big")
+    v.canvas.draw()
     assert ao.radius == pytest.approx(v._default_ao_radius())
     assert slider.value() * slider._step == pytest.approx(ao.radius, rel=0.02)
     v.pop()  # ... and shrink back with it
+    v.canvas.draw()
     assert ao.radius == pytest.approx(v._default_ao_radius())
 
     ctrl.ao_intensity_slider.setValue(

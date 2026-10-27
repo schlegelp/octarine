@@ -2,18 +2,13 @@
 
 import os
 
-# Anything Qt below must not try to open a window
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 import pytest
+import numpy as np
+import octarine as oc
 
-# N.B. this import has to happen before the first canvas is created: whichever
-# Qt binding is loaded first wins, and a viewer created beforehand may well
-# pull in a different one, which then makes PySide6 fail to load at all.
+# N.B. the Qt binding is pinned in tests/conftest.py, which has to run before
+# anything else can load one - see the comment there.
 pytest.importorskip("PySide6")
-
-import numpy as np  # noqa: E402
-import octarine as oc  # noqa: E402
 
 
 @pytest.fixture()
@@ -337,3 +332,26 @@ def test_legend_bulk_insert_leaves_list_visible(viewer, controls):
         row._legend_checkbox, QtGui.QEnterEvent(*(QtCore.QPointF(),) * 3)
     )
     assert controls._legend_hover_target == "obj0"
+
+
+def test_controls_explain_a_clashing_qt_binding():
+    """Importing the controls next to another Qt binding must say so.
+
+    Only one Qt binding can be loaded per process, and the failure otherwise
+    surfaces as a bare "symbol not found" naming libraries the caller never
+    asked for. Run in a subprocess: loading PyQt6 here would break every other
+    Qt test in this session, which is the very thing being tested.
+    """
+    import subprocess
+    import sys
+
+    pytest.importorskip("PyQt6")
+
+    done = subprocess.run(
+        [sys.executable, "-c", "import PyQt6.QtWidgets; import octarine.controls"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+    )
+    assert done.returncode != 0
+    assert "PyQt6 is already loaded in this process" in done.stderr
