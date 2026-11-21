@@ -31,6 +31,7 @@ nav:
     - Viewer: api/viewer.md
     - Animation: api/animation.md
     - Selection: api/selection.md
+    - Merging: api/merge.md
     - Shaders: api/shaders.md
     - Utility: api/utils.md
 

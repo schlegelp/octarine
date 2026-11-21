@@ -338,7 +338,9 @@ The control panel is organized into five tabs:
   highlights the corresponding object in the viewer.
 - **Controls**: viewer-wide settings - what happens on hover and
   double-click (see [Selecting Objects](selections.md)), flat
-  shading/wireframe for meshes, an FPS counter, lighting (see
+  shading/wireframe for meshes, an FPS counter,
+  [merging objects](manage.md#merging-objects) (with a readout of how many
+  objects the renderer is actually drawing), lighting (see
   [Lighting](#lighting)) and the [render trigger](triggers.md).
 - **Screenshot**: save a screenshot to file (with options for size and a
   transparent background) or copy it straight to the clipboard. Pointing it at
