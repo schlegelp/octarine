@@ -26,6 +26,11 @@ which will pass an object to the respective specialized function:
 
     The specialised methods may offer more ways to customize the visual.
 
+All of these take a `merge` parameter. Scenes made of many small objects draw a
+great deal faster if the objects that share a material are drawn as one, and
+`merge=False` keeps a given object out of that - see
+[Merging objects](manage.md#merging-objects).
+
 ## Meshes
 
 `Octarine` will happily work with anything that's mesh-like - i.e. anything that

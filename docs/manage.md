@@ -137,11 +137,12 @@ To see what it bought you:
 
 ```python
 >>> v.merge_stats
-MergeStats(objects=500, visuals=1, members=500, largest=500, split_outs=0)
+MergeStats(objects=500, visuals=1, merged=1, members=500, largest=500, split_outs=0)
 ```
 
 `objects` is what you added, `visuals` is how many pygfx objects the renderer
-actually walks - the number merging exists to bring down.
+actually walks - the number merging exists to bring down - and `merged` is how
+many of those hold more than one object.
 
 ### What can and cannot be merged
 
