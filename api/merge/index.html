@@ -1,0 +1,1136 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Fast and easy-to-use 3D Viewer for Python"><link href="https://schlegelp.github.io/octarine/api/merge/" rel="canonical"><link href="../selection/" rel="prev"><link href="../shaders/" rel="next"><link rel="icon" href="../../images/favicon-32x32.png"><meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2"><title>Merging - octarine</title><link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css"><link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css"><link rel="stylesheet" href="../../assets/external/fonts.googleapis.com/css.49ea35f2.css"><style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style><link rel="stylesheet" href="../../assets/_mkdocstrings.css"><link rel="stylesheet" href="../../stylesheets/extra.css"><script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script><link rel="apple-touch-icon" sizes="180x180" href="../../images/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="../../images/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="../../images/favicon-16x16.png"><link rel="manifest" href="../../images/site.webmanifest"><meta property="og:type" content="website"><meta property="og:title" content="Merging - octarine"><meta property="og:description" content="Fast and easy-to-use 3D Viewer for Python"><meta property="og:image" content="https://schlegelp.github.io/octarine/assets/images/social/api/merge.png"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta content="https://schlegelp.github.io/octarine/api/merge/" property="og:url"><meta property="twitter:card" content="summary_large_image"><meta property="twitter:title" content="Merging - octarine"><meta property="twitter:description" content="Fast and easy-to-use 3D Viewer for Python"><meta property="twitter:image" content="https://schlegelp.github.io/octarine/assets/images/social/api/merge.png"><link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head> <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"> <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off"> <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off"> <label class="md-overlay" for="__drawer"></label> <div data-md-component="skip"> <a href="#merging" class="md-skip"> Skip to content </a> </div> <div data-md-component="announce"> </div> <header class="md-header md-header--shadow" data-md-component="header"> <nav class="md-header__inner md-grid" aria-label="Header"> <a href="../.." title="octarine" class="md-header__button md-logo" aria-label="octarine" data-md-component="logo"> <img src="../../images/icon.png" alt="logo"> </a> <label class="md-header__button md-icon" for="__drawer"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg> </label> <div class="md-header__title" data-md-component="header-title"> <div class="md-header__ellipsis"> <div class="md-header__topic"> <span class="md-ellipsis"> octarine </span> </div> <div class="md-header__topic" data-md-component="header-topic"> <span class="md-ellipsis"> Merging </span> </div> </div> </div> <form class="md-header__option" data-md-component="palette"> <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo" aria-label="Switch to dark mode" type="radio" name="__palette" id="__palette_0"> <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden=""> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M296.5 291.1C321 265.2 336 230.4 336 192c0-79.5-64.5-144-144-144S48 112.5 48 192c0 38.4 15 73.2 39.5 99.1 21.3 22.4 44.9 54 53.3 92.9h102.4c8.4-39 32-70.5 53.3-92.9m34.8 33C307.7 349 288 379.4 288 413.7V432c0 44.2-35.8 80-80 80h-32c-44.2 0-80-35.8-80-80v-18.3c0-34.3-19.7-64.7-43.3-89.6C20 289.7 0 243.2 0 192 0 86 86 0 192 0s192 86 192 192c0 51.2-20 97.7-52.7 132.1M144 184c0 13.3-10.7 24-24 24s-24-10.7-24-24c0-48.6 39.4-88 88-88 13.3 0 24 10.7 24 24s-10.7 24-24 24c-22.1 0-40 17.9-40 40"></path></svg> </label> <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="pink" data-md-color-accent="pink" aria-label="Switch to light mode" type="radio" name="__palette" id="__palette_1"> <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden=""> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M292.9 384c7.3-22.3 21.9-42.5 38.4-59.9C364 289.7 384 243.2 384 192 384 86 298 0 192 0S0 86 0 192c0 51.2 20 97.7 52.7 132.1 16.5 17.4 31.2 37.6 38.4 59.9h201.7zm-4.9 48H96v16c0 44.2 35.8 80 80 80h32c44.2 0 80-35.8 80-80zM184 112c-39.8 0-72 32.2-72 72 0 13.3-10.7 24-24 24s-24-10.7-24-24c0-66.3 53.7-120 120-120 13.3 0 24 10.7 24 24s-10.7 24-24 24"></path></svg> </label> </form> <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script> <label class="md-header__button md-icon" for="__search"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg> </label> <div class="md-search" data-md-component="search" role="dialog"> <label class="md-search__overlay" for="__search"></label> <div class="md-search__inner" role="search"> <form class="md-search__form" name="search"> <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required=""> <label class="md-search__icon md-icon" for="__search"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg> </label> <nav class="md-search__options" aria-label="Search"> <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg> </button> </nav> </form> <div class="md-search__output"> <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix=""> <div class="md-search-result" data-md-component="search-result"> <div class="md-search-result__meta"> Initializing search </div> <ol class="md-search-result__list" role="presentation"></ol> </div> </div> </div> </div> </div> <div class="md-header__source"> <a href="https://github.com/schlegelp/octarine" title="Go to repository" class="md-source" data-md-component="source"> <div class="md-source__icon md-icon"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg> </div> <div class="md-source__repository"> schlegelp/octarine </div> </a> </div> </nav> </header> <div class="md-container" data-md-component="container"> <main class="md-main" data-md-component="main"> <div class="md-main__inner md-grid"> <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation"> <div class="md-sidebar__scrollwrap"> <div class="md-sidebar__inner"> <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0"> <label class="md-nav__title" for="__drawer"> <a href="../.." title="octarine" class="md-nav__button md-logo" aria-label="octarine" data-md-component="logo"> <img src="../../images/icon.png" alt="logo"> </a> octarine </label> <div class="md-nav__source"> <a href="https://github.com/schlegelp/octarine" title="Go to repository" class="md-source" data-md-component="source"> <div class="md-source__icon md-icon"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg> </div> <div class="md-source__repository"> schlegelp/octarine </div> </a> </div> <ul class="md-nav__list" data-md-scrollfix=""> <li class="md-nav__item"> <a href="../.." class="md-nav__link"> <span class="md-ellipsis"> Home </span> </a> </li> <li class="md-nav__item"> <a href="../../install/" class="md-nav__link"> <span class="md-ellipsis"> Installation </span> </a> </li> <li class="md-nav__item"> <a href="../../intro/" class="md-nav__link"> <span class="md-ellipsis"> The Basics </span> </a> </li> <li class="md-nav__item"> <a href="../../objects/" class="md-nav__link"> <span class="md-ellipsis"> Adding Objects </span> </a> </li> <li class="md-nav__item"> <a href="../../manage/" class="md-nav__link"> <span class="md-ellipsis"> Managing Objects </span> </a> </li> <li class="md-nav__item"> <a href="../../controls/" class="md-nav__link"> <span class="md-ellipsis"> Viewer Controls </span> </a> </li> <li class="md-nav__item"> <a href="../../selections/" class="md-nav__link"> <span class="md-ellipsis"> Selecting Objects </span> </a> </li> <li class="md-nav__item"> <a href="../../effects/" class="md-nav__link"> <span class="md-ellipsis"> Effects &amp; Shading </span> </a> </li> <li class="md-nav__item"> <a href="../../animations/" class="md-nav__link"> <span class="md-ellipsis"> Animations </span> </a> </li> <li class="md-nav__item"> <a href="../../triggers/" class="md-nav__link"> <span class="md-ellipsis"> Render Triggers </span> </a> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11"> <div class="md-nav__link md-nav__container"> <a href="../../extending/" class="md-nav__link "> <span class="md-ellipsis"> Extending Octarine </span> </a> <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="0"> <span class="md-nav__icon md-icon"></span> </label> </div> <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false"> <label class="md-nav__title" for="__nav_11"> <span class="md-nav__icon md-icon"></span> Extending Octarine </label> <ul class="md-nav__list" data-md-scrollfix=""> <li class="md-nav__item"> <a href="../../extending/converters/" class="md-nav__link"> <span class="md-ellipsis"> Custom Converters </span> </a> </li> <li class="md-nav__item"> <a href="../../extending/plugins/" class="md-nav__link"> <span class="md-ellipsis"> Plugins </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="../../changelog/" class="md-nav__link"> <span class="md-ellipsis"> Changelog </span> </a> </li> <li class="md-nav__item"> <a href="../../faq/" class="md-nav__link"> <span class="md-ellipsis"> FAQ </span> </a> </li> <li class="md-nav__item md-nav__item--active md-nav__item--nested"> <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" checked=""> <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="0"> <span class="md-ellipsis"> API </span> <span class="md-nav__icon md-icon"></span> </label> <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="true"> <label class="md-nav__title" for="__nav_14"> <span class="md-nav__icon md-icon"></span> API </label> <ul class="md-nav__list" data-md-scrollfix=""> <li class="md-nav__item"> <a href="../viewer/" class="md-nav__link"> <span class="md-ellipsis"> Viewer </span> </a> </li> <li class="md-nav__item"> <a href="../animation/" class="md-nav__link"> <span class="md-ellipsis"> Animation </span> </a> </li> <li class="md-nav__item"> <a href="../selection/" class="md-nav__link"> <span class="md-ellipsis"> Selection </span> </a> </li> <li class="md-nav__item md-nav__item--active"> <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc"> <label class="md-nav__link md-nav__link--active" for="__toc"> <span class="md-ellipsis"> Merging </span> <span class="md-nav__icon md-icon"></span> </label> <a href="./" class="md-nav__link md-nav__link--active"> <span class="md-ellipsis"> Merging </span> </a> <nav class="md-nav md-nav--secondary" aria-label="Table of contents"> <label class="md-nav__title" for="__toc"> <span class="md-nav__icon md-icon"></span> Table of contents </label> <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix=""> <li class="md-nav__item"> <a href="#octarine.handles.MergeStats" class="md-nav__link"> <span class="md-ellipsis"> MergeStats </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.handles.SubVisualHandle" class="md-nav__link"> <span class="md-ellipsis"> SubVisualHandle </span> </a> <nav class="md-nav" aria-label="SubVisualHandle"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.handles.SubVisualHandle.get_bounding_box" class="md-nav__link"> <span class="md-ellipsis"> get_bounding_box </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.handles.SubVisualHandle.get_world_bounding_box" class="md-nav__link"> <span class="md-ellipsis"> get_world_bounding_box </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="#octarine.merge.merge_visuals" class="md-nav__link"> <span class="md-ellipsis"> merge_visuals </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.merge.split_visual" class="md-nav__link"> <span class="md-ellipsis"> split_visual </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.merge.sub_visual_at" class="md-nav__link"> <span class="md-ellipsis"> sub_visual_at </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.merge.SubVisual" class="md-nav__link"> <span class="md-ellipsis"> SubVisual </span> </a> <nav class="md-nav" aria-label="SubVisual"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.merge.SubVisual.face_slice" class="md-nav__link"> <span class="md-ellipsis"> face_slice </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.merge.SubVisual.slice" class="md-nav__link"> <span class="md-ellipsis"> slice </span> </a> </li> </ul> </nav> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="../shaders/" class="md-nav__link"> <span class="md-ellipsis"> Shaders </span> </a> </li> <li class="md-nav__item"> <a href="../utils/" class="md-nav__link"> <span class="md-ellipsis"> Utility </span> </a> </li> </ul> </nav> </li> </ul> </nav> </div> </div> </div> <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc"> <div class="md-sidebar__scrollwrap"> <div class="md-sidebar__inner"> <nav class="md-nav md-nav--secondary" aria-label="Table of contents"> <label class="md-nav__title" for="__toc"> <span class="md-nav__icon md-icon"></span> Table of contents </label> <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix=""> <li class="md-nav__item"> <a href="#octarine.handles.MergeStats" class="md-nav__link"> <span class="md-ellipsis"> MergeStats </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.handles.SubVisualHandle" class="md-nav__link"> <span class="md-ellipsis"> SubVisualHandle </span> </a> <nav class="md-nav" aria-label="SubVisualHandle"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.handles.SubVisualHandle.get_bounding_box" class="md-nav__link"> <span class="md-ellipsis"> get_bounding_box </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.handles.SubVisualHandle.get_world_bounding_box" class="md-nav__link"> <span class="md-ellipsis"> get_world_bounding_box </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item"> <a href="#octarine.merge.merge_visuals" class="md-nav__link"> <span class="md-ellipsis"> merge_visuals </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.merge.split_visual" class="md-nav__link"> <span class="md-ellipsis"> split_visual </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.merge.sub_visual_at" class="md-nav__link"> <span class="md-ellipsis"> sub_visual_at </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.merge.SubVisual" class="md-nav__link"> <span class="md-ellipsis"> SubVisual </span> </a> <nav class="md-nav" aria-label="SubVisual"> <ul class="md-nav__list"> <li class="md-nav__item"> <a href="#octarine.merge.SubVisual.face_slice" class="md-nav__link"> <span class="md-ellipsis"> face_slice </span> </a> </li> <li class="md-nav__item"> <a href="#octarine.merge.SubVisual.slice" class="md-nav__link"> <span class="md-ellipsis"> slice </span> </a> </li> </ul> </nav> </li> </ul> </nav> </div> </div> </div> <div class="md-content" data-md-component="content"> <article class="md-content__inner md-typeset"> <h1 id="merging">Merging<a class="headerlink" href="#merging" title="Permanent link">#</a></h1> <p>Merging many small objects into a few shared pygfx objects, which is much faster to render. See <a href="../../manage/#merging-objects">Merging objects</a> for how to use it; this is the machinery underneath.</p> <p>The entry points on the viewer are <code>Viewer.merge_objects</code>, <code>Viewer.unmerge_objects</code> and <code>Viewer.merge_stats</code>, plus the <code>merge</code> parameter of <code>Viewer</code> and of the <code>add</code> methods.</p> <div class="doc doc-object doc-class"> <h2 id="octarine.handles.MergeStats" class="doc doc-heading"> <code>octarine.handles.MergeStats</code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small> </span> <a href="#octarine.handles.MergeStats" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>What merging currently costs and saves on a canvas.</p> <table> <thead> <tr> <th><span class="doc-section-title">ATTRIBUTE</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td><code><span title="octarine.handles.MergeStats.objects">objects</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>Objects on the canvas, merged or not.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.handles.MergeStats.visuals">visuals</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>pygfx objects the renderer actually walks. This is the number merging exists to bring down.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.handles.MergeStats.merged">merged</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>How many of those visuals hold more than one member.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.handles.MergeStats.members">members</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>Objects currently living inside a merged visual.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.handles.MergeStats.largest">largest</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>Members in the biggest merged visual.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.handles.MergeStats.split_outs">split_outs</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>Members that have been split back out since the canvas was created, because something was asked of them that a merged object cannot express. A number that climbs during normal use means the merge is being eroded - see <code>SubVisualHandle._write_shared</code>.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> </p> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/handles.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span>
+<span class="normal">496</span>
+<span class="normal">497</span>
+<span class="normal">498</span>
+<span class="normal">499</span>
+<span class="normal">500</span>
+<span class="normal">501</span>
+<span class="normal">502</span>
+<span class="normal">503</span>
+<span class="normal">504</span>
+<span class="normal">505</span>
+<span class="normal">506</span>
+<span class="normal">507</span>
+<span class="normal">508</span>
+<span class="normal">509</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MergeStats</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""What merging currently costs and saves on a canvas.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    objects :       int</span>
+<span class="sd">                    Objects on the canvas, merged or not.</span>
+<span class="sd">    visuals :       int</span>
+<span class="sd">                    pygfx objects the renderer actually walks. This is the</span>
+<span class="sd">                    number merging exists to bring down.</span>
+<span class="sd">    merged :        int</span>
+<span class="sd">                    How many of those visuals hold more than one member.</span>
+<span class="sd">    members :       int</span>
+<span class="sd">                    Objects currently living inside a merged visual.</span>
+<span class="sd">    largest :       int</span>
+<span class="sd">                    Members in the biggest merged visual.</span>
+<span class="sd">    split_outs :    int</span>
+<span class="sd">                    Members that have been split back out since the canvas</span>
+<span class="sd">                    was created, because something was asked of them that a</span>
+<span class="sd">                    merged object cannot express. A number that climbs during</span>
+<span class="sd">                    normal use means the merge is being eroded - see</span>
+<span class="sd">                    `SubVisualHandle._write_shared`.</span>
+
+<span class="sd">    """</span>
+
+    <span class="n">objects</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">visuals</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">merged</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">members</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">largest</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">split_outs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+</code></pre></div></td></tr></tbody></table></div> </details> <div class="doc doc-children"> </div> </div> </div> <div class="doc doc-object doc-class"> <h2 id="octarine.handles.SubVisualHandle" class="doc doc-heading"> <code>octarine.handles.SubVisualHandle</code> <a href="#octarine.handles.SubVisualHandle" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>One object inside a merged visual, addressable as if it were its own.</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>manager</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    The manager that owns this handle. Used to split the member
+    back out when a write cannot be expressed on a merged object.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> MergeManager</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>visual</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    The merged visual the member currently lives in.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> pygfx visual</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>sub</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Which vertex (and face) range the member owns.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> merge.SubVisual</code> </span> </p> </td> </tr> </tbody> </table> <details class="see-also" open=""> <summary>See Also</summary> <p>merge.SubVisual The record this wraps.</p> </details> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/handles.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span>
+<span class="normal">322</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span>
+<span class="normal">376</span>
+<span class="normal">377</span>
+<span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span>
+<span class="normal">388</span>
+<span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span>
+<span class="normal">404</span>
+<span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span>
+<span class="normal">411</span>
+<span class="normal">412</span>
+<span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span>
+<span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span>
+<span class="normal">441</span>
+<span class="normal">442</span>
+<span class="normal">443</span>
+<span class="normal">444</span>
+<span class="normal">445</span>
+<span class="normal">446</span>
+<span class="normal">447</span>
+<span class="normal">448</span>
+<span class="normal">449</span>
+<span class="normal">450</span>
+<span class="normal">451</span>
+<span class="normal">452</span>
+<span class="normal">453</span>
+<span class="normal">454</span>
+<span class="normal">455</span>
+<span class="normal">456</span>
+<span class="normal">457</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">SubVisualHandle</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""One object inside a merged visual, addressable as if it were its own.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    manager :   MergeManager</span>
+<span class="sd">                The manager that owns this handle. Used to split the member</span>
+<span class="sd">                back out when a write cannot be expressed on a merged object.</span>
+<span class="sd">    visual :    pygfx visual</span>
+<span class="sd">                The merged visual the member currently lives in.</span>
+<span class="sd">    sub :       merge.SubVisual</span>
+<span class="sd">                Which vertex (and face) range the member owns.</span>
+
+<span class="sd">    See Also</span>
+<span class="sd">    --------</span>
+<span class="sd">    merge.SubVisual</span>
+<span class="sd">                The record this wraps.</span>
+
+<span class="sd">    """</span>
+
+    <span class="c1"># Defaults for the bookkeeping the viewer hangs off its objects. Without</span>
+    <span class="c1"># them every `getattr(obj, "_pinned", False)` probe - several per object</span>
+    <span class="c1"># per styling or legend pass - costs a raised-and-swallowed AttributeError</span>
+    <span class="c1"># from `__getattr__`.</span>
+    <span class="n">_pinned</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">_highlighted</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">,</span> <span class="n">visual</span><span class="p">,</span> <span class="n">sub</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span> <span class="o">=</span> <span class="n">manager</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visual</span> <span class="o">=</span> <span class="n">visual</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sub</span> <span class="o">=</span> <span class="n">sub</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_geometry</span> <span class="o">=</span> <span class="n">_HandleGeometry</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_material</span> <span class="o">=</span> <span class="n">_HandleMaterial</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="c1"># Positions are destroyed to hide a member (see `visible`), so the</span>
+        <span class="c1"># originals are kept here while it is hidden - and only while it is,</span>
+        <span class="c1"># which keeps the cost proportional to how much is hidden.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stashed_positions</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"&lt;SubVisualHandle </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_object_id</span><span class="si">!r}</span><span class="s2"> "</span>
+            <span class="sa">f</span><span class="s2">"in </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">offset</span><span class="si">}</span><span class="s2">:"</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">count</span><span class="si">}</span><span class="s2">&gt;"</span>
+        <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------ identity</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_object_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">object_id</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_object_group</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">group</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_object_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="p">,</span> <span class="s2">"_object_type"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">material</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_material</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">geometry</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_geometry</span>
+
+    <span class="c1"># ------------------------------------------------------------ retarget</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_retarget</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visual</span><span class="p">,</span> <span class="n">sub</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Point this handle at a rebuilt merged visual.</span>
+
+<span class="sd">        Merging, splitting and compacting all produce *new* pygfx objects, so</span>
+<span class="sd">        the handles for the members that moved have to be pointed at them -</span>
+<span class="sd">        the viewer and the legend hold on to handles across all of that.</span>
+
+<span class="sd">        """</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visual</span> <span class="o">=</span> <span class="n">visual</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sub</span> <span class="o">=</span> <span class="n">sub</span>
+
+    <span class="c1"># ---------------------------------------------------------- visibility</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">visible</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stashed_positions</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">visible</span>
+
+    <span class="nd">@visible</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">visible</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">bool</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_stashed_positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="n">buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">positions</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
+            <span class="n">buffer</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">slice</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stashed_positions</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_stashed_positions</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_hidden</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># A copy, not a view: the next line overwrites what it points at.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_stashed_positions</span> <span class="o">=</span> <span class="n">buffer</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">slice</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">buffer</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">slice</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_hidden</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">buffer</span><span class="o">.</span><span class="n">update_range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">count</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_touch</span><span class="p">()</span>
+
+    <span class="c1"># -------------------------------------------------------------- bounds</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_bounding_box</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""This member's axis-aligned bounds, in the merged visual's space.</span>
+
+<span class="sd">        Computed from the member's own positions rather than the merged</span>
+<span class="sd">        object's, and from the stash while it is hidden - `Viewer.get_bounds`</span>
+<span class="sd">        documents itself as covering visible *and* invisible objects, and a</span>
+<span class="sd">        hidden member's vertices are NaN in the buffer.</span>
+
+<span class="sd">        Deliberately pygfx's own `points_to_bounds`: it is what every real</span>
+<span class="sd">        visual's bounds go through, it already drops non-finite vertices (which</span>
+<span class="sd">        a merged line's gap vertices and a hidden member's are), and going</span>
+<span class="sd">        through it is what keeps a handle's bounds identical to those of the</span>
+<span class="sd">        unmerged object it stands in for.</span>
+
+<span class="sd">        """</span>
+        <span class="n">aabb</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">points_to_bounds</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_positions</span><span class="p">(),</span> <span class="n">calculate_radius</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">aabb</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_world_bounding_box</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""This member's axis-aligned bounds, in world space."""</span>
+        <span class="n">aabb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bounding_box</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">aabb</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">matrix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">world</span><span class="o">.</span><span class="n">matrix</span>
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">array_equal</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">_IDENTITY</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">aabb</span>
+        <span class="k">return</span> <span class="n">la</span><span class="o">.</span><span class="n">aabb_transform</span><span class="p">(</span><span class="n">aabb</span><span class="p">,</span> <span class="n">matrix</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------- shared fields</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="c1"># Only reached for names this class does not define, which is where</span>
+        <span class="c1"># the shared object-level state (`render_order`, `cast_shadow`, ...)</span>
+        <span class="c1"># and anything a plugin reads off a visual ends up.</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"_"</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------ internals</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_positions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""The member's positions, from the stash while it is hidden."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stashed_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stashed_positions</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">positions</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">slice</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_buffer_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"positions"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_positions</span><span class="p">()</span>
+        <span class="n">buffer</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">geometry</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"indices"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">buffer</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">face_slice</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">buffer</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">slice</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_update_buffer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+        <span class="n">buffer</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">geometry</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">face_offset</span> <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"indices"</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">offset</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">face_count</span> <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"indices"</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">count</span>
+        <span class="n">buffer</span><span class="o">.</span><span class="n">update_range</span><span class="p">(</span><span class="n">base</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span> <span class="n">count</span> <span class="k">if</span> <span class="n">size</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">size</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_touch</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read_color</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">colors</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">geometry</span><span class="p">,</span> <span class="s2">"colors"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">colors</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Still a single colour for the whole merged visual</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">material</span><span class="o">.</span><span class="n">color</span>
+        <span class="n">stored</span> <span class="o">=</span> <span class="n">colors</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">offset</span><span class="p">]</span>
+        <span class="c1"># Whether the buffer holds physical or sRGB values depends on the</span>
+        <span class="c1"># visual type - see `merge.colors_are_physical`.</span>
+        <span class="k">if</span> <span class="n">colors_are_physical</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">_color_from_physical</span><span class="p">(</span><span class="n">stored</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gfx</span><span class="o">.</span><span class="n">Color</span><span class="p">(</span><span class="n">stored</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_write_color</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">colors_are_physical</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="p">):</span>
+            <span class="n">rgba</span> <span class="o">=</span> <span class="n">_color_to_physical</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">rgba</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">gfx</span><span class="o">.</span><span class="n">Color</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">rgba</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="c1"># Writing one member's colour is what forces a merged visual off its</span>
+        <span class="c1"># shared colour, so the buffer may have to be created here.</span>
+        <span class="n">colors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_ensure_vertex_colors</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="p">)</span>
+        <span class="n">colors</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">slice</span><span class="p">]</span> <span class="o">=</span> <span class="n">rgba</span>
+        <span class="n">colors</span><span class="o">.</span><span class="n">update_range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sub</span><span class="o">.</span><span class="n">count</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_touch</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_write_shared</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Apply a write that a merged object can only hold once.</span>
+
+<span class="sd">        Inside a bulk write this member stakes its claim on the shared value</span>
+<span class="sd">        first (see `MergeManager.bulk_shared_write`), *before* the "nothing</span>
+<span class="sd">        would change" shortcut below. Taking the shortcut first would let a</span>
+<span class="sd">        member that is happy with the current value stay silent, and a later</span>
+<span class="sd">        member asking for a different one would then find the visual</span>
+<span class="sd">        unclaimed and write its value to everybody.</span>
+
+<span class="sd">        Outside a bulk, an unchanged value is simply dropped: splitting an</span>
+<span class="sd">        object out to write what is already there would be pure loss.</span>
+
+<span class="sd">        """</span>
+        <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">material</span> <span class="k">if</span> <span class="n">owner</span> <span class="o">==</span> <span class="s2">"material"</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">visual</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">current</span><span class="p">,</span> <span class="n">known</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">name</span><span class="p">),</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="n">current</span><span class="p">,</span> <span class="n">known</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">False</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_covered_by_bulk</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+            <span class="c1"># Every member of this visual is in this bulk and none of them has</span>
+            <span class="c1"># asked for anything else, so it can go on the shared object.</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">known</span> <span class="ow">and</span> <span class="n">_same</span><span class="p">(</span><span class="n">current</span><span class="p">,</span> <span class="n">value</span><span class="p">)):</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_touch</span><span class="p">()</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="n">known</span> <span class="ow">and</span> <span class="n">_same</span><span class="p">(</span><span class="n">current</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="n">split</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">split_out</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_object_id</span><span class="p">])[</span><span class="bp">self</span><span class="o">.</span><span class="n">_object_id</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">note_erosion</span><span class="p">()</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">split</span><span class="p">,</span> <span class="n">owner</span><span class="p">)</span> <span class="k">if</span> <span class="n">owner</span> <span class="o">==</span> <span class="s2">"material"</span> <span class="k">else</span> <span class="n">split</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+</code></pre></div></td></tr></tbody></table></div> </details> <div class="doc doc-children"> <div class="doc doc-object doc-function"> <h3 id="octarine.handles.SubVisualHandle.get_bounding_box" class="doc doc-heading"> <code class="highlight language-python"><span class="n">get_bounding_box</span><span class="p">()</span></code> <a href="#octarine.handles.SubVisualHandle.get_bounding_box" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>This member's axis-aligned bounds, in the merged visual's space.</p> <p>Computed from the member's own positions rather than the merged object's, and from the stash while it is hidden - <code>Viewer.get_bounds</code> documents itself as covering visible <em>and</em> invisible objects, and a hidden member's vertices are NaN in the buffer.</p> <p>Deliberately pygfx's own <code>points_to_bounds</code>: it is what every real visual's bounds go through, it already drops non-finite vertices (which a merged line's gap vertices and a hidden member's are), and going through it is what keeps a handle's bounds identical to those of the unmerged object it stands in for.</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/handles.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_bounding_box</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""This member's axis-aligned bounds, in the merged visual's space.</span>
+
+<span class="sd">    Computed from the member's own positions rather than the merged</span>
+<span class="sd">    object's, and from the stash while it is hidden - `Viewer.get_bounds`</span>
+<span class="sd">    documents itself as covering visible *and* invisible objects, and a</span>
+<span class="sd">    hidden member's vertices are NaN in the buffer.</span>
+
+<span class="sd">    Deliberately pygfx's own `points_to_bounds`: it is what every real</span>
+<span class="sd">    visual's bounds go through, it already drops non-finite vertices (which</span>
+<span class="sd">    a merged line's gap vertices and a hidden member's are), and going</span>
+<span class="sd">    through it is what keeps a handle's bounds identical to those of the</span>
+<span class="sd">    unmerged object it stands in for.</span>
+
+<span class="sd">    """</span>
+    <span class="n">aabb</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">points_to_bounds</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_positions</span><span class="p">(),</span> <span class="n">calculate_radius</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">aabb</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h3 id="octarine.handles.SubVisualHandle.get_world_bounding_box" class="doc doc-heading"> <code class="highlight language-python"><span class="n">get_world_bounding_box</span><span class="p">()</span></code> <a href="#octarine.handles.SubVisualHandle.get_world_bounding_box" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>This member's axis-aligned bounds, in world space.</p> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/handles.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_world_bounding_box</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""This member's axis-aligned bounds, in world space."""</span>
+    <span class="n">aabb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bounding_box</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">aabb</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">matrix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">world</span><span class="o">.</span><span class="n">matrix</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">array_equal</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">_IDENTITY</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">aabb</span>
+    <span class="k">return</span> <span class="n">la</span><span class="o">.</span><span class="n">aabb_transform</span><span class="p">(</span><span class="n">aabb</span><span class="p">,</span> <span class="n">matrix</span><span class="p">)</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> </div> </div> </div> <div class="doc doc-object doc-function"> <h2 id="octarine.merge.merge_visuals" class="doc doc-heading"> <code class="highlight language-python"><span class="n">octarine</span><span class="o">.</span><span class="n">merge</span><span class="o">.</span><span class="n">merge_visuals</span><span class="p">(</span><span class="n">visuals</span><span class="p">,</span> <span class="n">max_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_nodes</span><span class="o">=</span><span class="n">_MAX_MERGED_NODES</span><span class="p">)</span></code> <a href="#octarine.merge.merge_visuals" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>Merge compatible visuals into fewer pygfx objects.</p> <p>Lines, points and meshes are merged; everything else - volumes, text, tubes, and any visual whose material or geometry we can't concatenate - is passed through untouched and in place, as are visuals that end up alone in their group.</p> <p>Visuals are merged only if they agree on everything the merged object can hold just once: the material's uniforms and blend/depth state, the object's transform, visibility and render order. Colour is the exception, along with line width and point size - where members disagree on those, they move into the geometry as per-vertex buffers.</p> <p>Merging is destructive to the per-object handles the viewer relies on (<code>material.color</code>, <code>visual.visible</code>, one <code>_object_id</code> per object); those are replaced by the vertex ranges in <code>visual._sub_visuals</code>. See <code>SubVisual</code> for how to address an individual member.</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>visuals</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Visuals to merge. Visuals that have already been through this
+    function are taken apart member by member and re-merged, so a
+    group can be grown one visual at a time.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> list of pygfx visuals</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>max_size</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Maximum number of members per merged visual. `None` (default)
+    puts every compatible visual in one object. The gain flattens
+    out below ~50 objects, so capping this keeps the buffers small
+    enough to rebuild cheaply without giving much up.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> int</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>max_nodes</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    Maximum number of vertices per merged visual. Guards against
+    producing buffers larger than the GPU will bind.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code><span title="octarine.merge._MAX_MERGED_NODES">_MAX_MERGED_NODES</span></code> </span> </p> </td> </tr> </tbody> </table> <table> <thead> <tr> <th><span class="doc-section-title">RETURNS</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <span class="doc-returns-annotation"> <code>list of pygfx visuals</code> </span> </td> <td class="doc-returns-details"> <div class="doc-md-description"> <p>The merged visuals. Merged ones carry a <code>_sub_visuals</code> list.</p> </div> </td> </tr> </tbody> </table> <details class="see-also" open=""> <summary>See Also</summary> <p>SubVisual Addressing an individual object inside a merged visual.</p> </details> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/merge.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">817</span>
+<span class="normal">818</span>
+<span class="normal">819</span>
+<span class="normal">820</span>
+<span class="normal">821</span>
+<span class="normal">822</span>
+<span class="normal">823</span>
+<span class="normal">824</span>
+<span class="normal">825</span>
+<span class="normal">826</span>
+<span class="normal">827</span>
+<span class="normal">828</span>
+<span class="normal">829</span>
+<span class="normal">830</span>
+<span class="normal">831</span>
+<span class="normal">832</span>
+<span class="normal">833</span>
+<span class="normal">834</span>
+<span class="normal">835</span>
+<span class="normal">836</span>
+<span class="normal">837</span>
+<span class="normal">838</span>
+<span class="normal">839</span>
+<span class="normal">840</span>
+<span class="normal">841</span>
+<span class="normal">842</span>
+<span class="normal">843</span>
+<span class="normal">844</span>
+<span class="normal">845</span>
+<span class="normal">846</span>
+<span class="normal">847</span>
+<span class="normal">848</span>
+<span class="normal">849</span>
+<span class="normal">850</span>
+<span class="normal">851</span>
+<span class="normal">852</span>
+<span class="normal">853</span>
+<span class="normal">854</span>
+<span class="normal">855</span>
+<span class="normal">856</span>
+<span class="normal">857</span>
+<span class="normal">858</span>
+<span class="normal">859</span>
+<span class="normal">860</span>
+<span class="normal">861</span>
+<span class="normal">862</span>
+<span class="normal">863</span>
+<span class="normal">864</span>
+<span class="normal">865</span>
+<span class="normal">866</span>
+<span class="normal">867</span>
+<span class="normal">868</span>
+<span class="normal">869</span>
+<span class="normal">870</span>
+<span class="normal">871</span>
+<span class="normal">872</span>
+<span class="normal">873</span>
+<span class="normal">874</span>
+<span class="normal">875</span>
+<span class="normal">876</span>
+<span class="normal">877</span>
+<span class="normal">878</span>
+<span class="normal">879</span>
+<span class="normal">880</span>
+<span class="normal">881</span>
+<span class="normal">882</span>
+<span class="normal">883</span>
+<span class="normal">884</span>
+<span class="normal">885</span>
+<span class="normal">886</span>
+<span class="normal">887</span>
+<span class="normal">888</span>
+<span class="normal">889</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">merge_visuals</span><span class="p">(</span><span class="n">visuals</span><span class="p">,</span> <span class="n">max_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_nodes</span><span class="o">=</span><span class="n">_MAX_MERGED_NODES</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Merge compatible visuals into fewer pygfx objects.</span>
+
+<span class="sd">    Lines, points and meshes are merged; everything else - volumes, text,</span>
+<span class="sd">    tubes, and any visual whose material or geometry we can't concatenate - is</span>
+<span class="sd">    passed through untouched and in place, as are visuals that end up alone in</span>
+<span class="sd">    their group.</span>
+
+<span class="sd">    Visuals are merged only if they agree on everything the merged object can</span>
+<span class="sd">    hold just once: the material's uniforms and blend/depth state, the</span>
+<span class="sd">    object's transform, visibility and render order. Colour is the exception,</span>
+<span class="sd">    along with line width and point size - where members disagree on those,</span>
+<span class="sd">    they move into the geometry as per-vertex buffers.</span>
+
+<span class="sd">    Merging is destructive to the per-object handles the viewer relies on</span>
+<span class="sd">    (`material.color`, `visual.visible`, one `_object_id` per object); those</span>
+<span class="sd">    are replaced by the vertex ranges in `visual._sub_visuals`. See</span>
+<span class="sd">    `SubVisual` for how to address an individual member.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    visuals :   list of pygfx visuals</span>
+<span class="sd">                Visuals to merge. Visuals that have already been through this</span>
+<span class="sd">                function are taken apart member by member and re-merged, so a</span>
+<span class="sd">                group can be grown one visual at a time.</span>
+<span class="sd">    max_size :  int, optional</span>
+<span class="sd">                Maximum number of members per merged visual. `None` (default)</span>
+<span class="sd">                puts every compatible visual in one object. The gain flattens</span>
+<span class="sd">                out below ~50 objects, so capping this keeps the buffers small</span>
+<span class="sd">                enough to rebuild cheaply without giving much up.</span>
+<span class="sd">    max_nodes : int, optional</span>
+<span class="sd">                Maximum number of vertices per merged visual. Guards against</span>
+<span class="sd">                producing buffers larger than the GPU will bind.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list of pygfx visuals</span>
+<span class="sd">                The merged visuals. Merged ones carry a `_sub_visuals` list.</span>
+
+<span class="sd">    See Also</span>
+<span class="sd">    --------</span>
+<span class="sd">    SubVisual</span>
+<span class="sd">                Addressing an individual object inside a merged visual.</span>
+
+<span class="sd">    """</span>
+    <span class="c1"># Groups in first-appearance order. Visuals we can't merge get a group of</span>
+    <span class="c1"># their own, which the loop below passes straight through.</span>
+    <span class="n">order</span><span class="p">,</span> <span class="n">buckets</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">vis</span> <span class="ow">in</span> <span class="n">visuals</span><span class="p">:</span>
+        <span class="n">merger</span> <span class="o">=</span> <span class="n">_MERGERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">vis</span><span class="p">))</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">merger</span><span class="o">.</span><span class="n">key</span><span class="p">(</span><span class="n">vis</span><span class="p">)</span> <span class="k">if</span> <span class="n">merger</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">group</span> <span class="o">=</span> <span class="n">buckets</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="nb">type</span><span class="p">(</span><span class="n">vis</span><span class="p">),</span> <span class="n">key</span><span class="p">))</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">group</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">group</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">order</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">buckets</span><span class="p">[</span><span class="nb">type</span><span class="p">(</span><span class="n">vis</span><span class="p">),</span> <span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">group</span>
+        <span class="n">group</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vis</span><span class="p">)</span>
+
+    <span class="n">merged</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
+        <span class="c1"># A lone visual is already as merged as it is going to get</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">group</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">merged</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">continue</span>
+
+        <span class="n">merger</span> <span class="o">=</span> <span class="n">_MERGERS</span><span class="p">[</span><span class="nb">type</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="n">members</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span> <span class="k">for</span> <span class="n">vis</span> <span class="ow">in</span> <span class="n">group</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">merger</span><span class="o">.</span><span class="n">members</span><span class="p">(</span><span class="n">vis</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">_batch_members</span><span class="p">(</span><span class="n">members</span><span class="p">,</span> <span class="n">max_size</span><span class="p">,</span> <span class="n">max_nodes</span><span class="p">):</span>
+            <span class="n">merged</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">merger</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">batch</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">merged</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h2 id="octarine.merge.split_visual" class="doc doc-heading"> <code class="highlight language-python"><span class="n">octarine</span><span class="o">.</span><span class="n">merge</span><span class="o">.</span><span class="n">split_visual</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="n">object_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extract</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code> <a href="#octarine.merge.split_visual" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>Split members back out of a merged visual.</p> <p>The inverse of <code>merge_visuals</code>, to the extent that one exists: the members are decomposed exactly as a re-merge would decompose them and rebuilt as visuals of their own. What is <em>not</em> restored is the material class a member had before merging - a <code>gfx.LineMaterial</code> line that merged into a <code>FlexLineMaterial</code> splits back out as a <code>FlexLineMaterial</code>, since the merged visual is all the split has to go on.</p> <p>Members sharing an <code>object_id</code> stay together in one visual, because that is what the viewer addresses as a single object.</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>merged</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>        A visual produced by `merge_visuals`, i.e. one carrying
+        `_sub_visuals`.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> pygfx visual</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>object_ids</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>        The `object_id`(s) to extract. `None` (default) extracts
+        every member, leaving no remainder. IDs that aren't in
+        this visual are ignored.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> hashable | list thereof | None</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>extract</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>        Whether to build the extracted visuals at all. `False`
+        returns only the remainder, for a caller that is throwing
+        the extracted members away (removing them, say) - building
+        one visual per member is the expensive half of a split.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> bool</code> </span> <span class="doc-param-default"> <b>DEFAULT:</b> <code>True</code> </span> </p> </td> </tr> </tbody> </table> <table> <thead> <tr> <th><span class="doc-section-title">RETURNS</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>remainder</code> </td> <td class="doc-returns-details"> <div class="doc-md-description"> <p>A visual holding the members that were not extracted, or <code>None</code> if none were left.</p> </div> <p> <span class="doc-returns-annotation"> <b>TYPE:</b> <code>pygfx visual | None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>extracted</code> </td> <td class="doc-returns-details"> <div class="doc-md-description"> <p>One visual per extracted <code>object_id</code>, in the order the ids first appear in <code>merged._sub_visuals</code>. Empty if <code>extract</code> is False.</p> </div> <p> <span class="doc-returns-annotation"> <b>TYPE:</b> <code>list of pygfx visuals</code> </span> </p> </td> </tr> </tbody> </table> <details class="see-also" open=""> <summary>See Also</summary> <p>merge_visuals The operation this undoes.</p> </details> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/merge.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 935</span>
+<span class="normal"> 936</span>
+<span class="normal"> 937</span>
+<span class="normal"> 938</span>
+<span class="normal"> 939</span>
+<span class="normal"> 940</span>
+<span class="normal"> 941</span>
+<span class="normal"> 942</span>
+<span class="normal"> 943</span>
+<span class="normal"> 944</span>
+<span class="normal"> 945</span>
+<span class="normal"> 946</span>
+<span class="normal"> 947</span>
+<span class="normal"> 948</span>
+<span class="normal"> 949</span>
+<span class="normal"> 950</span>
+<span class="normal"> 951</span>
+<span class="normal"> 952</span>
+<span class="normal"> 953</span>
+<span class="normal"> 954</span>
+<span class="normal"> 955</span>
+<span class="normal"> 956</span>
+<span class="normal"> 957</span>
+<span class="normal"> 958</span>
+<span class="normal"> 959</span>
+<span class="normal"> 960</span>
+<span class="normal"> 961</span>
+<span class="normal"> 962</span>
+<span class="normal"> 963</span>
+<span class="normal"> 964</span>
+<span class="normal"> 965</span>
+<span class="normal"> 966</span>
+<span class="normal"> 967</span>
+<span class="normal"> 968</span>
+<span class="normal"> 969</span>
+<span class="normal"> 970</span>
+<span class="normal"> 971</span>
+<span class="normal"> 972</span>
+<span class="normal"> 973</span>
+<span class="normal"> 974</span>
+<span class="normal"> 975</span>
+<span class="normal"> 976</span>
+<span class="normal"> 977</span>
+<span class="normal"> 978</span>
+<span class="normal"> 979</span>
+<span class="normal"> 980</span>
+<span class="normal"> 981</span>
+<span class="normal"> 982</span>
+<span class="normal"> 983</span>
+<span class="normal"> 984</span>
+<span class="normal"> 985</span>
+<span class="normal"> 986</span>
+<span class="normal"> 987</span>
+<span class="normal"> 988</span>
+<span class="normal"> 989</span>
+<span class="normal"> 990</span>
+<span class="normal"> 991</span>
+<span class="normal"> 992</span>
+<span class="normal"> 993</span>
+<span class="normal"> 994</span>
+<span class="normal"> 995</span>
+<span class="normal"> 996</span>
+<span class="normal"> 997</span>
+<span class="normal"> 998</span>
+<span class="normal"> 999</span>
+<span class="normal">1000</span>
+<span class="normal">1001</span>
+<span class="normal">1002</span>
+<span class="normal">1003</span>
+<span class="normal">1004</span>
+<span class="normal">1005</span>
+<span class="normal">1006</span>
+<span class="normal">1007</span>
+<span class="normal">1008</span>
+<span class="normal">1009</span>
+<span class="normal">1010</span>
+<span class="normal">1011</span>
+<span class="normal">1012</span>
+<span class="normal">1013</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">split_visual</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="n">object_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extract</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Split members back out of a merged visual.</span>
+
+<span class="sd">    The inverse of `merge_visuals`, to the extent that one exists: the</span>
+<span class="sd">    members are decomposed exactly as a re-merge would decompose them and</span>
+<span class="sd">    rebuilt as visuals of their own. What is *not* restored is the material</span>
+<span class="sd">    class a member had before merging - a `gfx.LineMaterial` line that merged</span>
+<span class="sd">    into a `FlexLineMaterial` splits back out as a `FlexLineMaterial`, since</span>
+<span class="sd">    the merged visual is all the split has to go on.</span>
+
+<span class="sd">    Members sharing an `object_id` stay together in one visual, because that</span>
+<span class="sd">    is what the viewer addresses as a single object.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    merged :        pygfx visual</span>
+<span class="sd">                    A visual produced by `merge_visuals`, i.e. one carrying</span>
+<span class="sd">                    `_sub_visuals`.</span>
+<span class="sd">    object_ids :    hashable | list thereof | None</span>
+<span class="sd">                    The `object_id`(s) to extract. `None` (default) extracts</span>
+<span class="sd">                    every member, leaving no remainder. IDs that aren't in</span>
+<span class="sd">                    this visual are ignored.</span>
+<span class="sd">    extract :       bool</span>
+<span class="sd">                    Whether to build the extracted visuals at all. `False`</span>
+<span class="sd">                    returns only the remainder, for a caller that is throwing</span>
+<span class="sd">                    the extracted members away (removing them, say) - building</span>
+<span class="sd">                    one visual per member is the expensive half of a split.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    remainder :     pygfx visual | None</span>
+<span class="sd">                    A visual holding the members that were not extracted, or</span>
+<span class="sd">                    `None` if none were left.</span>
+<span class="sd">    extracted :     list of pygfx visuals</span>
+<span class="sd">                    One visual per extracted `object_id`, in the order the</span>
+<span class="sd">                    ids first appear in `merged._sub_visuals`. Empty if</span>
+<span class="sd">                    `extract` is False.</span>
+
+<span class="sd">    See Also</span>
+<span class="sd">    --------</span>
+<span class="sd">    merge_visuals</span>
+<span class="sd">                    The operation this undoes.</span>
+
+<span class="sd">    """</span>
+    <span class="n">merger</span> <span class="o">=</span> <span class="n">_MERGERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">merged</span><span class="p">))</span>
+    <span class="n">subs</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="s2">"_sub_visuals"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">merger</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">subs</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">merged</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> is not a merged visual - nothing to split."</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">object_ids</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">wanted</span> <span class="o">=</span> <span class="p">{</span><span class="n">sub</span><span class="o">.</span><span class="n">object_id</span> <span class="k">for</span> <span class="n">sub</span> <span class="ow">in</span> <span class="n">subs</span><span class="p">}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">wanted</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">utils</span><span class="o">.</span><span class="n">make_iterable</span><span class="p">(</span><span class="n">object_ids</span><span class="p">))</span>
+
+    <span class="c1"># `members` comes back in `_sub_visuals` order, so grouping by id as we go</span>
+    <span class="c1"># preserves first-appearance order for the extracted visuals.</span>
+    <span class="n">keep</span><span class="p">,</span> <span class="n">taken</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">member</span> <span class="ow">in</span> <span class="n">merger</span><span class="o">.</span><span class="n">members</span><span class="p">(</span><span class="n">merged</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">member</span><span class="o">.</span><span class="n">object_id</span> <span class="ow">in</span> <span class="n">wanted</span><span class="p">:</span>
+            <span class="n">taken</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">object_id</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">member</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">keep</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">member</span><span class="p">)</span>
+
+    <span class="c1"># Both sides: a remainder whose members turn out to agree should go back</span>
+    <span class="c1"># to a uniform value just as a fresh merge of them would.</span>
+    <span class="n">_collapse_members</span><span class="p">(</span><span class="n">keep</span><span class="p">,</span> <span class="n">merger</span><span class="o">.</span><span class="n">kind</span><span class="p">)</span>
+
+    <span class="c1"># N.B. `merged` is the template for both sides: it is where the shared</span>
+    <span class="c1"># material and object state the members have to keep living now lives.</span>
+    <span class="n">extracted</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">extract</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">taken</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">_collapse_members</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">merger</span><span class="o">.</span><span class="n">kind</span><span class="p">)</span>
+            <span class="n">extracted</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_strip_if_whole</span><span class="p">(</span><span class="n">merger</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="n">group</span><span class="p">)))</span>
+    <span class="n">remainder</span> <span class="o">=</span> <span class="n">_strip_if_whole</span><span class="p">(</span><span class="n">merger</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="n">keep</span><span class="p">))</span> <span class="k">if</span> <span class="n">keep</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">remainder</span><span class="p">,</span> <span class="n">extracted</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-function"> <h2 id="octarine.merge.sub_visual_at" class="doc doc-heading"> <code class="highlight language-python"><span class="n">octarine</span><span class="o">.</span><span class="n">merge</span><span class="o">.</span><span class="n">sub_visual_at</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="n">pick_info</span><span class="p">)</span></code> <a href="#octarine.merge.sub_visual_at" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>Which member of a merged visual a pick landed on.</p> <p>Picking reports the merged visual as the world object, so the member has to be recovered from the index that comes with it: the face index for meshes, which is what the merged <code>indices</code> buffer is laid out by, and the vertex index for points and lines.</p> <table> <thead> <tr> <th><span class="doc-section-title">PARAMETER</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <code>merged</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    The world object the pick reported.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code> pygfx visual</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td> <code>pick_info</code> </td> <td class="doc-param-details"> <div class="doc-md-description"> <div class="highlight"><pre><span></span><code>    The event's `pick_info`.
+</code></pre></div> </div> <p> <span class="doc-param-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></code> </span> </p> </td> </tr> </tbody> </table> <table> <thead> <tr> <th><span class="doc-section-title">RETURNS</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td> <span class="doc-returns-annotation"> <code><a class="autorefs autorefs-internal" title="octarine.merge.SubVisual
+
+
+  
+      dataclass
+  " href="#octarine.merge.SubVisual">SubVisual</a> | None</code> </span> </td> <td class="doc-returns-details"> <div class="doc-md-description"> <p>The member that was hit, or <code>None</code> if <code>merged</code> isn't a merged visual, carries no usable index, or the index falls in one of the gap vertices between members.</p> </div> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/merge.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1043</span>
+<span class="normal">1044</span>
+<span class="normal">1045</span>
+<span class="normal">1046</span>
+<span class="normal">1047</span>
+<span class="normal">1048</span>
+<span class="normal">1049</span>
+<span class="normal">1050</span>
+<span class="normal">1051</span>
+<span class="normal">1052</span>
+<span class="normal">1053</span>
+<span class="normal">1054</span>
+<span class="normal">1055</span>
+<span class="normal">1056</span>
+<span class="normal">1057</span>
+<span class="normal">1058</span>
+<span class="normal">1059</span>
+<span class="normal">1060</span>
+<span class="normal">1061</span>
+<span class="normal">1062</span>
+<span class="normal">1063</span>
+<span class="normal">1064</span>
+<span class="normal">1065</span>
+<span class="normal">1066</span>
+<span class="normal">1067</span>
+<span class="normal">1068</span>
+<span class="normal">1069</span>
+<span class="normal">1070</span>
+<span class="normal">1071</span>
+<span class="normal">1072</span>
+<span class="normal">1073</span>
+<span class="normal">1074</span>
+<span class="normal">1075</span>
+<span class="normal">1076</span>
+<span class="normal">1077</span>
+<span class="normal">1078</span>
+<span class="normal">1079</span>
+<span class="normal">1080</span>
+<span class="normal">1081</span>
+<span class="normal">1082</span>
+<span class="normal">1083</span>
+<span class="normal">1084</span>
+<span class="normal">1085</span>
+<span class="normal">1086</span>
+<span class="normal">1087</span>
+<span class="normal">1088</span>
+<span class="normal">1089</span>
+<span class="normal">1090</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sub_visual_at</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="n">pick_info</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Which member of a merged visual a pick landed on.</span>
+
+<span class="sd">    Picking reports the merged visual as the world object, so the member has</span>
+<span class="sd">    to be recovered from the index that comes with it: the face index for</span>
+<span class="sd">    meshes, which is what the merged `indices` buffer is laid out by, and the</span>
+<span class="sd">    vertex index for points and lines.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    merged :    pygfx visual</span>
+<span class="sd">                The world object the pick reported.</span>
+<span class="sd">    pick_info : dict</span>
+<span class="sd">                The event's `pick_info`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    SubVisual | None</span>
+<span class="sd">                The member that was hit, or `None` if `merged` isn't a merged</span>
+<span class="sd">                visual, carries no usable index, or the index falls in one of</span>
+<span class="sd">                the gap vertices between members.</span>
+
+<span class="sd">    """</span>
+    <span class="n">subs</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="s2">"_sub_visuals"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">subs</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="c1"># Meshes index by face, everything else by vertex. Note that `face_index`</span>
+    <span class="c1"># is also absent on a mesh whose material doesn't write pick info.</span>
+    <span class="n">faces</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="n">gfx</span><span class="o">.</span><span class="n">Mesh</span><span class="p">)</span>
+    <span class="n">index</span> <span class="o">=</span> <span class="n">pick_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"face_index"</span> <span class="k">if</span> <span class="n">faces</span> <span class="k">else</span> <span class="s2">"vertex_index"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">offsets</span> <span class="o">=</span> <span class="n">_pick_offsets</span><span class="p">(</span><span class="n">merged</span><span class="p">,</span> <span class="n">faces</span><span class="p">)</span>
+    <span class="n">at</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">"right"</span><span class="p">))</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">at</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">sub</span> <span class="o">=</span> <span class="n">subs</span><span class="p">[</span><span class="n">at</span><span class="p">]</span>
+    <span class="n">count</span> <span class="o">=</span> <span class="n">sub</span><span class="o">.</span><span class="n">face_count</span> <span class="k">if</span> <span class="n">faces</span> <span class="k">else</span> <span class="n">sub</span><span class="o">.</span><span class="n">count</span>
+    <span class="c1"># A line's members are separated by a NaN vertex, which belongs to no</span>
+    <span class="c1"># member - an index pointing at one lands past the end of the member</span>
+    <span class="c1"># before it.</span>
+    <span class="k">if</span> <span class="n">index</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">face_offset</span> <span class="k">if</span> <span class="n">faces</span> <span class="k">else</span> <span class="n">sub</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span> <span class="o">+</span> <span class="n">count</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">sub</span>
+</code></pre></div></td></tr></tbody></table></div> </details> </div> </div> <div class="doc doc-object doc-class"> <h2 id="octarine.merge.SubVisual" class="doc doc-heading"> <code>octarine.merge.SubVisual</code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small> </span> <a href="#octarine.merge.SubVisual" class="headerlink" title="Permanent link">#</a></h2> <div class="doc doc-contents first"> <p>One of the original visuals inside a visual merged by <code>merge_visuals</code>.</p> <p>Merging turns N objects into one, which means per-object operations (hiding, recolouring, picking) can no longer address an object as a whole. Instead each original visual becomes a contiguous range of vertices in the merged buffers, and this is the record of where it went::</p> <div class="highlight"><pre><span></span><code>sub = merged._sub_visuals[3]
+merged.geometry.colors.data[sub.slice] = (1, 0, 0, 1)
+merged.geometry.colors.update_range(sub.offset, sub.count)
+</code></pre></div> <p>Hiding works the same way, by writing NaN into the position slice - those vertices then drop out for lines, points and meshes alike, exactly like the NaN breaks that separate merged lines. Note that this is destructive, so callers that want to unhide again have to keep a copy of the slice.</p> <p>Merged meshes additionally own a range of <em>faces</em>, which is what picking reports and what the merged <code>indices</code> buffer is laid out by.</p> <table> <thead> <tr> <th><span class="doc-section-title">ATTRIBUTE</span></th> <th><span>DESCRIPTION</span></th> </tr> </thead> <tbody> <tr class="doc-section-item"> <td><code><span title="octarine.merge.SubVisual.object_id">object_id</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>The <code>_object_id</code> the original visual carried.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/uuid.html#module-uuid">uuid</a></code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.merge.SubVisual.group">group</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>The <code>_object_group</code> the original visual carried.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.merge.SubVisual.offset">offset</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>Index of the member's first vertex in the merged buffers.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.merge.SubVisual.count">count</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>Number of vertices the member occupies. For lines this excludes the NaN vertex that separates it from the next member.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.merge.SubVisual.face_offset">face_offset</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>Index of the member's first face. Meshes only.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a> | None</code> </span> </p> </td> </tr> <tr class="doc-section-item"> <td><code><span title="octarine.merge.SubVisual.face_count">face_count</span></code></td> <td class="doc-attribute-details"> <div class="doc-md-description"> <p>Number of faces the member occupies. Meshes only.</p> </div> <p> <span class="doc-attribute-annotation"> <b>TYPE:</b> <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a> | None</code> </span> </p> </td> </tr> </tbody> </table> <details class="mkdocstrings-source"> <summary>Source code in <code>octarine/merge.py</code></summary> <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SubVisual</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""One of the original visuals inside a visual merged by `merge_visuals`.</span>
+
+<span class="sd">    Merging turns N objects into one, which means per-object operations</span>
+<span class="sd">    (hiding, recolouring, picking) can no longer address an object as a whole.</span>
+<span class="sd">    Instead each original visual becomes a contiguous range of vertices in the</span>
+<span class="sd">    merged buffers, and this is the record of where it went::</span>
+
+<span class="sd">        sub = merged._sub_visuals[3]</span>
+<span class="sd">        merged.geometry.colors.data[sub.slice] = (1, 0, 0, 1)</span>
+<span class="sd">        merged.geometry.colors.update_range(sub.offset, sub.count)</span>
+
+<span class="sd">    Hiding works the same way, by writing NaN into the position slice - those</span>
+<span class="sd">    vertices then drop out for lines, points and meshes alike, exactly like</span>
+<span class="sd">    the NaN breaks that separate merged lines. Note that this is destructive,</span>
+<span class="sd">    so callers that want to unhide again have to keep a copy of the slice.</span>
+
+<span class="sd">    Merged meshes additionally own a range of *faces*, which is what picking</span>
+<span class="sd">    reports and what the merged `indices` buffer is laid out by.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    object_id : str | uuid</span>
+<span class="sd">                The `_object_id` the original visual carried.</span>
+<span class="sd">    group :     str | None</span>
+<span class="sd">                The `_object_group` the original visual carried.</span>
+<span class="sd">    offset :    int</span>
+<span class="sd">                Index of the member's first vertex in the merged buffers.</span>
+<span class="sd">    count :     int</span>
+<span class="sd">                Number of vertices the member occupies. For lines this</span>
+<span class="sd">                excludes the NaN vertex that separates it from the next</span>
+<span class="sd">                member.</span>
+<span class="sd">    face_offset : int | None</span>
+<span class="sd">                Index of the member's first face. Meshes only.</span>
+<span class="sd">    face_count : int | None</span>
+<span class="sd">                Number of faces the member occupies. Meshes only.</span>
+
+<span class="sd">    """</span>
+
+    <span class="n">object_id</span><span class="p">:</span> <span class="nb">object</span>
+    <span class="n">group</span><span class="p">:</span> <span class="nb">object</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">count</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">face_offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">face_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">slice</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""The member's vertex range, as a slice into the merged buffers."""</span>
+        <span class="k">return</span> <span class="nb">slice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">count</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">face_slice</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""The member's face range, or None if this isn't a mesh."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">face_offset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="nb">slice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">face_offset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">face_offset</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">face_count</span><span class="p">)</span>
+</code></pre></div></td></tr></tbody></table></div> </details> <div class="doc doc-children"> <div class="doc doc-object doc-attribute"> <h3 id="octarine.merge.SubVisual.face_slice" class="doc doc-heading"> <code class="highlight language-python"><span class="n">face_slice</span></code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-property"><code>property</code></small> </span> <a href="#octarine.merge.SubVisual.face_slice" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>The member's face range, or None if this isn't a mesh.</p> </div> </div> <div class="doc doc-object doc-attribute"> <h3 id="octarine.merge.SubVisual.slice" class="doc doc-heading"> <code class="highlight language-python"><span class="nb">slice</span></code> <span class="doc doc-labels"> <small class="doc doc-label doc-label-property"><code>property</code></small> </span> <a href="#octarine.merge.SubVisual.slice" class="headerlink" title="Permanent link">#</a></h3> <div class="doc doc-contents "> <p>The member's vertex range, as a slice into the merged buffers.</p> </div> </div> </div> </div> </div> </article> </div> <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script> <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script> </div> </main> <footer class="md-footer"> <div class="md-footer-meta md-typeset"> <div class="md-footer-meta__inner md-grid"> <div class="md-copyright"> Made with <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener"> Material for MkDocs </a> </div> </div> </div> </footer> </div> <div class="md-dialog" data-md-component="dialog"> <div class="md-dialog__inner md-typeset"></div> </div> <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.tabs.link", "content.code.annotate", "navigation.indexes", "navigation.instant", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script> <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>  <script id="init-glightbox">document.querySelectorAll('.glightbox').forEach(function(element) {
+    try {
+        var img = element.querySelector('img');
+        if (img) {
+            const imageSrc = img.dataset.src || img.src;
+            if (imageSrc) {
+                element.setAttribute('href', imageSrc);
+            } else {
+                console.log('No img element with src or data-src attribute found');
+            }
+        } else {
+            console.log('No img element found');
+        }
+    } catch (error) {
+        console.log('Error:', error);
+    }
+});
+const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
