@@ -40,8 +40,8 @@ these:
 
 See `pygfx.Material.alpha_mode` (e.g. via `help()`) for the available
 modes. Note that `Octarine` will automatically pick a sensible alpha mode
-when you change an object's opacity: `"add"` for semi-transparent objects,
-`"opaque"` otherwise. If you need full control, you can always set
+when you change an object's opacity: `"weighted_blend"` for semi-transparent
+meshes, `"add"` for semi-transparent lines and points, `"opaque"` otherwise. If you need full control, you can always set
 `material.alpha_mode` on individual `pygfx` objects.
 
 ## Silhouette rendering

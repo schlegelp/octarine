@@ -8,7 +8,7 @@ Octarine is the eighth color of the Discworld's spectrum, which is described as 
 [![docs](https://github.com/schlegelp/octarine/actions/workflows/docs.yml/badge.svg)](https://schlegelp.github.io/octarine/)
 
 # Octarine
-A minimalist, easy-to-use, high-performance 3D viewer. `Octarine` is build on top of the excellent
+A minimalist, easy-to-use, high-performance 3D viewer. `Octarine` is built on top of the excellent
 [`pygfx`](https://github.com/pygfx/pygfx) WGPU rendering engine which does most of the heavy lifting - we're simply
 abstracting away some of the boiler plate code for you.
 
@@ -21,14 +21,29 @@ Why another 3D viewer? There are plenty options out there:
 2. Works in both _Jupyter_ and _REPL_.
 3. _High performance_: a mesh with 15M faces renders with 80 fps at 1080p on a 2023 MacBook Pro.
 
+## Features :sparkles:
+- **Objects**: meshes, points, lines, volumes, tubes and sparse volumes (tens of millions of
+  voxels, including run-length encoded ones) - see [Adding Objects](https://schlegelp.github.io/octarine/objects/)
+- **Looks good out of the box**: shadows, ambient occlusion and a light that follows the camera
+  are on by default; environment lighting, matcaps, outlines, silhouettes, subsurface scattering,
+  depth of field, tone mapping and gradient backgrounds are one call away - see
+  [Effects & Shading](https://schlegelp.github.io/octarine/effects/)
+- **Animations**: orbit, fly between views and zoom, then play it in the viewer or render it to
+  `.mp4`, `.gif` or PNGs - see [Animations](https://schlegelp.github.io/octarine/animations/)
+- **Many objects**: optionally merge objects into fewer draw calls for scenes made of thousands
+  of small objects, while still hiding, colouring and picking them one by one - see
+  [Managing Objects](https://schlegelp.github.io/octarine/manage/)
+- **Controls**: a control panel with legend, effects, screenshots and animations; keep the
+  cameras of several viewers in sync - see [Viewer Controls](https://schlegelp.github.io/octarine/controls/)
+
 ## Installation :rocket:
 
 ```bash
 pip install "octarine3d[all]"
 ```
 
-This will install the minimal requirements plus `PySide6` and `jupyter_rfb` as window managers for IPython/shell
-and Jupyter, respectively. Check out the [**Install Instructions**](https://schlegelp.github.io/octarine/install/)
+`Octarine` requires Python 3.11 or later. The above will install the minimal requirements plus `PySide6` and
+`jupyter_rfb` as window managers for IPython/shell and Jupyter, respectively. Check out the [**Install Instructions**](https://schlegelp.github.io/octarine/install/)
 for details.
 
 ## Quickstart :fire:
@@ -57,7 +72,7 @@ v.close()
 
 > [!NOTE]
 > The above example will work in interactive environments such as IPython and Jupyter. When using from the standard
-> REPL or when running as a script you will have to additionally start the event loop. Please see corresponding the
+> REPL or when running as a script you will have to additionally start the event loop. Please see the corresponding
 > section in the [Introduction](https://schlegelp.github.io/octarine/intro/).
 
 ![demo gif](docs/_static/octarine_demo_720p.gif)
@@ -80,11 +95,15 @@ so we can discuss the best way to address the issue.
 
 ### Tests
 
-We're currently running only a very limited test suite. What's there can be run with:
+To run the test suite:
 
 ```bash
+pip install -e .[dev]
 pytest -v
 ```
+
+Most tests render with an offscreen canvas, so they need a working GPU driver but no window. Tests for the Qt
+control panel are run if `PySide6` is installed.
 
 ### Docs
 

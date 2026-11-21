@@ -4,10 +4,18 @@ This is a selection of features added, changes made and bugs fixed with each ver
 For a full list of changes please see the [commits history](https://github.com/schlegelp/octarine/commits/main)
 on the Github repository.
 
-## dev
-_Date: ongoing_
+## Version `0.9.0` { data-toc-label="0.9.0" }
+_Date: 21/11/26_
 
 #### Breaking
+- shadows, the camera-linked headlight and ambient occlusion are now **on by default**, i.e.
+  scenes look different out of the box: objects cast shadows onto each other, are always lit
+  from the front and get contact shadows in their creases and cavities. Each can be switched
+  off individually via the new `shadows` / `ambient_occlusion` parameters and the existing
+  `headlight` parameter (or the matching properties/methods), e.g.
+  `oc.Viewer(shadows=False, headlight=False, ambient_occlusion=False)` gets you the previous
+  look. Note that fitting the shadows and the occlusion radius to the scene costs an extra
+  pass over the objects, which is made once per frame in which the scene changed
 - `Octarine` now requires Python 3.11 or later: `wgpu` (which `pygfx` is built on) needs
   3.11 from version 0.33, which is the earliest that behaves in IPython
 - `Octarine` now requires `pygfx>=0.17` - `0.17` renamed two symbols in the shader API that
@@ -35,6 +43,8 @@ _Date: ongoing_
   `oc.Animation(v).orbit().render("rotation.mp4")`, is what you actually want: a turntable
   rotation around the scene rather than a roll about the camera's own axis
   (see [Animations](animations.md#camera-animations))
+- `opacity` no longer scales the extinction per voxel in `add_sparse_volume(mode="density")`;
+  it is now a plain global opacity in all modes and `density` takes its place
 
 #### Improvements
 - new [`octarine.Animation`][] class: a timeline of camera moves that can be played in the
@@ -68,11 +78,39 @@ _Date: ongoing_
   `samples`, `power` and `blur` tune the look, and `debug=True` renders the raw occlusion
   (see [Ambient occlusion](effects.md#ambient-occlusion)). With an automatic radius the effect
   now also tracks the scene, i.e. the radius is re-derived as objects are added or removed
+- new [`Viewer.set_environment`][octarine.Viewer.set_environment] method: light the scene with
+  an environment map (image-based lighting), so that surfaces are lit from every direction and
+  pick up soft reflections instead of looking flat. The environments are generated rather than
+  loaded from HDRI photographs, so nothing has to be downloaded; five presets (`studio`, `soft`,
+  `sky`, `sunset`, `neon`). Plain Phong meshes are switched to a physically-based material while
+  an environment is on (see [Environment lighting](effects.md#environment-lighting-ibl))
+- new [`Viewer.set_matcap`][octarine.Viewer.set_matcap] method (plus a `matcap` parameter for
+  [`Viewer.add_mesh`][octarine.Viewer.add_mesh]): shade meshes with a matcap - a picture of a
+  shaded sphere used as a lookup table - instead of with the scene's lights. Surface shape reads
+  very well and the result cannot be under- or over-lit. Eleven presets (`pearl`, `clay`,
+  `metal`, `gold`, `jade`, `neon`, `sidelit`, `ceramic`, `slate`, `toon`, `toon_light`), and an
+  off-the-shelf matcap image works too (see [Matcap shading](effects.md#matcap-shading))
+- new [`Viewer.set_outline`][octarine.Viewer.set_outline] method: draw lines around silhouettes
+  and along creases, which also keeps overlapping objects of similar colour apart in a crowded
+  scene (see [Outlines](effects.md#outlines))
+- new [`Viewer.set_tonemapping`][octarine.Viewer.set_tonemapping] method and `Viewer.exposure`
+  property: tone mapping (`aces`, `filmic`, `reinhard` or `none`) so that bright regions roll
+  off instead of clipping to flat white. Off by default; environment lighting is the main thing
+  that needs it (see [Tone mapping](effects.md#tone-mapping-and-exposure))
+- post-processing passes now run in a fixed order no matter in which order they were switched
+  on: ambient occlusion, outlines, other effects, tone mapping and finally anti-aliasing. The
+  anti-aliasing used to run first, which means effects such as `add_effect('bloom')` now run
+  before it rather than after
 - control panel: the "Effects" tab now has one collapsible section per effect (the checkbox
   switches the effect on, the arrow expands its parameters) and gained controls for
-  [`Viewer.shadows`][octarine.Viewer.shadows] and
-  [`Viewer.set_ambient_occlusion`][octarine.Viewer.set_ambient_occlusion]
-  (see [GUI Controls](controls.md#gui-controls))
+  [`Viewer.shadows`][octarine.Viewer.shadows],
+  [`Viewer.set_ambient_occlusion`][octarine.Viewer.set_ambient_occlusion], environment
+  lighting, matcaps, outlines and tone mapping (see [GUI Controls](controls.md#gui-controls))
+- semi-transparent meshes now default to the `"weighted_blend"` alpha mode instead of `"add"`,
+  which keeps their colours instead of brightening everything they overlap (lines and points
+  still use `"add"`; see [Transparency](effects.md#transparency-alpha-modes))
+- in the `"reactive"` [render trigger](triggers.md) the canvas now actually goes idle when
+  nothing changes - before, it skipped the render but kept the loop ticking
 - new [`Viewer.link`][octarine.Viewer.link] / [`Viewer.unlink`][octarine.Viewer.unlink] methods
   (plus a [`Viewer.linked`][octarine.Viewer.linked] property): keep the camera synchronised
   between two or more viewers, so that panning, rotating or zooming in one of them does the
@@ -103,11 +141,6 @@ _Date: ongoing_
   wherever the radius outruns the centreline's curvature, which rasterised skeletons routinely
   trigger; dropping harmonics via `k` is currently the only effective lever against it
   (see [Tubes](objects.md#tubes))
-- new [`Viewer.headlight`][octarine.Viewer.headlight] property (plus a `headlight` parameter for
-  [`octarine.Viewer`][] and a checkbox in the GUI controls): link the light to the camera such
-  that objects are always lit from the front; accepts a float or tuple to also set the light's
-  offset from the camera's axis (see [Lighting](controls.md#lighting))
-- new `Viewer.lights` property: list all light sources illuminating the scene
 - [`Viewer.add_sparse_volume`][octarine.Viewer.add_sparse_volume]: new `mode="surface"` which
   renders the volume as a shaded isosurface (normals from the volume's gradient) instead of a
   flat blob; the level is set via the new `threshold` parameter (see
@@ -121,7 +154,6 @@ _Date: ongoing_
   accumulates properly instead of saturating on the first voxel; the extinction per voxel is
   set via the new `density` parameter (previously it was tied to `opacity`, whose default of
   `1` made the volume opaque at the first sample)
-
 - [`Viewer.add_sparse_volume`][octarine.Viewer.add_sparse_volume] now accepts run-length encoded
   voxels as an `(N, 4)` array of `(x, y, z, x_run_length)` - the layout DVID's `sparsevol`
   endpoint returns (plus the [`octarine.VoxelRuns`][] container). Runs are rendered from a
@@ -130,7 +162,6 @@ _Date: ongoing_
   materialized. Binary occupancy only - passing `values` alongside runs raises. Binary `(N, 3)`
   coordinates can opt in with `method="bitmask"` (see
   [Sparse Volumes](objects.md#run-length-encoded-voxels))
-
 - [`Viewer.screenshot`][octarine.Viewer.screenshot] gained a `supersample` parameter: the frame
   is rendered at N times the requested resolution and filtered back down, which - unlike the
   post-processing anti-aliasing that runs during interaction - actually resolves sub-pixel
@@ -140,12 +171,10 @@ _Date: ongoing_
   the occlusion blur) are scaled along, so the picture keeps its look. Note that
   [`Animation.render`][octarine.Animation.render] defaults to `supersample=1`, since there the
   cost is paid per frame
-
 - control panel: the "Screenshot" tab's "Browse..." button now offers a folder as well as a
   file. Point the tab at a folder and screenshots are collected in there as
   `screenshot_0001.png`, `screenshot_0002.png`, ... - numbering continues past whatever is
   already in the folder, so nothing gets overwritten
-
 - objects can now be merged: `oc.Viewer(merge=True)` draws everything that shares a material as
   a single object, which is a great deal faster for scenes made of many small ones - 300 meshes
   go from 300 objects at ~16 ms a frame to one at ~10 ms. The objects stay separate as far as
@@ -196,25 +225,23 @@ _Date: ongoing_
 - [`Viewer.screenshot`][octarine.Viewer.screenshot] raised `AttributeError` on an on-screen
   canvas: it forced the frame through a private `rendercanvas` method that has since been
   renamed. It now uses the public `canvas.force_draw()`
+- shadows no longer flicker while the camera moves with the headlight on
+- a render before the viewer's first regular frame (e.g. from an app embedding the canvas) no
+  longer produces NaNs and `RuntimeWarning`s from the not-yet-placed headlight
 
-#### Breaking
-- shadows, the camera-linked headlight and ambient occlusion are now **on by default**, i.e.
-  scenes look different out of the box: objects cast shadows onto each other, are always lit
-  from the front and get contact shadows in their creases and cavities. Each can be switched
-  off individually via the new `shadows` / `ambient_occlusion` parameters and the existing
-  `headlight` parameter (or the matching properties/methods), e.g.
-  `oc.Viewer(shadows=False, headlight=False, ambient_occlusion=False)` gets you the previous
-  look. Note that fitting the shadows and the occlusion radius to the scene costs an extra
-  pass over the objects, which is made once per frame in which the scene changed
-- `opacity` no longer scales the extinction per voxel in `add_sparse_volume(mode="density")`;
-  it is now a plain global opacity in all modes and `density` takes its place
+**Full Changelog**: [v0.8.0...v0.9.0](https://github.com/schlegelp/octarine/compare/v0.8.0...v0.9.0)
 
-To install the current `dev` version of `octarine`:
+## Version `0.8.0` { data-toc-label="0.8.0" }
+_Date: 03/08/26_
 
-```shell
-pip uninstall octarine3d -y
-pip install git+https://github.com/schlegelp/octarine.git
-```
+#### Improvements
+- new [`Viewer.headlight`][octarine.Viewer.headlight] property (plus a `headlight` parameter for
+  [`octarine.Viewer`][] and a checkbox in the GUI controls): link the light to the camera such
+  that objects are always lit from the front; accepts a float or tuple to also set the light's
+  offset from the camera's axis (see [Lighting](controls.md#lighting))
+- new `Viewer.lights` property: list all light sources illuminating the scene
+
+**Full Changelog**: [v0.7.0...v0.8.0](https://github.com/schlegelp/octarine/compare/v0.7.0...v0.8.0)
 
 ## Version `0.7.0` { data-toc-label="0.7.0" }
 _Date: 02/08/26_
