@@ -435,7 +435,9 @@ class DepthOfFieldPass(EffectPass):
             p = self.camera.world.matrix @ np.append(view_pt, 1.0)
             return p[:3] / p[3]
 
-        tex = renderer._blender.get_texture("depth")
+        # pygfx calls this texture "depth_stencil" since 0.18, "depth" before
+        blender = renderer._blender
+        tex = blender.get_texture("depth_stencil") or blender.get_texture("depth")
         if tex is None:  # nothing rendered yet
             return None
         if self._depth_reader is None:
