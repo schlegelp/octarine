@@ -56,6 +56,30 @@ def _drag(viewer):
         viewer.renderer.dispatch_event(event)
 
 
+def _steady_controller_clock(monkeypatch, step=0.001):
+    """Make the controller's damping advance by a fixed amount per tick.
+
+    Damping settles in wall-clock time: pygfx moves an action towards its
+    target by `min(1, 50 * elapsed / damping)` each tick, so the slower the
+    machine, the bigger each step and the sooner the motion is over. At ~80 ms
+    a tick the factor reaches 1 and it settles instantly.
+
+    That turned the test below into a measure of how busy the machine was - it
+    passed locally and failed on CI, with a different frame count each run. A
+    fixed step makes the damping behave the same everywhere.
+
+    """
+    from pygfx.controllers import _base
+
+    now = [0.0]
+
+    def fake_perf_counter():
+        now[0] += step
+        return now[0]
+
+    monkeypatch.setattr(_base, "perf_counter", fake_perf_counter)
+
+
 def _run_loop(viewer, requests, max_frames=100):
     """Draw frames for as long as the viewer asks for them.
 
@@ -188,14 +212,15 @@ def test_drag_is_rendered_until_the_motion_settles(viewer, monkeypatch):
     # frames after the gesture itself is over, and the viewer has to keep
     # asking for frames until it has come to a rest
     before = viewer._camera_sig()
+    _steady_controller_clock(monkeypatch)
     requests = _count_draw_requests(viewer, monkeypatch)
 
     _drag(viewer)
     frames = _run_loop(viewer, requests, max_frames=10)
 
     assert viewer._camera_sig() != before
-    # Damping settles in wall-clock time, so in a loop as tight as this one
-    # the motion is still going: the viewer has to keep asking for frames
+    # With the clock pinned the motion is still going after ten ticks, so the
+    # viewer has to keep asking for frames throughout
     assert frames == 10
 
 
