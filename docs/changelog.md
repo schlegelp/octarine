@@ -13,6 +13,19 @@ _Date: ongoing_
 - `Octarine` now requires `pygfx>=0.17` - `0.17` renamed two symbols in the shader API that
   `octarine`'s custom shaders build on (`lighting_phong()` no longer takes `is_front`, and
   `physical_albeido` is now spelled `physical_albedo`)
+- colours given per vertex to a mesh or a tube now draw the same as the same colour set on the
+  material, where before they came out lighter. `pygfx` expects a colour in the geometry to
+  have already been converted out of sRGB, which `octarine` was not doing, so
+  `mesh2gfx(color=0.5)` and the same 0.5 handed over per vertex did not match. If you had
+  brightened your colours to make up for this, they will now look too dark. (Lines and points
+  are unaffected: their shaders convert whichever colour they are given, so those stay as they
+  were.)
+- with merging switched on, `Viewer.objects` hands back a stand-in
+  for each object rather than the `pygfx` object itself, because there is no longer one of
+  those per object. The stand-ins behave like objects for everything `octarine` does with them,
+  but they are not `pygfx.Mesh` instances - code of your own doing `isinstance(vis, gfx.Mesh)`
+  on them wants `handle.visual` to get at the object they live in. This is why merging is off
+  unless you ask for it
 - the `octarine.video_helpers` module (i.e. `make_rotation_video`) has been removed in favour
   of [`octarine.Animation`][], which does the same job with better output (no stray alpha
   channel, no rescaling of odd-sized frames) and without the undeclared `scipy`/`tqdm`
@@ -132,6 +145,22 @@ _Date: ongoing_
   file. Point the tab at a folder and screenshots are collected in there as
   `screenshot_0001.png`, `screenshot_0002.png`, ... - numbering continues past whatever is
   already in the folder, so nothing gets overwritten
+
+- objects can now be merged: `oc.Viewer(merge=True)` draws everything that shares a material as
+  a single object, which is a great deal faster for scenes made of many small ones - 300 meshes
+  go from 300 objects at ~16 ms a frame to one at ~10 ms. The objects stay separate as far as
+  you are concerned: hiding, colouring, picking, selecting and the legend all still work one
+  object at a time. Only meshes, lines and points are merged, and only where they agree on
+  everything a single object can hold once (blend mode, transform, draw order); colour, line
+  width and point size are the exceptions and move into the geometry where they differ. Ask for
+  something a merged object cannot hold per object - a silhouette, a matcap, a blend mode - and
+  that object is taken back out of the merge for you. Set `merge` at any time with
+  [`Viewer.merge`][octarine.Viewer.merge], merge or unmerge on request with
+  [`Viewer.merge_objects`][octarine.Viewer.merge_objects] /
+  [`Viewer.unmerge_objects`][octarine.Viewer.unmerge_objects], see what it is saving with
+  [`Viewer.merge_stats`][octarine.Viewer.merge_stats], and keep single objects out with
+  `v.add_mesh(..., merge=False)`. There is also a tick box for it in the control panel's
+  "Controls" tab (see [Merging objects](manage.md#merging-objects))
 
 #### Fixes
 - [`Viewer.screenshot`][octarine.Viewer.screenshot] came out with the background still in it
